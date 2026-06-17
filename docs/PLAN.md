@@ -1,7 +1,8 @@
 # Aidit — 구현 계획서 (PLAN.md)
 
-> 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [WIREFRAME.md](./WIREFRAME.md)
+> 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [WIREFRAME.md](./WIREFRAME.md), [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md)
 > 상태: PoC · 버전: 0.2 · 날짜: 2026-06-16
+> **구현 상태(2026-06-17): M1–M5 전부 구현·검증·커밋 완료.** 스펙 대비 확정/추가/변경 사항과 수정한 버그는 [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md)에 정리(§9 완료 정의의 실제 충족 현황 포함).
 > 본 계획서는 5개 영역 계획(Backend / Realtime / Frontend / AI-Engine / Cross-cutting)을 종합한 것으로, 세 개의 원본 문서에 엄격히 근거한다. 원본 문서 내부에서 충돌이 있는 경우(특히 TRD §3 스키마 vs. TRD §4.1 멱등성), 본 계획서가 그 충돌을 명시적으로 해소하며 그 결정은 **구속력(binding)** 을 가진다.
 
 ---
@@ -363,23 +364,25 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 
 ## 9. 완료 정의 (Definition of Done)
 
+> 범례: `[x]` 구현 + 자동검증(vitest contract/integration/unit) 또는 부팅 스모크로 확인 · `[~]` 구현·코드검증 완료, 단 명시한 항목은 PoC에서 미측정/미실행(브라우저 E2E·성능 P95·Postgres 교체). 상세: [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md) §6.
+
 ### PRD §13 수용기준 (각각 검증 WP/여정에 연결)
-- [ ] **#1** 홈 인기 피드 + 커뮤니티 검색 — BE-5/BE-9a/FE-4 + BE-4/FE-5; E2E(XC-T).
-- [ ] **#2** 특정 커뮤니티에 글 작성 — BE-5/FE-7; E2E J1.
-- [ ] **#3** 작성자 키로 페르소나 적용 1차 AI 답변, 로딩 — AI-5/FE-7/FE-12; E2E J1.
-- [ ] **#4** 원본 고정 + 채팅; 타인/AI 좌, 본인 우 — FE-9(`authorId===userId`)/BE-3/FE-3; E2E.
-- [ ] **#5** `@AI` (원본+AI+사람) 기반 신규 버블 — AI-7/AI-4/BE-12; E2E J2.
-- [ ] **#6** >128K → 색 구분 요약 버블 — AI-8/AI-6/BE-7/FE-13a; E2E J3.
-- [ ] **#7** 요약 후 `@AI`는 (요약+이후)만 기반 — AI-9/BE-12; E2E J3.
-- [ ] **BYOK** 모든 AI 호출 브라우저→Google, 서버 key-blind — L1/AI-1/XC-1/XC-2; redaction 테스트.
-- [ ] **순서** 사람 먼저 → 로딩 → AI 버블 — AI-7/FE-11/FE-12; E2E J2.
+- [x] **#1** 홈 인기 피드 + 커뮤니티 검색 — BE-5/BE-9a/FE-4 + BE-4/FE-5. (구현; hotScore unit, 피드/검색 라우트 스모크. E2E 스캐폴드)
+- [x] **#2** 특정 커뮤니티에 글 작성 — BE-5/FE-7. (POST /posts + seg#0 스모크. E2E J1 스캐폴드)
+- [x] **#3** 작성자 키로 페르소나 적용 1차 AI 답변, 로딩 — AI-5/FE-7/FE-12. (runPrimaryReply + PENDING/PATCH unit)
+- [x] **#4** 원본 고정 + 채팅; 타인/AI 좌, 본인 우 — FE-9(`authorId===userId`)/BE-3/FE-3. (코드 + 프론트 unit)
+- [x] **#5** `@AI` (원본+AI+사람) 기반 신규 버블 — AI-7/AI-4/BE-12. (`/context` seg0 조립 contract 테스트)
+- [x] **#6** >128K → 색 구분 요약 버블 — AI-8/AI-6/BE-7/FE-13a. (요약 전환 + 409 contract 테스트)
+- [x] **#7** 요약 후 `@AI`는 (요약+이후)만 기반 — AI-9/BE-12. (seg≥1 이전 히스토리 제외 contract 테스트)
+- [x] **BYOK** 모든 AI 호출 브라우저→Google, 서버 key-blind — L1/AI-1/XC-3. (서버 src apiKey 0건 + key-blind contract 테스트; gemini 직접 호출 unit)
+- [x] **순서** 사람 먼저 → 로딩 → AI 버블 — AI-7/FE-11/FE-12. (runAtAiReply 순서 unit)
 
 ### 엔지니어링 게이트
-- [ ] **실시간**: 다중 클라 fan-out P95 < 1.5s; 재접속 재생 정확(RT-4/RT-6/XC-T).
-- [ ] **신뢰성**: AI 실패 시 사람 버블 보존, FAILED+재시도 표시(NFR-5; FE-12).
-- [ ] **보안**: CSP 강제(`connect-src` Google만), DOMPurify, 로그에 키 없음(XC-2/XC-3); 프롬프트 인젝션 가드(XC-4).
-- [ ] **PWA**: 설치 가능, 모바일 360–430px, 터치 ≥44px(FE-13/NFR-1).
-- [ ] **배포**: 정적 프론트 + 컨테이너 Node; SQLite→Postgres datasource 교체 검증(BE-1/L10).
-- [ ] **지표**: §8 KPI 계측, 작성자 D1 포함(BE-13/XC-10).
-- [ ] **라이선스**: MIT LICENSE + 헤더(XC-11).
-- [ ] **테스트**: 통합 스위트 green — unit/contract/integration/E2E(XC-T).
+- [~] **실시간**: 재접속 재생 정확 + comment.created/updated/segment.opened seq 순서 — SSE integration 테스트 green. **P95 < 1.5s 성능은 PoC에서 미측정.**
+- [x] **신뢰성**: AI 실패 시 사람 버블 보존, FAILED+재시도 표시(NFR-5; FE-12). (engine unit + retryAiBubble)
+- [x] **보안**: CSP 강제(`connect-src` Google만 — 헤더+메타), DOMPurify sanitize chokepoint, 로그/소스에 키 없음(XC-3); 프롬프트 인젝션 가드 XC-4. (CSP 헤더 스모크 + sanitize/XC-4 unit; §4 캡슐화 버그 수정 후 헤더 적용 확인)
+- [~] **PWA**: vite-plugin-pwa로 SW+manifest 산출, 모바일 우선/터치 ≥44px(FE-13/NFR-1). **실기기 설치는 수동 확인 권장.**
+- [~] **배포**: 정적 프론트 + Node 서버 구조 확립. **SQLite→Postgres datasource 교체는 미검증**(추상화만, L10).
+- [x] **지표**: §8 KPI 계측 + 작성자 D1(VisitEvent) — BE-13(/metrics, /metrics/visit) + XC-10 클라 계측. (DB 산출 KPI 동작; geminiSuccessRate/p95는 best-effort `null`)
+- [x] **라이선스**: MIT LICENSE + 엔트리 파일 헤더(XC-11).
+- [~] **테스트**: 통합 스위트 — **unit/contract/integration green(백엔드 22, 프론트 28)**. **E2E(J1/J2/J3)는 Gemini 모킹 스캐폴드 제공, 브라우저 실행은 미수행**(XC-T).

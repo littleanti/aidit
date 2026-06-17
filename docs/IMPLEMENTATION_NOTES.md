@@ -1,0 +1,166 @@
+# Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
+
+> 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
+> 상태: M1–M5 구현 완료 · 날짜: 2026-06-17
+> 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
+
+---
+
+## 0. 마일스톤 ↔ 커밋 매핑
+
+| 마일스톤 | 커밋 | 검증 |
+|----------|------|------|
+| 초기 스캐폴드 | `chore: initial project scaffold …` | — |
+| **M1** 골격 | `feat(M1): skeleton …` | 백엔드 typecheck + boot smoke(/health, /auth/session) · 프론트 typecheck + build |
+| **M2** 실시간 | `feat(M2): thread / realtime …` | clientId 멱등 + SSE 스냅샷 재생/라이브 fan-out smoke |
+| **M3** AI 코어 | `feat(M3): AI core …` | `/context` 형상 + PATCH(clientId/userId) 인가 smoke |
+| **M4** 요약 | `feat(M4): summary engine …` | 세그먼트 전환 + FR-7.2 제외 + 409 가드 + segment.opened 순서 smoke |
+| **M5** 다듬기 | `feat(M5): polish …` | 양측 테스트 green + build + CSP/지표/레이트리밋 smoke |
+
+---
+
+## 1. 확정 기술 스택 버전
+
+TRD §2는 스택을 "권장"으로만 명시했다. 실제 설치·검증된 버전:
+
+**Backend (`server/`)** — Node 20 ESM
+- `fastify` ^5.2, `@fastify/cors` ^10, `fastify-plugin` ^5 (전역 훅 de-encapsulation용 — §4 버그 참조)
+- `prisma` / `@prisma/client` ^6.2, datasource = SQLite (PoC, `server/prisma/dev.db`)
+- dev: `tsx` ^4, `typescript` ^5.7, test: `vitest` ^2.1
+
+**Frontend (`frontend/`)** — Vite SPA
+- `react` ^18.3, `react-router-dom` ^6.30, `zustand` ^4.5
+- `dompurify` ^3.4 + `marked` ^18 (마크다운 sanitize 파이프라인, XC-3)
+- dev/build: `vite` ^5.4, `@vitejs/plugin-react` ^4, `tailwindcss` ^3.4, `vite-plugin-pwa` ^1.3
+- test: `vitest` ^2.1 + `jsdom`, E2E: `@playwright/test` ^1.61
+
+> 모델 ID 상수는 단일 출처(`frontend/src/config/model.ts`)에만 존재: `MODEL = "gemini-3.1-flash-lite"` (L7).
+
+---
+
+## 2. API 계약 — 확정 / 추가 / 변경
+
+### 2.1 행위자 인증: `x-user-id` 헤더 (TRD §4 "username" 대체 — 구속력)
+
+TRD §4 표는 인증 칼럼을 "username"으로 적었으나, **실제 구현은 영속화된 `User.id`를 `x-user-id` 헤더로 전달**한다. 이는 L11("`me` 식별자 = `User.id`")과 정합한다.
+- `POST /auth/session`이 `{ id, username }`을 반환 → 클라이언트(`authStore`)가 `userId` 영속화.
+- 모든 쓰기 요청은 `x-user-id: <User.id>`를 보낸다. **API 키는 어떤 헤더/바디/로그에도 절대 포함되지 않는다(L1).**
+- 인가: 커뮤니티 편집은 `creatorId === x-user-id`; 사람 댓글 PATCH는 `authorId === x-user-id`; AI 버블(authorId=null) PATCH는 발신 `clientId` 매칭(L12).
+
+### 2.2 추가 엔드포인트 (BE-13, TRD §4 표에 미열거)
+
+| Method · Path | 설명 | 인증 |
+|---------------|------|------|
+| `POST /metrics/visit` | 인증 앱 오픈 시 `VisitEvent(userId, date=YYYY-MM-DD)` 일별 멱등 기록(upsert) | `x-user-id` |
+| `GET /metrics` | §8 KPI 집계 반환(아래 형상) | - |
+
+`GET /metrics` 응답 형상(실제):
+```jsonc
+{
+  "postCount": 0,
+  "avgAtAiRepliesPerPost": 0,        // 글당 평균 AI_REPLY 수
+  "avgUniqueCommentersPerThread": 0, // 스레드당 고유 사람 댓글자 수
+  "summarySuccessRate": null,        // COMPLETE AI_SUMMARY / 전체 AI_SUMMARY
+  "authorD1RetentionRate": null,     // 첫 글 익일 VisitEvent 보유 작성자 비율
+  "geminiSuccessRate": null,         // 클라 이벤트 기반 — 서버 DB로 산출 불가, best-effort(null)
+  "p95PropagationMs": null,          // 동일 — 서버 단독 산출 불가(null)
+  "unavailable": {}                  // null KPI에 대한 사유 표기
+}
+```
+> `geminiSuccessRate`, `p95PropagationMs`는 BYOK·클라 측정 지표라 서버 DB만으로는 산출되지 않아 `null`로 노출하고 `unavailable`에 사유를 둔다. 클라이언트 계측(`frontend/src/lib/metrics.ts`)이 best-effort로 이벤트를 발행한다(XC-10).
+
+### 2.3 개발 프록시
+
+- REST 베이스 `/api`. Vite dev 프록시 `/api → http://localhost:3001` (rewrite로 `^/api` 제거 — 서버는 `/api` prefix를 두지 않음).
+- SSE 구독도 동일 출처(`/api/posts/:id/stream`)로 CSP `connect-src 'self'` 안에서 동작.
+
+---
+
+## 3. 주요 구현 결정 (스펙 보강)
+
+- **요약 세그먼트 멱등(BE-7/BE-5s)**: AI_SUMMARY는 **새 세그먼트 N+1의 첫(최저 seq) 버블**로 들어가고, 헬퍼 `openSummarySegment(db, input, segmentExpected)`(`server/src/domain/segment.ts`)가 한 트랜잭션에서 (a) 활성 N 비활성화, (b) N+1 활성 생성(요약 토큰으로 `tokenSum` 시드), (c) `N+1.summaryCommentId` 연결을 수행. `segmentExpected !== active.index`면 **409 `{ segmentIndex, summaryCommentId }`** 반환(이중 개시 방지). 성공 시 `comment.created` → `segment.opened`를 **seq 순서대로** 발행(RT-8).
+- **컨텍스트 조립(BE-12)**: `server/src/domain/contextAssembler.ts`가 활성 세그먼트만 조립. seg0 = 원본 글 user turn + seg0 버블; seg≥1 = "지금까지 요약: …" user turn + 그 이후 버블(이전 히스토리 제외, FR-7.2). PENDING/FAILED AI 버블은 컨텍스트에서 제외(COMPLETE만).
+- **CSP 적용 방식(XC-3, L2)**: 서버는 `onSend` 훅(`server/src/plugins/security.ts`)으로 **모든 응답**에 CSP 헤더 부여. SPA는 빌드 시 `vite.config.ts`의 주입 플러그인이 `dist/index.html`에 `<meta http-equiv>`로 동일 CSP 주입(`apply: 'build'`이므로 **dev HMR은 영향 없음**). 확정 CSP:
+  ```
+  default-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com;
+  script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
+  ```
+- **레이트 리미팅 기본값(XC-9)**: 인메모리(단일 인스턴스). `POST /posts` 10회/분/identity(슬라이딩 윈도우), `POST /communities` 1회/3분/identity(쿨다운). 초과 시 429 + `Retry-After`. 읽기/댓글 게시는 비제한(실시간 데모 매끄러움 위해).
+- **마크다운 sanitize chokepoint(XC-3)**: `frontend/src/lib/sanitize.ts`의 `renderMarkdownSafe(md)`(marked → DOMPurify 엄격 allowlist) + `SafeMarkdown` 컴포넌트가 **유일한** `dangerouslySetInnerHTML` 경로. 모든 사용자 콘텐츠(ChatBubble/SummaryBubble/PostCard/Thread 원본 본문)가 이를 경유. `javascript:`/`data:`/`iframe`/`script`/이벤트 핸들러 제거, 실패 시 평문 폴백.
+- **hot decay(XC-8)**: 읽기 시점 재계산 방식 채택(PoC). hot 피드 반환 시 `ageDecay`를 반영해 정렬이 현재 경과시간을 반영하도록 함(커서 페이지네이션 유지).
+- **토큰 카운팅(AI-3)**: `countTokens` 우선, 폴백 `Math.ceil(text.length/4)`(`estimateTokens`). 버블 게시 시 `tokenCount`를 함께 보내 서버가 활성 세그먼트 `tokenSum` 누적.
+
+---
+
+## 4. 개발 중 수정한 버그
+
+1. **CSP·레이트리밋 플러그인 캡슐화로 전역 훅 미적용 (M5, L2 위반)**
+   - 증상: `app.register(security)` / `app.register(rateLimit)`로 등록 시 Fastify가 플러그인 컨텍스트를 **캡슐화**해, `onSend`(CSP)·`onRequest`(레이트리밋) 훅이 **형제 라우트와 `/health`에 적용되지 않았다.** 결과적으로 응답에 CSP 헤더가 없고(키 유출 1차 완화책 무력화), `POST /posts`가 429를 내지 않았다(연속 게시 모두 201).
+   - 수정: 두 플러그인 export를 `fastify-plugin`(`fp`)로 감싸 훅을 **de-encapsulate** → 앱 전역 적용. `fastify-plugin` ^5를 `server` 의존성에 추가. `app.ts` 변경 없음(등록 순서는 이미 올바름).
+   - 파일: `server/src/plugins/security.ts`, `server/src/plugins/rateLimit.ts`, `server/package.json`.
+   - 발견 경로: M5 검증(verify) 패스의 부팅 스모크(실제 리스닝 서버에서 CSP 헤더·429 부재 확인).
+
+2. **`CreateCommentRequest.segmentExpected` 타입 오류 (M4)**
+   - `frontend/src/api/types.ts`의 댓글 게시 요청 타입에서 `segmentExpected` 표기가 엔진의 요약 게시 호출과 어긋나 typecheck 단계에서 정정.
+
+> 그 외 M1–M4 검증에서는 라우트/도메인 소스의 기능 버그가 발견되지 않았다(독립 구현 산출물이 계약대로 통합됨). 대부분의 검증은 typecheck/build/부팅 스모크에서 무수정 통과.
+
+---
+
+## 5. 스펙에 없던 추가 보조 자산
+
+구현 응집을 위해 PLAN의 WP 파일 목록 외에 도입한 소규모 자산:
+
+- `frontend/src/stores/postIntentStore.ts` — CreatePost의 "1차 AI 답변 받기" 토글 값을 Thread로 전달(스레드 진입 후 1회 trigger). (FR-4.3 보조)
+- `frontend/src/engine/retryAiBubble.ts` — FAILED AI 버블 재시도(같은 버블 재호출 → PATCH) 보조. (FE-12 retry 보조)
+- `frontend/src/lib/SafeMarkdown.tsx` — `renderMarkdownSafe` 래퍼 컴포넌트(XC-3 렌더 편의).
+- `frontend/src/components/states/` — `EmptyState` / `ErrorState` / `LoadingState` / `OfflineBanner` (FE-14 재사용 컴포넌트 집합).
+- `server/src/domain/segment.ts::openSummarySegment` — 요약 전환 트랜잭션 헬퍼(BE-5s/BE-7 응집).
+
+---
+
+## 6. 테스트 현황 (XC-T)
+
+- **백엔드 (`server/`, vitest, app.inject + 격리 SQLite): 22/22 green**
+  - `contract.test.ts` (10): clientId 멱등, `/context` seg0(#5) vs seg≥1 제외(#7), PATCH 인가(사람/AI/오인가 403), 요약 409 가드, `/auth/session {id,username}`, key-blind.
+  - `sse.test.ts` (4): `comment.created/updated/segment.opened` seq 순서 수신, afterSeq/Last-Event-ID 재생.
+  - `hotScore.test.ts` (8): 정렬/decay 단조성.
+- **프론트 (`frontend/`, vitest + jsdom, rest/gemini 모킹): 28 green**
+  - `engine/contextEngine.test.ts`: buildContents XC-4 격리, 순서(사람→PENDING→reply), `ensureSummary` 409 재조회·지연(호출자 키), AI-9 재조립.
+  - `api/gemini.test.ts`: 401/403/429 에러 매핑, 토큰 추정.
+  - `lib/sanitize.test.ts`: `<script>`/`onerror`/`javascript:` 제거.
+  - `stores/threadStore.test.ts`: seq/id/clientId dedupe.
+- **E2E (`frontend/e2e/`, Playwright, Gemini `page.route` 모킹): J1/J2/J3 스캐폴드** — 명세 type-clean, 실행 절차는 `frontend/e2e/README.md`. **브라우저 E2E는 본 PoC 검증에서 미실행**(자동 green 게이트는 vitest unit/contract/integration). "실제 키" 레인도 미실행(BYOK라 CI 키 부재).
+
+---
+
+## 7. 실행 방법
+
+```bash
+# Backend (http://localhost:3001)
+cd server
+npm install
+npx prisma generate && npx prisma migrate dev   # SQLite dev.db
+npm run dev        # tsx watch
+npm test           # vitest (격리 test.db)
+
+# Frontend (http://localhost:5173, /api → :3001 프록시)
+cd frontend
+npm install
+npm run dev
+npm test           # vitest
+npm run build      # tsc && vite build (PWA SW + manifest 산출)
+
+# E2E (선택) — 절차는 frontend/e2e/README.md
+```
+
+로그인 시 입력한 **Google AI Studio API 키는 localStorage에만 저장**되고 서버로 전송되지 않는다. 키는 브라우저에서 호출 시점에만 메모리로 사용되어 Google로 직접 전송된다.
+
+---
+
+## 8. 알려진 제약 / 후속 (PoC 범위)
+
+- **브라우저 E2E·실키 레인 미실행**: 스캐폴드만 제공(위 §6). 실 환경에서 서버+프론트 기동 후 수동/CI 실행 권장.
+- **`geminiSuccessRate`·`p95PropagationMs`**: 서버 DB 단독 산출 불가 → 클라 계측(XC-10) 집계 파이프라인은 PoC에서 best-effort(서버는 `null` 노출).
+- **단일 인스턴스 pub/sub·레이트리밋**: 인메모리(L10). 다중 인스턴스 시 Redis seam 교체 필요.
+- **SQLite PoC**: datasource 추상화로 Postgres 교체 예정(L10).

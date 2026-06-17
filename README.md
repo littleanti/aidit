@@ -26,7 +26,7 @@ Browser (React PWA)  ──REST(텍스트만)──▶  Aidit Server (Node + Fas
 
 ## 개발
 
-자세한 사양은 [`docs/`](./docs)를 참조하세요: [PRD](./docs/PRD.md) · [TRD](./docs/TRD.md) · [PLAN](./docs/PLAN.md) · [WIREFRAME](./docs/WIREFRAME.md).
+자세한 사양은 [`docs/`](./docs)를 참조하세요: [PRD](./docs/PRD.md) · [TRD](./docs/TRD.md) · [PLAN](./docs/PLAN.md) · [WIREFRAME](./docs/WIREFRAME.md) · [구현 노트](./docs/IMPLEMENTATION_NOTES.md)(실제 구현 차이·추가·버그 수정·실행 방법).
 
 ```bash
 # Backend

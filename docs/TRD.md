@@ -147,22 +147,26 @@ model ContextSegment {
 
 ## 4. REST API (요약)
 
+> **구현 메모(확정)**: 아래 "인증" 칼럼의 `username`은 실제 구현에서 **`x-user-id` 헤더(영속화된 `User.id`)** 로 실현된다(L11 정합). `POST /auth/session`이 `{ id, username }`을 반환하고 클라이언트가 `userId`를 보관해 모든 쓰기에 `x-user-id`로 전달한다. **키는 어떤 헤더/바디/로그에도 절대 포함되지 않는다(L1).** 전체 구현 차이·추가 엔드포인트·KPI 형상은 [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md) 참조.
+
 | Method · Path | 설명 | 인증 | 비고 |
 |---------------|------|------|------|
-| `POST /auth/session` | username 등록/확인(없으면 생성) | - | 키 미전송. 사실상 username upsert |
+| `POST /auth/session` | username 등록/확인(없으면 생성), **`{id,username}` 반환** | - | 키 미전송. username upsert |
 | `GET /communities?q=` | 커뮤니티 검색(부분일치) | - | FR-1.2 |
-| `POST /communities` | 커뮤니티 생성(name, slug, personaPrompt) | username | FR-3.1 |
-| `PATCH /communities/:id` | 페르소나/설명 수정(생성자만) | username | FR-3.3 |
+| `POST /communities` | 커뮤니티 생성(name, slug, personaPrompt, personaIcon) | `x-user-id` | FR-3.1 |
+| `PATCH /communities/:id` | 페르소나/설명 수정(생성자만) | `x-user-id` | FR-3.3 |
 | `GET /posts?sort=hot&cursor=` | 홈 인기 피드 | - | FR-1.1, 커서 페이지네이션 |
 | `GET /communities/:slug/posts` | 커뮤니티별 글 | - | |
-| `POST /posts` | 글 작성(먼저 등록) | username | FR-4.2 |
+| `POST /posts` | 글 작성(먼저 등록, seg#0 자동) | `x-user-id` | FR-4.2 · 레이트리밋(XC-9) |
 | `GET /posts/:id` | 글 + 메타 | - | |
 | `GET /posts/:id/comments?afterSeq=` | 버블 페이지네이션 | - | FR-5 |
-| `POST /posts/:id/comments` | **버블 게시**(사람/AI/요약 텍스트) | username | §4.1 |
-| `PATCH /comments/:id` | AI 버블 상태/본문 갱신(PENDING→COMPLETE/FAILED) | username | FR-6.2 |
+| `POST /posts/:id/comments` | **버블 게시**(사람/AI/요약 텍스트) | `x-user-id`(사람) | §4.1 · clientId 멱등 |
+| `PATCH /comments/:id` | AI 버블 상태/본문 갱신(PENDING→COMPLETE/FAILED) | `x-user-id`(사람)·clientId(AI) | FR-6.2 |
 | `GET /posts/:id/context` | **AI 호출용 컨텍스트 조립 결과** 반환 | - | §6.2 핵심 |
 | `GET /posts/:id/stream` | **SSE 구독**(새 버블/상태변경 push) | - | §7 |
-| `POST /posts/:id/upvote` | 추천 | username | hotScore 갱신 |
+| `POST /posts/:id/upvote` | 추천 | `x-user-id` | hotScore 갱신 |
+| `POST /metrics/visit` | 인증 앱 오픈 시 `VisitEvent` 일별 멱등 기록 | `x-user-id` | BE-13 · 작성자 D1 |
+| `GET /metrics` | §8 KPI 집계 반환 | - | BE-13 (형상: IMPLEMENTATION_NOTES §2.2) |
 
 ### 4.1 `POST /posts/:id/comments` — 버블 게시 계약
 
