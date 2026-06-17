@@ -1,0 +1,184 @@
+// FE-9: ChatBubble — renders a single comment as a chat-room bubble.
+//
+// Side rule (FR-5.3): own human -> right (brand-filled). Everyone else,
+// including ALL AI comments (authorId === null), render on the left.
+// Variants: own human / other human / AI reply / AI summary (full-width band).
+// Status: PENDING -> typing/loading; FAILED -> red border + 재시도 affordance.
+//
+// L1: nothing here touches an API key. AI authorship is signalled purely by
+// authorId === null + type, never by any key material.
+
+import { useAuthStore } from '../stores/authStore';
+import type { Comment } from '../api/types';
+
+/** Compact relative time in Korean (방금 / N분 / N시간 / N일 / N주, else date). */
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const diffSec = Math.floor((Date.now() - then) / 1000);
+  if (diffSec < 60) return '방금';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}분`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}시간`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}일`;
+  const diffWk = Math.floor(diffDay / 7);
+  if (diffWk < 5) return `${diffWk}주`;
+  return new Date(then).toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  });
+}
+
+const DEFAULT_PERSONA_ICON = '🤖';
+
+interface ChatBubbleProps {
+  comment: Comment;
+  /** persona display name for AI bubbles (community persona). */
+  personaName?: string | null;
+  /** persona icon (emoji / short token) for AI bubbles. */
+  personaIcon?: string | null;
+  /** retry affordance for FAILED comments (wired in M3). */
+  onRetry?: (comment: Comment) => void;
+}
+
+/** PENDING typing indicator: three bouncing dots + label. */
+function TypingDots() {
+  return (
+    <span className="inline-flex items-center gap-1.5" aria-label="입력 중">
+      <span className="inline-flex gap-0.5" aria-hidden>
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current" />
+      </span>
+      <span className="text-xs opacity-70">⟳ 입력 중…</span>
+    </span>
+  );
+}
+
+export default function ChatBubble({
+  comment,
+  personaName,
+  personaIcon,
+  onRetry,
+}: ChatBubbleProps) {
+  const me = useAuthStore((s) => s.userId);
+
+  const isAi = comment.authorId === null;
+  const isSummary = comment.type === 'AI_SUMMARY';
+  // AI bubbles are ALWAYS left; only own-human goes right.
+  const side: 'left' | 'right' = !isAi && comment.authorId === me ? 'right' : 'left';
+
+  const isPending = comment.status === 'PENDING';
+  const isFailed = comment.status === 'FAILED';
+
+  const time = relativeTime(comment.createdAt);
+
+  // ---- AI_SUMMARY: full-width amber/purple band (basic M1 version). ----
+  if (isSummary) {
+    return (
+      <div className="my-2 w-full px-1">
+        <div className="rounded-lg border border-amber-300 bg-gradient-to-r from-amber-50 to-purple-50 px-3 py-2.5">
+          <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-amber-700">
+            <span aria-hidden>≈</span>
+            <span>요약</span>
+            <span aria-hidden>≈</span>
+          </div>
+          {isPending ? (
+            <div className="text-amber-800">
+              <TypingDots />
+            </div>
+          ) : (
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">
+              {comment.body}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const alignClass = side === 'right' ? 'items-end' : 'items-start';
+  const personaLabel =
+    personaName && personaName.trim() ? personaName : 'AI 페르소나';
+  const personaEmoji =
+    personaIcon && personaIcon.trim() ? personaIcon : DEFAULT_PERSONA_ICON;
+
+  // Bubble surface classes per variant.
+  let bubbleClass: string;
+  if (side === 'right') {
+    // own human — brand filled.
+    bubbleClass = 'bg-brand text-white rounded-2xl rounded-br-sm';
+  } else if (isAi) {
+    // AI reply — light purple border.
+    bubbleClass =
+      'bg-purple-50 text-slate-800 border border-purple-300 rounded-2xl rounded-bl-sm';
+  } else {
+    // other human — gray.
+    bubbleClass = 'bg-slate-100 text-slate-800 rounded-2xl rounded-bl-sm';
+  }
+  if (isFailed) {
+    bubbleClass += ' !border !border-red-400 !bg-red-50 !text-red-900';
+  }
+
+  return (
+    <div className={`flex w-full flex-col gap-1 px-1 py-1 ${alignClass}`}>
+      {/* author / persona header (left bubbles only) */}
+      {side === 'left' && (
+        <div className="flex items-center gap-1 px-1 text-xs text-slate-500">
+          {isAi ? (
+            <>
+              <span aria-hidden className="text-sm leading-none">
+                {personaEmoji}
+              </span>
+              <span className="font-medium text-purple-700">{personaLabel}</span>
+              <span className="rounded bg-purple-100 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-purple-700">
+                AI
+              </span>
+            </>
+          ) : (
+            <span className="font-medium text-slate-600">
+              {comment.authorUsername ?? '익명'}
+            </span>
+          )}
+        </div>
+      )}
+
+      <div
+        className={`flex max-w-[78%] flex-col ${
+          side === 'right' ? 'items-end' : 'items-start'
+        }`}
+      >
+        <div
+          className={`min-h-[44px] px-3 py-2 text-sm leading-relaxed ${bubbleClass}`}
+        >
+          {isPending ? (
+            <TypingDots />
+          ) : (
+            <p className="whitespace-pre-wrap break-words">{comment.body}</p>
+          )}
+        </div>
+
+        {/* meta line: time + retry on failure */}
+        <div
+          className={`mt-0.5 flex items-center gap-2 px-1 text-[11px] text-slate-400 ${
+            side === 'right' ? 'flex-row-reverse' : 'flex-row'
+          }`}
+        >
+          {time && <time dateTime={comment.createdAt}>{time}</time>}
+          {isFailed && (
+            <button
+              type="button"
+              onClick={() => onRetry?.(comment)}
+              className="inline-flex min-h-[44px] items-center gap-0.5 font-medium text-red-600 active:opacity-70"
+            >
+              <span aria-hidden>↻</span> 재시도
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

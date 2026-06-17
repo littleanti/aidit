@@ -1,5 +1,7 @@
 import type {
+  Comment,
   Community,
+  CreateCommentRequest,
   Post,
   PostListItem,
   SessionResponse,
@@ -153,4 +155,36 @@ export function postPost(body: CreatePostBody, userId: string): Promise<Post> {
 
 export function getPost(id: string): Promise<Post> {
   return request<Post>(`/posts/${id}`);
+}
+
+// ---- Comments ----
+
+/**
+ * POST /posts/:id/comments — create a comment (human or AI placeholder).
+ * L1: NO key crosses the wire; acting user via x-user-id header.
+ * L12: body carries clientId for idempotency.
+ */
+export function postComment(
+  postId: string,
+  body: CreateCommentRequest,
+  userId: string,
+): Promise<Comment> {
+  return request<Comment>(`/posts/${postId}/comments`, {
+    method: 'POST',
+    body,
+    userId,
+  });
+}
+
+/**
+ * GET /posts/:id/comments?afterSeq= — fetch comments, optionally only those
+ * after a given seq (L4 ordering key) for incremental catch-up.
+ */
+export function getComments(
+  postId: string,
+  afterSeq?: number,
+): Promise<Comment[]> {
+  return request<Comment[]>(`/posts/${postId}/comments`, {
+    query: { afterSeq },
+  });
 }
