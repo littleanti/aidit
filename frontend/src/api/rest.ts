@@ -135,14 +135,27 @@ export interface GetPostsParams {
   cursor?: string;
 }
 
-export function getPosts(params: GetPostsParams = {}): Promise<PostListItem[]> {
-  return request<PostListItem[]>('/posts', {
-    query: { sort: params.sort, cursor: params.cursor },
-  });
+// The server returns a paginated envelope { items, nextCursor? } for post
+// listings (a bare array for some other resources). Normalize to an array here
+// so callers can rely on the declared PostListItem[] return type. The next
+// cursor is derived client-side from the last item's id.
+type PostListResponse = PostListItem[] | { items: PostListItem[] };
+function toItems(r: PostListResponse): PostListItem[] {
+  return Array.isArray(r) ? r : (r?.items ?? []);
 }
 
-export function getCommunityPosts(slug: string): Promise<PostListItem[]> {
-  return request<PostListItem[]>(`/communities/${slug}/posts`);
+export async function getPosts(
+  params: GetPostsParams = {},
+): Promise<PostListItem[]> {
+  const r = await request<PostListResponse>('/posts', {
+    query: { sort: params.sort, cursor: params.cursor },
+  });
+  return toItems(r);
+}
+
+export async function getCommunityPosts(slug: string): Promise<PostListItem[]> {
+  const r = await request<PostListResponse>(`/communities/${slug}/posts`);
+  return toItems(r);
 }
 
 export interface CreatePostBody {
@@ -182,13 +195,17 @@ export function postComment(
  * GET /posts/:id/comments?afterSeq= — fetch comments, optionally only those
  * after a given seq (L4 ordering key) for incremental catch-up.
  */
-export function getComments(
+export async function getComments(
   postId: string,
   afterSeq?: number,
 ): Promise<Comment[]> {
-  return request<Comment[]>(`/posts/${postId}/comments`, {
-    query: { afterSeq },
-  });
+  // Server returns the paginated envelope { items, nextCursor? }; normalize to
+  // an array so callers (threadStore.setInitial) get the declared Comment[].
+  const r = await request<Comment[] | { items: Comment[] }>(
+    `/posts/${postId}/comments`,
+    { query: { afterSeq } },
+  );
+  return Array.isArray(r) ? r : (r?.items ?? []);
 }
 
 /**

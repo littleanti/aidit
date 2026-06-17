@@ -4,15 +4,15 @@
 // CONTRACT under test: when a user posts a comment containing '@AI', the HUMAN
 // comment is committed FIRST (human-first ordering), and only AFTER that does
 // the AI reply bubble appear. We assert both bubbles are present AND that the
-// human bubble is ordered before the AI bubble in the DOM.
+// human bubble is ordered before the AI bubble in the chat column.
 //
-// Gemini is mocked (page.route), so a DUMMY key is sufficient and no real model
-// call is made.
+// Gemini is mocked (page.route), so a DUMMY key suffices and no real model call
+// is made.
 // ============================================================================
 import { test, expect } from '@playwright/test';
-import { login, mockGemini, uniq } from './helpers';
+import { login, mockGemini, uniq, createCommunityAndPost } from './helpers';
 
-const HUMAN_TEXT = '@AI what is the answer here?';
+const HUMAN_TEXT = '@AI 이 토론의 핵심이 뭐야?';
 const AI_REPLY = 'J2 AI answer to the mention.';
 
 test('J2: @AI comment shows the human bubble first, then the AI reply', async ({ page }) => {
@@ -20,10 +20,8 @@ test('J2: @AI comment shows the human bubble first, then the AI reply', async ({
 
   await login(page, uniq('j2user'));
 
-  // Open an existing thread. The scaffold assumes a seeded/most-recent post is
-  // reachable from Home; adjust the navigation for your seed (see README).
-  await page.goto('/');
-  await page.locator('a[href*="/post/"], a[href*="/t/"]').first().click();
+  // Own community + post (primary AI off so the only AI bubble is the @AI reply).
+  await createCommunityAndPost(page, { primaryAi: false });
 
   // Type an @AI comment in the Composer and send it.
   const composer = page.getByLabel('댓글 입력');
@@ -38,8 +36,7 @@ test('J2: @AI comment shows the human bubble first, then the AI reply', async ({
   const aiBubble = page.getByText(AI_REPLY, { exact: false });
   await expect(aiBubble).toBeVisible({ timeout: 15_000 });
 
-  // 3) DOM order: the human comment is positioned before the AI reply. We use
-  //    bounding boxes (vertical position) since the thread is a chat column.
+  // 3) Chat-column order: the human comment sits above the AI reply.
   const humanBox = await humanBubble.first().boundingBox();
   const aiBox = await aiBubble.first().boundingBox();
   expect(humanBox, 'human bubble must be laid out').not.toBeNull();

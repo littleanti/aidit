@@ -105,6 +105,23 @@ TRD §4 표는 인증 칼럼을 "username"으로 적었으나, **실제 구현�
 
 > 그 외 M1–M4 검증에서는 라우트/도메인 소스의 기능 버그가 발견되지 않았다(독립 구현 산출물이 계약대로 통합됨). 대부분의 검증은 typecheck/build/부팅 스모크에서 무수정 통과.
 
+### 4.1 라이브 런타임 검증(실제 Gemini 키)에서 발견·수정한 버그
+
+빌드/타입체크만으로는 드러나지 않았고, **실제 키로 앱을 구동(claude-in-chrome MCP + Playwright)** 했을 때 비로소 나타난 런타임 통합 버그들이다. 모두 수정 후 재검증 green.
+
+3. **페이지네이션 envelope 미해제 — 피드/스레드 (`{items}` vs 배열)**
+   - 증상: 서버 목록 엔드포인트는 `{ items: [...] }`를 반환하는데 `rest.ts`의 `getPosts`/`getCommunityPosts`/`getComments`가 이를 `PostListItem[]`/`Comment[]`로 **그대로** 반환(타입과 런타임 불일치). 결과: 커뮤니티 상세가 `posts.map is not a function`로 **크래시**, 홈 피드는 `.length` 가드 덕에 크래시는 면했으나 **글이 있어도 빈 화면**, Thread는 `getComments`가 객체라 **"스레드를 불러오지 못했습니다"** 로딩 실패.
+   - 수정: 세 함수가 `Array.isArray(r) ? r : r.items ?? []`로 정규화(다음 커서는 마지막 항목 id로 클라가 도출하므로 안전). 파일: `frontend/src/api/rest.ts`.
+4. **PENDING AI 버블 빈 본문 거부 → `@AI`/1차 답변 400 (FR-6.2 위반)**
+   - 증상: 엔진이 로딩 버블을 `body:''`(PENDING)로 먼저 게시한 뒤 COMPLETE 시 PATCH로 본문을 채우는데, `POST /comments`가 본문을 **무조건 비어있지 않게** 요구해 `{"error":"body is required"}` 400 → AI 답변이 전혀 생성되지 않음.
+   - 수정: `status === 'PENDING'`일 때 빈 본문 허용(텍스트는 PATCH로 도착). 파일: `server/src/routes/comments.ts`.
+5. **`GET /posts/:id`에 `authorId` 누락 → 1차 AI 답변 미발화 (FR-4.3 / 수용 #3 위반)**
+   - 증상: 글 상세 응답이 `author:{id,username}`만 주고 최상위 `authorId`(및 `communityId`) 스칼라를 누락. Thread의 1차 답변 가드 `post.authorId === me`가 `undefined === me`로 항상 거짓 → **작성자 키 1차 AI 답변이 전혀 발화되지 않음**.
+   - 수정: 상세 응답에 `authorId`/`communityId` 포함(Post DTO와 일치). 파일: `server/src/routes/posts.ts`.
+6. **모바일에서 하단 탭바가 Composer 전송 버튼을 가림 (NFR-1)**
+   - 증상: Thread의 Composer가 `sticky bottom-0`인데 모바일 고정 하단 탭바(`fixed bottom-0 z-20`)와 겹쳐 **전송 버튼이 탭바에 가려 클릭 불가**(Playwright Pixel 7에서 pointer-intercept로 발견; 데스크톱은 탭바 `tablet:hidden`이라 비노출).
+   - 수정: Composer를 모바일에서 탭바 위로 올림(`sticky bottom-16 z-30 tablet:bottom-0`). 파일: `frontend/src/components/Composer.tsx`.
+
 ---
 
 ## 5. 스펙에 없던 추가 보조 자산
@@ -130,7 +147,10 @@ TRD §4 표는 인증 칼럼을 "username"으로 적었으나, **실제 구현�
   - `api/gemini.test.ts`: 401/403/429 에러 매핑, 토큰 추정.
   - `lib/sanitize.test.ts`: `<script>`/`onerror`/`javascript:` 제거.
   - `stores/threadStore.test.ts`: seq/id/clientId dedupe.
-- **E2E (`frontend/e2e/`, Playwright, Gemini `page.route` 모킹): J1/J2/J3 스캐폴드** — 명세 type-clean, 실행 절차는 `frontend/e2e/README.md`. **브라우저 E2E는 본 PoC 검증에서 미실행**(자동 green 게이트는 vitest unit/contract/integration). "실제 키" 레인도 미실행(BYOK라 CI 키 부재).
+- **E2E (`frontend/e2e/`, Playwright): 4/4 green (실행 검증 완료)**
+  - **J1/J2/J3 (Gemini `page.route` 모킹, 더미 키)**: 로그인→커뮤니티 생성→글 작성→스레드 흐름을 실제 UI로 구동. J1 1차 답변(FR-4.3), J2 사람-먼저→@AI 답변(FR-6.2), J3 128K 초과→색 구분 요약 띠(`role="separator"`)→요약 기반 답변(FR-7). 초기 스캐폴드는 실 UI와 맞지 않는 셀렉터(`/post/` 등)·시드 가정으로 실행 시 실패했으나, `helpers.createCommunityAndPost`/`seedOverThreshold`로 자체 데이터를 만들도록 재작성해 green.
+  - **`real-key-byok.spec.ts` (실제 Gemini 키, env `GEMINI_TEST_KEY`로 opt-in, 키 미커밋)**: 실제 BYOK `@AI` 흐름을 구동하며 (1) 서버가 키를 절대 수신하지 않음(key-blind, 모든 `/api` URL·헤더·바디 검사), (2) `generativelanguage.googleapis.com`로 **직접** 호출 발생, (3) AI_REPLY가 COMPLETE에 도달함을 단언. 키 부재 시 자동 skip(=CI 안전).
+  - 실행 절차: `frontend/e2e/README.md`. 게이트: 모킹 J1/J2/J3 + (키 제공 시) 실키 스펙.
 
 ---
 
@@ -160,7 +180,7 @@ npm run build      # tsc && vite build (PWA SW + manifest 산출)
 
 ## 8. 알려진 제약 / 후속 (PoC 범위)
 
-- **브라우저 E2E·실키 레인 미실행**: 스캐폴드만 제공(위 §6). 실 환경에서 서버+프론트 기동 후 수동/CI 실행 권장.
+- **브라우저 E2E·실키 레인**: 실행 검증 완료(§6, 4/4 green). 실키 스펙은 `GEMINI_TEST_KEY` env로만 동작하며 CI에서는 자동 skip — CI 자동 게이트는 모킹 J1/J2/J3 + vitest.
 - **`geminiSuccessRate`·`p95PropagationMs`**: 서버 DB 단독 산출 불가 → 클라 계측(XC-10) 집계 파이프라인은 PoC에서 best-effort(서버는 `null` 노출).
 - **단일 인스턴스 pub/sub·레이트리밋**: 인메모리(L10). 다중 인스턴스 시 Redis seam 교체 필요.
 - **SQLite PoC**: datasource 추상화로 Postgres 교체 예정(L10).

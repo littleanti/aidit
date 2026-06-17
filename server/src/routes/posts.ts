@@ -262,6 +262,11 @@ const plugin: FastifyPluginAsync = async (app) => {
 
     return reply.send({
       id: post.id,
+      // Top-level scalar FKs per the Post DTO. authorId is required by the
+      // Thread's primary-reply guard (post.authorId === me) and communityId by
+      // the AI engine; omitting them silently disabled the first AI reply.
+      communityId: post.communityId,
+      authorId: post.authorId,
       title: post.title,
       body: post.body,
       score: post.score,

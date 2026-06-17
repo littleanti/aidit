@@ -153,8 +153,11 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
     }
   }
 
+  // On mobile the fixed bottom tab bar (h ~56px) sits at bottom-0; lift the
+  // composer above it so the send button isn't covered. On tablet+ the tab bar
+  // is hidden, so sit flush at the bottom.
   return (
-    <div className="sticky bottom-0 border-t border-slate-200 bg-white">
+    <div className="sticky bottom-16 z-30 border-t border-slate-200 bg-white tablet:bottom-0">
       {toast && (
         <div
           role="alert"

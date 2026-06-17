@@ -118,7 +118,13 @@ const plugin: FastifyPluginAsync = async (app) => {
       if (type !== "HUMAN" && type !== "AI_REPLY" && type !== "AI_SUMMARY") {
         return reply.code(400).send({ error: "Invalid or missing type" });
       }
-      if (typeof body !== "string" || body.length === 0) {
+      // A PENDING bubble (AI loading placeholder, FR-6.2) legitimately has no
+      // body yet — its text arrives via PATCH on COMPLETE. Only require a
+      // non-empty body for non-PENDING comments.
+      if (typeof body !== "string") {
+        return reply.code(400).send({ error: "body is required" });
+      }
+      if (body.length === 0 && status !== "PENDING") {
         return reply.code(400).send({ error: "body is required" });
       }
       if (typeof clientId !== "string" || clientId.length === 0) {
