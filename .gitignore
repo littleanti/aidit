@@ -1,0 +1,44 @@
+# --- OMC / temp (explicitly ignored per project setup) ---
+.omc/
+tmp/
+
+# --- Dependencies ---
+node_modules/
+.pnpm-store/
+
+# --- Build output ---
+dist/
+build/
+*.tsbuildinfo
+.vite/
+
+# --- Environment / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Database (SQLite PoC) ---
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+server/prisma/dev.db*
+
+# --- Logs ---
+*.log
+npm-debug.log*
+pnpm-debug.log*
+logs/
+
+# --- Editor / OS ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# --- Test / coverage ---
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
