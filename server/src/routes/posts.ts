@@ -1,0 +1,318 @@
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+
+import { prisma } from "../db.js";
+import { hotScore } from "../domain/hotScore.js";
+import { createInitialSegment } from "../domain/segment.js";
+
+// --- helpers ---------------------------------------------------------------
+
+// Acting user is carried in the x-user-id header (L11: persisted User.id). Returns
+// the id, or null after sending a 401 (caller must return immediately).
+function requireUserId(req: FastifyRequest, reply: FastifyReply): string | null {
+  const header = req.headers["x-user-id"];
+  const userId = Array.isArray(header) ? header[0] : header;
+  if (!userId) {
+    void reply.code(401).send({ error: "Missing x-user-id" });
+    return null;
+  }
+  return userId;
+}
+
+// Feed cursor: opaque base64 of "hotScore|id" (hot) or "createdAtMs|id" (new). The
+// numeric component is the keyset tie-break anchor; id breaks ties deterministically.
+interface DecodedCursor {
+  value: number;
+  id: string;
+}
+
+function encodeCursor(value: number, id: string): string {
+  return Buffer.from(`${value}|${id}`, "utf8").toString("base64url");
+}
+
+function decodeCursor(cursor: string): DecodedCursor | null {
+  try {
+    const raw = Buffer.from(cursor, "base64url").toString("utf8");
+    const sep = raw.lastIndexOf("|");
+    if (sep <= 0) return null;
+    const value = Number(raw.slice(0, sep));
+    const id = raw.slice(sep + 1);
+    if (!Number.isFinite(value) || id === "") return null;
+    return { value, id };
+  } catch {
+    return null;
+  }
+}
+
+const FEED_PAGE_SIZE = 20;
+
+// Shape a post row (with community + author) into a feed card.
+function toFeedCard(p: {
+  id: string;
+  title: string;
+  score: number;
+  commentCount: number;
+  hotScore: number;
+  createdAt: Date;
+  community: { slug: string; name: string; personaIcon: string | null };
+  author: { username: string };
+}) {
+  return {
+    id: p.id,
+    title: p.title,
+    score: p.score,
+    commentCount: p.commentCount,
+    hotScore: p.hotScore,
+    createdAt: p.createdAt,
+    community: {
+      slug: p.community.slug,
+      name: p.community.name,
+      personaIcon: p.community.personaIcon,
+    },
+    author: { username: p.author.username },
+  };
+}
+
+const feedInclude = {
+  community: { select: { slug: true, name: true, personaIcon: true } },
+  author: { select: { username: true } },
+} as const;
+
+// --- plugin ----------------------------------------------------------------
+
+const plugin: FastifyPluginAsync = async (app) => {
+  // BE-5: Create a post + its initial ContextSegment (index 0, isActive) atomically.
+  app.post<{ Body: { communityId?: string; title?: string; body?: string } }>(
+    "/posts",
+    async (req, reply) => {
+      const userId = requireUserId(req, reply);
+      if (!userId) return;
+
+      const { communityId, title, body } = req.body ?? {};
+      if (!communityId || !title || !body) {
+        return reply
+          .code(400)
+          .send({ error: "communityId, title and body are required" });
+      }
+
+      const community = await prisma.community.findUnique({
+        where: { id: communityId },
+        select: { id: true },
+      });
+      if (!community) {
+        return reply.code(404).send({ error: "Community not found" });
+      }
+
+      const createdAt = new Date();
+      const initialHot = hotScore(0, 0, createdAt, createdAt);
+
+      const post = await prisma.$transaction(async (tx) => {
+        const created = await tx.post.create({
+          data: {
+            communityId,
+            authorId: userId,
+            title,
+            body,
+            score: 0,
+            commentCount: 0,
+            hotScore: initialHot,
+            createdAt,
+          },
+          include: feedInclude,
+        });
+        await createInitialSegment(tx, created.id);
+        return created;
+      });
+
+      return reply.code(201).send({
+        id: post.id,
+        communityId: post.communityId,
+        title: post.title,
+        body: post.body,
+        score: post.score,
+        commentCount: post.commentCount,
+        hotScore: post.hotScore,
+        createdAt: post.createdAt,
+        community: {
+          slug: post.community.slug,
+          name: post.community.name,
+          personaIcon: post.community.personaIcon,
+        },
+        author: { username: post.author.username },
+      });
+    },
+  );
+
+  // Home feed: ORDER BY hotScore DESC (sort=hot, default) or createdAt DESC
+  // (sort=new), keyset/cursor paginated.
+  app.get<{ Querystring: { sort?: string; cursor?: string } }>(
+    "/posts",
+    async (req, reply) => {
+      const sort = req.query.sort === "new" ? "new" : "hot";
+      const cursorRaw = req.query.cursor;
+      const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
+      if (cursorRaw && !cursor) {
+        return reply.code(400).send({ error: "Invalid cursor" });
+      }
+
+      // Keyset predicate: rows strictly "after" the cursor in the sort order.
+      // For DESC ordering on (key, id) the next page is key < cursorKey, OR
+      // key == cursorKey AND id < cursorId (id also DESC as a stable tie-break).
+      const where =
+        cursor === null
+          ? {}
+          : sort === "hot"
+            ? {
+                OR: [
+                  { hotScore: { lt: cursor.value } },
+                  {
+                    AND: [
+                      { hotScore: cursor.value },
+                      { id: { lt: cursor.id } },
+                    ],
+                  },
+                ],
+              }
+            : {
+                OR: [
+                  { createdAt: { lt: new Date(cursor.value) } },
+                  {
+                    AND: [
+                      { createdAt: new Date(cursor.value) },
+                      { id: { lt: cursor.id } },
+                    ],
+                  },
+                ],
+              };
+
+      const orderBy =
+        sort === "hot"
+          ? [{ hotScore: "desc" as const }, { id: "desc" as const }]
+          : [{ createdAt: "desc" as const }, { id: "desc" as const }];
+
+      const rows = await prisma.post.findMany({
+        where,
+        orderBy,
+        take: FEED_PAGE_SIZE + 1,
+        include: feedInclude,
+      });
+
+      const hasMore = rows.length > FEED_PAGE_SIZE;
+      const page = hasMore ? rows.slice(0, FEED_PAGE_SIZE) : rows;
+
+      let nextCursor: string | null = null;
+      if (hasMore && page.length > 0) {
+        const last = page[page.length - 1]!;
+        const anchor =
+          sort === "hot" ? last.hotScore : last.createdAt.getTime();
+        nextCursor = encodeCursor(anchor, last.id);
+      }
+
+      return reply.send({
+        items: page.map(toFeedCard),
+        nextCursor,
+      });
+    },
+  );
+
+  // Single post + community + author summary.
+  app.get<{ Params: { id: string } }>("/posts/:id", async (req, reply) => {
+    const post = await prisma.post.findUnique({
+      where: { id: req.params.id },
+      include: {
+        community: {
+          select: {
+            id: true,
+            slug: true,
+            name: true,
+            description: true,
+            personaIcon: true,
+          },
+        },
+        author: { select: { id: true, username: true } },
+      },
+    });
+    if (!post) {
+      return reply.code(404).send({ error: "Post not found" });
+    }
+
+    return reply.send({
+      id: post.id,
+      title: post.title,
+      body: post.body,
+      score: post.score,
+      commentCount: post.commentCount,
+      hotScore: post.hotScore,
+      createdAt: post.createdAt,
+      community: {
+        id: post.community.id,
+        slug: post.community.slug,
+        name: post.community.name,
+        description: post.community.description,
+        personaIcon: post.community.personaIcon,
+      },
+      author: { id: post.author.id, username: post.author.username },
+    });
+  });
+
+  // Posts within a community (newest by default, or hot).
+  app.get<{ Params: { slug: string }; Querystring: { sort?: string } }>(
+    "/communities/:slug/posts",
+    async (req, reply) => {
+      const community = await prisma.community.findUnique({
+        where: { slug: req.params.slug },
+        select: { id: true },
+      });
+      if (!community) {
+        return reply.code(404).send({ error: "Community not found" });
+      }
+
+      const sort = req.query.sort === "hot" ? "hot" : "new";
+      const orderBy =
+        sort === "hot"
+          ? [{ hotScore: "desc" as const }, { id: "desc" as const }]
+          : [{ createdAt: "desc" as const }, { id: "desc" as const }];
+
+      const rows = await prisma.post.findMany({
+        where: { communityId: community.id },
+        orderBy,
+        include: feedInclude,
+      });
+
+      return reply.send({ items: rows.map(toFeedCard) });
+    },
+  );
+
+  // BE-9b: Upvote — increment score, recompute hotScore, persist. PoC: no dedupe.
+  app.post<{ Params: { id: string } }>(
+    "/posts/:id/upvote",
+    async (req, reply) => {
+      const userId = requireUserId(req, reply);
+      if (!userId) return;
+
+      const post = await prisma.post.findUnique({
+        where: { id: req.params.id },
+        select: { score: true, commentCount: true, createdAt: true },
+      });
+      if (!post) {
+        return reply.code(404).send({ error: "Post not found" });
+      }
+
+      const newScore = post.score + 1;
+      const newHot = hotScore(newScore, post.commentCount, post.createdAt);
+
+      const updated = await prisma.post.update({
+        where: { id: req.params.id },
+        data: { score: newScore, hotScore: newHot },
+        select: { id: true, score: true, hotScore: true },
+      });
+
+      return reply.send({
+        id: updated.id,
+        score: updated.score,
+        hotScore: updated.hotScore,
+      });
+    },
+  );
+};
+
+export default plugin;

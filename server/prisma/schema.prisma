@@ -1,0 +1,116 @@
+// Aidit — Prisma schema (PoC)
+// Server is KEY-BLIND (PLAN L1): there is NO apiKey field anywhere in this model.
+// Includes PLAN L12 divergences from TRD §3:
+//   - Comment.clientId (String?) + @@unique([postId, clientId])
+//   - Community.personaIcon (String?, nullable)
+//   - VisitEvent { id, userId, date, @@unique([userId, date]) }
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id          String   @id @default(cuid())
+  username    String   @unique // display + self identification. Keys are NEVER stored.
+  createdAt   DateTime @default(now())
+  communities Community[]   @relation("CreatedCommunities")
+  posts       Post[]
+  comments    Comment[]
+  visitEvents VisitEvent[]
+}
+
+model Community {
+  id            String   @id @default(cuid())
+  slug          String   @unique // search / URL
+  name          String
+  description   String?
+  personaPrompt String   // community AI persona (system instruction)
+  personaIcon   String?  // L12: nullable persona icon
+  creatorId     String
+  creator       User     @relation("CreatedCommunities", fields: [creatorId], references: [id])
+  createdAt     DateTime @default(now())
+  posts         Post[]
+}
+
+model Post {
+  id           String   @id @default(cuid())
+  communityId  String
+  community    Community @relation(fields: [communityId], references: [id])
+  authorId     String
+  author       User     @relation(fields: [authorId], references: [id])
+  title        String
+  body         String
+  score        Int      @default(0)   // upvotes (popularity sort)
+  commentCount Int      @default(0)
+  hotScore     Float    @default(0)   // denormalized hot score (§9)
+  createdAt    DateTime @default(now())
+  comments     Comment[]
+  segments     ContextSegment[]
+}
+
+enum CommentType {
+  HUMAN
+  AI_REPLY
+  AI_SUMMARY
+}
+
+enum CommentStatus {
+  PENDING
+  COMPLETE
+  FAILED
+}
+
+model Comment {
+  id         String        @id @default(cuid())
+  postId     String
+  post       Post          @relation(fields: [postId], references: [id])
+  authorId   String?       // null for AI bubbles
+  author     User?         @relation(fields: [authorId], references: [id])
+  type       CommentType
+  status     CommentStatus @default(COMPLETE)
+  body       String
+  tokenCount Int           @default(0) // estimated, for context summation
+  segmentId  String        // owning context segment (§6)
+  segment    ContextSegment @relation(fields: [segmentId], references: [id])
+  replyToId  String?       // which human comment an @AI reply responds to
+  replyTo    Comment?      @relation("ReplyChain", fields: [replyToId], references: [id])
+  replies    Comment[]     @relation("ReplyChain")
+  clientId   String?       // L12: client-supplied idempotency key
+  seq        Int           // monotonic per-post order (SoT sort key, L4)
+  createdAt  DateTime      @default(now())
+
+  @@unique([postId, clientId]) // L12: idempotency
+  @@index([postId, seq])
+}
+
+// Context segment: the single source of truth for summary boundaries (PLAN L5).
+// seg#0 is auto-created on post creation. When a summary bubble is produced a new
+// segment opens, whose first bubble is the summary (AI_SUMMARY).
+model ContextSegment {
+  id               String   @id @default(cuid())
+  postId           String
+  post             Post     @relation(fields: [postId], references: [id])
+  index            Int      // 0,1,2... per-post ordinal
+  summaryCommentId String?  // the summary bubble opening this segment (when index>0)
+  tokenSum         Int      @default(0) // cached cumulative tokens (128K threshold basis)
+  isActive         Boolean  @default(true) // exactly ONE active segment per post
+  createdAt        DateTime @default(now())
+  comments         Comment[]
+
+  @@unique([postId, index])
+}
+
+// L12: per-user daily visit tracking (one row per user per date).
+model VisitEvent {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  date   String // e.g. "2026-06-17"
+
+  @@unique([userId, date])
+}
