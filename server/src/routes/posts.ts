@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 
 import { prisma } from "../db.js";
-import { hotScore } from "../domain/hotScore.js";
+import { effectiveHotScore, hotScore } from "../domain/hotScore.js";
 import { createInitialSegment } from "../domain/segment.js";
 
 // --- helpers ---------------------------------------------------------------
@@ -45,23 +45,28 @@ function decodeCursor(cursor: string): DecodedCursor | null {
 
 const FEED_PAGE_SIZE = 20;
 
-// Shape a post row (with community + author) into a feed card.
-function toFeedCard(p: {
-  id: string;
-  title: string;
-  score: number;
-  commentCount: number;
-  hotScore: number;
-  createdAt: Date;
-  community: { slug: string; name: string; personaIcon: string | null };
-  author: { username: string };
-}) {
+// Shape a post row (with community + author) into a feed card. `hotScoreOverride`
+// lets the hot feed surface the read-time effective hotScore (XC-8) instead of the
+// possibly-stale stored value.
+function toFeedCard(
+  p: {
+    id: string;
+    title: string;
+    score: number;
+    commentCount: number;
+    hotScore: number;
+    createdAt: Date;
+    community: { slug: string; name: string; personaIcon: string | null };
+    author: { username: string };
+  },
+  hotScoreOverride?: number,
+) {
   return {
     id: p.id,
     title: p.title,
     score: p.score,
     commentCount: p.commentCount,
-    hotScore: p.hotScore,
+    hotScore: hotScoreOverride ?? p.hotScore,
     createdAt: p.createdAt,
     community: {
       slug: p.community.slug,
@@ -199,6 +204,8 @@ const plugin: FastifyPluginAsync = async (app) => {
       const hasMore = rows.length > FEED_PAGE_SIZE;
       const page = hasMore ? rows.slice(0, FEED_PAGE_SIZE) : rows;
 
+      // Cursor anchor uses the STORED key (sort=hot → stored hotScore), keeping
+      // keyset pagination consistent with the DB ORDER BY across pages (XC-8).
       let nextCursor: string | null = null;
       if (hasMore && page.length > 0) {
         const last = page[page.length - 1]!;
@@ -207,8 +214,26 @@ const plugin: FastifyPluginAsync = async (app) => {
         nextCursor = encodeCursor(anchor, last.id);
       }
 
+      // XC-8: for the hot feed, recompute the effective hotScore at read time and
+      // re-sort the in-page rows so the visible order reflects current age. The
+      // stored value (and thus pagination) is untouched.
+      if (sort === "hot") {
+        const now = new Date();
+        const withEffective = page.map((p) => ({
+          row: p,
+          eff: effectiveHotScore(p, now),
+        }));
+        withEffective.sort(
+          (a, b) => b.eff - a.eff || (a.row.id < b.row.id ? 1 : -1),
+        );
+        return reply.send({
+          items: withEffective.map((e) => toFeedCard(e.row, e.eff)),
+          nextCursor,
+        });
+      }
+
       return reply.send({
-        items: page.map(toFeedCard),
+        items: page.map((p) => toFeedCard(p)),
         nextCursor,
       });
     },

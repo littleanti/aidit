@@ -199,6 +199,22 @@ export function getContext(postId: string): Promise<ContextResponse> {
   return request<ContextResponse>(`/posts/${postId}/context`);
 }
 
+// ---- Metrics (XC-10 / BE-13) ----
+
+/**
+ * POST /metrics/visit — record an idempotent daily visit for the acting user
+ * (author D1-retention basis). L1: carries ONLY x-user-id, NEVER any API key.
+ * The server reads the header and upserts on @@unique([userId, date]); no body.
+ */
+export function postMetricsVisit(
+  userId: string,
+): Promise<{ userId: string; date: string }> {
+  return request<{ userId: string; date: string }>('/metrics/visit', {
+    method: 'POST',
+    userId,
+  });
+}
+
 export interface PatchCommentBody {
   status?: CommentStatus;
   body?: string;

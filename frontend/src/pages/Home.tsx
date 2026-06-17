@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { getPosts, ApiError, type PostSort } from '../api/rest';
 import type { PostListItem } from '../api/types';
 import PostCard from '../components/PostCard';
+import { EmptyState, ErrorState, LoadingState } from '../components/states';
 
 type Tab = Extract<PostSort, 'hot' | 'new'>;
 
@@ -104,32 +105,31 @@ export default function Home() {
       </div>
 
       {error && (
-        <div className="mb-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-          <button
-            type="button"
-            onClick={() => void loadPage(sort)}
-            className="ml-2 font-semibold underline"
-          >
-            다시 시도
-          </button>
-        </div>
+        <ErrorState
+          variant="banner"
+          message={error}
+          onRetry={() => void loadPage(sort)}
+          className="mb-3"
+        />
+      )}
+
+      {/* first-load skeleton (before we know whether the list is empty) */}
+      {!initialized && loading && posts.length === 0 && (
+        <LoadingState variant="skeleton" rows={5} />
       )}
 
       {isEmpty && (
-        <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <p className="text-sm text-slate-500">
-            {sort === 'hot'
-              ? '아직 인기글이 없어요.'
-              : '아직 글이 없어요.'}
-          </p>
-          <Link
-            to="/create-post"
-            className="inline-flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark"
-          >
-            + 첫 글 쓰기
-          </Link>
-        </div>
+        <EmptyState
+          title={sort === 'hot' ? '아직 인기글이 없어요.' : '아직 글이 없어요.'}
+          action={
+            <Link
+              to="/create-post"
+              className="inline-flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark"
+            >
+              + 첫 글 쓰기
+            </Link>
+          }
+        />
       )}
 
       {posts.length > 0 && (
@@ -146,7 +146,7 @@ export default function Home() {
           ref={sentinelRef}
           className="flex justify-center py-6 text-xs text-slate-400"
         >
-          {loading
+          {loading && posts.length > 0
             ? '불러오는 중…'
             : done && posts.length > 0
               ? '마지막 글이에요'

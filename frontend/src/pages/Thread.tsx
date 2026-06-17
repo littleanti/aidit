@@ -22,12 +22,14 @@ import type { Comment, Community, Post } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
 import { usePostIntentStore } from '../stores/postIntentStore';
 import { useThreadStore } from '../stores/threadStore';
-import { useThreadStream, type StreamStatus } from '../stream/useThreadStream';
+import { useThreadStream } from '../stream/useThreadStream';
 import { runPrimaryReply } from '../engine/contextEngine';
 import { retryAiBubble } from '../engine/retryAiBubble';
 import ChatBubble from '../components/ChatBubble';
 import Composer from '../components/Composer';
 import PersonaBadge from '../components/PersonaBadge';
+import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '../components/states';
+import SafeMarkdown from '../lib/SafeMarkdown';
 
 /** Compact relative time in Korean (방금 / N분 / N시간 / N일 / N주, else date). */
 function relativeTime(iso: string): string {
@@ -55,20 +57,6 @@ function relativeTime(iso: string): string {
 const SUMMARY_WARN_FLOOR = 120_000;
 const SUMMARY_HARD_THRESHOLD = 128_000;
 
-/** Small offline / reconnecting banner driven by the SSE stream status. */
-function StreamBanner({ status }: { status: StreamStatus }) {
-  if (status === 'open') return null;
-  const label =
-    status === 'reconnecting'
-      ? '연결이 끊겼습니다 — 다시 연결 중…'
-      : '실시간 연결 중…';
-  return (
-    <div className="bg-amber-50 px-3 py-1 text-center text-xs text-amber-700">
-      {label}
-    </div>
-  );
-}
-
 export default function Thread() {
   const { postId } = useParams<{ postId: string }>();
 
@@ -94,6 +82,26 @@ export default function Thread() {
 
   // SSE live stream (also drives initial replay via Last-Event-ID / afterSeq).
   const { status } = useThreadStream(postId);
+
+  // Browser-level connectivity (WIREFRAME §8). Combined with the SSE status this
+  // drives the offline / reconnecting top strip.
+  const [online, setOnline] = useState(
+    typeof navigator === 'undefined' ? true : navigator.onLine,
+  );
+  useEffect(() => {
+    const goOnline = () => setOnline(true);
+    const goOffline = () => setOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+
+  // reload nonce: bump to re-run the load effect (used by the error retry button).
+  const [reloadKey, setReloadKey] = useState(0);
+  const retryLoad = useCallback(() => setReloadKey((k) => k + 1), []);
 
   // FR-7.4 imminent-summary badge: source the active segment's tokenSum from
   // GET /posts/:id/context (the same L5 128K basis the engine uses). We fetch
@@ -161,7 +169,7 @@ export default function Thread() {
       cancelled = true;
       reset();
     };
-  }, [postId, reset, setInitial]);
+  }, [postId, reset, setInitial, reloadKey]);
 
   // ----- AI-5: primary reply trigger (FR-4.3) -----
   // Fire EXACTLY ONCE per mount, when arriving at a just-created post with the
@@ -260,22 +268,31 @@ export default function Thread() {
   }, [postId, loading, bubbles.length, activeSegmentIndex]);
 
   if (!postId) {
-    return <p className="text-sm text-slate-500">잘못된 주소입니다.</p>;
+    return <EmptyState title="잘못된 주소입니다." />;
   }
   if (loading) {
-    return <p className="text-sm text-slate-500">불러오는 중…</p>;
+    return <LoadingState label="스레드 불러오는 중…" />;
   }
   if (error) {
-    return <p className="text-sm text-red-600">{error}</p>;
+    return <ErrorState message={error} onRetry={retryLoad} />;
   }
   if (!post) {
-    return <p className="text-sm text-slate-500">글을 찾을 수 없습니다.</p>;
+    return <EmptyState title="글을 찾을 수 없습니다." />;
   }
 
   const personaName = community?.name ?? 'AI 페르소나';
   const personaIcon = community?.personaIcon ?? null;
   const authorName = post.author?.username ?? '익명';
   const hasComments = bubbles.length > 0;
+
+  // Offline / reconnect strip (WIREFRAME §8). Show whenever the browser is
+  // offline OR the SSE stream is not live ('open'). Hide once both are healthy.
+  const degraded = !online || status !== 'open';
+  const bannerLabel = !online
+    ? '오프라인 — 재연결 중…'
+    : status === 'reconnecting'
+      ? '연결이 끊겼습니다 — 다시 연결 중…'
+      : '실시간 연결 중…';
 
   // FR-7.4: show the imminent-summary badge when the active segment is in the
   // warning band [120K, 128K), OR the server already reports summaryNeeded
@@ -295,7 +312,7 @@ export default function Thread() {
         <PersonaBadge personaIcon={personaIcon} name={personaName} size="sm" />
       </header>
 
-      <StreamBanner status={status} />
+      <OfflineBanner show={degraded} label={bannerLabel} />
 
       {/* scrolling region: pinned original post + chat list */}
       <div className="flex-1 overflow-y-auto">
@@ -308,9 +325,9 @@ export default function Thread() {
             u/{authorName} · ▲{post.score} · {relativeTime(post.createdAt)}
           </p>
           {post.body && (
-            <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">
-              {post.body}
-            </p>
+            <div className="mt-2 break-words text-sm leading-relaxed text-slate-700">
+              <SafeMarkdown text={post.body} />
+            </div>
           )}
         </article>
 
@@ -336,10 +353,11 @@ export default function Thread() {
             <div ref={bottomRef} />
           </div>
         ) : (
-          <div className="px-4 py-10 text-center text-sm text-slate-500">
-            <p className="font-medium text-slate-600">첫 댓글을 남겨보세요</p>
-            <p className="mt-1 text-slate-400">@AI 로 질문해보세요</p>
-          </div>
+          <EmptyState
+            title="첫 댓글을 남겨보세요"
+            hint="@AI 로 질문해보세요"
+            className="py-10"
+          />
         )}
       </div>
 

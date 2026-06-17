@@ -11,6 +11,7 @@
 import { useAuthStore } from '../stores/authStore';
 import type { Comment } from '../api/types';
 import SummaryBubble from './SummaryBubble';
+import SafeMarkdown from '../lib/SafeMarkdown';
 
 /** Compact relative time in Korean (방금 / N분 / N시간 / N일 / N주, else date). */
 function relativeTime(iso: string): string {
@@ -146,7 +147,12 @@ export default function ChatBubble({
           {isPending ? (
             <TypingDots />
           ) : (
-            <p className="whitespace-pre-wrap break-words">{comment.body}</p>
+            // XC-3: user/AI body is untrusted markdown — render via the
+            // sanitize chokepoint, never as raw HTML.
+            <SafeMarkdown
+              text={comment.body}
+              className="prose-chat whitespace-pre-wrap break-words"
+            />
           )}
         </div>
 

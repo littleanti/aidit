@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { postAuthSession } from '../api/rest';
+import { recordVisit, track } from '../lib/metrics';
 
 // FE-3: auth/identity store.
 // L1: googleApiKey is LOCAL ONLY (localStorage). It is NEVER sent to the
@@ -30,6 +31,10 @@ export const useAuthStore = create<AuthState>()(
           username: session.username,
           googleApiKey: key,
         });
+        // XC-10: authed app-open. Non-blocking; feeds author D1 retention (BE-13).
+        // L1: recordVisit sends ONLY x-user-id — the local key is never emitted.
+        track('login');
+        recordVisit(session.id);
       },
 
       logout: () => {

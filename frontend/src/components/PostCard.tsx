@@ -54,7 +54,9 @@ export default function PostCard({ post }: PostCardProps) {
         <span className="truncate">r/{post.communitySlug}</span>
       </div>
 
-      {/* title */}
+      {/* title — XC-3: user-authored, intentionally rendered as PLAIN text
+          (titles stay single-line, no markdown). React auto-escapes the
+          interpolation, so no raw user HTML is ever injected here. */}
       <h2 className="mt-1 line-clamp-2 text-[15px] font-semibold leading-snug text-slate-900">
         {post.title}
       </h2>

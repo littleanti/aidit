@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ApiError,
@@ -8,6 +8,7 @@ import {
 import type { Community as CommunityDTO, PostListItem } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
 import PersonaBadge from '../components/PersonaBadge';
+import { EmptyState, ErrorState, LoadingState } from '../components/states';
 
 // FE-5: community search (no slug) + community detail (/c/:slug).
 export default function Community() {
@@ -69,10 +70,10 @@ function CommunitySearch() {
         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
       />
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <ErrorState variant="banner" message={error} />}
 
       {loading && results.length === 0 ? (
-        <p className="text-sm text-slate-500">불러오는 중…</p>
+        <LoadingState variant="skeleton" rows={4} />
       ) : (
         <ul className="space-y-2">
           {results.map((c) => (
@@ -97,7 +98,7 @@ function CommunitySearch() {
         </ul>
       )}
 
-      {!loading && results.length === 0 && (
+      {!loading && !error && results.length === 0 && (
         <div className="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-center text-sm text-slate-500">
           결과 없음?{' '}
           <Link
@@ -124,6 +125,10 @@ function CommunityDetail({ slug }: { slug: string }) {
   const [posts, setPosts] = useState<PostListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // reload nonce: bump to re-run the fetch effect (used by the retry button).
+  const [reloadKey, setReloadKey] = useState(0);
+  const retry = useCallback(() => setReloadKey((k) => k + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,7 +161,7 @@ function CommunityDetail({ slug }: { slug: string }) {
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, reloadKey]);
 
   const isCreator = useMemo(
     () => !!community && !!userId && community.creatorId === userId,
@@ -164,16 +169,14 @@ function CommunityDetail({ slug }: { slug: string }) {
   );
 
   if (loading) {
-    return <p className="text-sm text-slate-500">불러오는 중…</p>;
+    return <LoadingState />;
   }
   if (error) {
-    return <p className="text-sm text-red-600">{error}</p>;
+    return <ErrorState message={error} onRetry={retry} />;
   }
   if (!community) {
     return (
-      <p className="text-sm text-slate-500">
-        커뮤니티를 찾을 수 없습니다.
-      </p>
+      <EmptyState title="커뮤니티를 찾을 수 없습니다." />
     );
   }
 
@@ -224,9 +227,19 @@ function CommunityDetail({ slug }: { slug: string }) {
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-slate-700">글</h2>
         {posts.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            아직 글이 없습니다. 첫 글을 작성해 보세요.
-          </p>
+          <EmptyState
+            title="아직 글이 없습니다."
+            hint="첫 글을 작성해 보세요."
+            action={
+              <Link
+                to={`/c/${community.slug}/create-post`}
+                className="inline-flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark"
+              >
+                + 첫 글 쓰기
+              </Link>
+            }
+            className="py-10"
+          />
         ) : (
           <ul className="space-y-2">
             {posts.map((p) => (

@@ -11,6 +11,7 @@
 // type === 'AI_SUMMARY'; this component is only ever asked to render that.
 
 import type { Comment } from '../api/types';
+import SafeMarkdown from '../lib/SafeMarkdown';
 
 const DEFAULT_PERSONA_ICON = '🟣';
 
@@ -79,13 +80,22 @@ export default function SummaryBubble({
             <SummaryTyping />
           </div>
         ) : isFailed ? (
-          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-red-700">
-            {comment.body || '요약 생성에 실패했습니다.'}
-          </p>
+          comment.body ? (
+            // XC-3: summary body is untrusted — sanitize before render.
+            <SafeMarkdown
+              text={comment.body}
+              className="prose-chat whitespace-pre-wrap break-words text-sm leading-relaxed text-red-700"
+            />
+          ) : (
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-red-700">
+              요약 생성에 실패했습니다.
+            </p>
+          )
         ) : (
-          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">
-            {comment.body}
-          </p>
+          <SafeMarkdown
+            text={comment.body}
+            className="prose-chat whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700"
+          />
         )}
       </div>
 

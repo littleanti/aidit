@@ -36,6 +36,7 @@ import {
 } from '../api/gemini';
 import { getContext, postComment, patchComment, ApiError } from '../api/rest';
 import { useAuthStore } from '../stores/authStore';
+import { track } from '../lib/metrics';
 
 /** Product threshold (A-2 / FR-7): active-segment token budget. Above this the
  *  next @AI caller must summarize first. Kept here so the engine's lazy-summary
@@ -164,6 +165,9 @@ async function resolveAiBubble(args: {
   request: GeminiRequest;
 }): Promise<ReplyResult> {
   const { aiCommentId, clientId, apiKey, request } = args;
+  // XC-10: an @AI / primary reply Gemini call is being invoked (KPI: avg @AI per
+  // post). Non-blocking, no key in props.
+  track('ai_reply_invoked');
   try {
     const answer = await generateContent({
       apiKey,
@@ -171,6 +175,9 @@ async function resolveAiBubble(args: {
       contents: request.contents,
       generationConfig: request.generationConfig,
     });
+
+    // XC-10: Gemini call succeeded (KPI: Gemini success rate, target >= 0.97).
+    track('gemini_success');
 
     await patchComment(aiCommentId, {
       status: 'COMPLETE',
@@ -186,6 +193,10 @@ async function resolveAiBubble(args: {
         : new GeminiError('unknown', 'AI 응답 실패 — 잠시 후 재시도', {
             cause: err,
           });
+
+    // XC-10: Gemini call failed (KPI: Gemini success rate). `kind` is the typed
+    // GeminiError category only — NEVER any key or raw error text.
+    track('gemini_failure', { kind: ge.kind });
 
     // Mark the bubble FAILED with the UI-safe message; clientId authorizes it.
     // If even this PATCH fails we still surface the original failure.
@@ -385,6 +396,8 @@ export async function ensureSummary(
     // (3) Graceful fallback (TRD §11): the summary Gemini call failed (any
     // GeminiError/unknown). Do NOT block the answer or lose the human comment —
     // answer against the existing pre-summary context; the next caller retries.
+    // XC-10: summary attempt failed at the Gemini call (KPI: summary success rate).
+    track('summary_failure', { stage: 'generate' });
     return { context: currentContext, outcome: 'summary_failed_fallback' };
   }
 
@@ -405,17 +418,23 @@ export async function ensureSummary(
       userId ?? '',
     );
     // 201 winner: server opened segment N+1. Re-fetch reassembled context (AI-9).
+    // XC-10: a summary was successfully created and committed (KPI: summary success rate).
+    track('summary_success', { outcome: 'summarized' });
     const reassembled = await getContext(postId);
     return { context: reassembled, outcome: 'summarized' };
   } catch (err) {
     if (err instanceof ApiError && err.status === 409) {
       // 409 loser (BE-7): a peer already summarized. Re-fetch the now-active
       // segment's context and answer against it (AI-9). NOT an error.
+      // XC-10: a summary exists (peer won the race) — count as a success.
+      track('summary_success', { outcome: 'concurrent_loser' });
       const reassembled = await getContext(postId);
       return { context: reassembled, outcome: 'concurrent_loser' };
     }
     // Any other POST/fetch failure: fall back to the pre-summary context so the
     // human comment is never lost and the @AI answer can still proceed.
+    // XC-10: the summary could not be committed (KPI: summary success rate).
+    track('summary_failure', { stage: 'commit' });
     return { context: currentContext, outcome: 'summary_failed_fallback' };
   }
 }

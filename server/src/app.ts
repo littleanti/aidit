@@ -1,12 +1,16 @@
+// Aidit — MIT License. See LICENSE.
 import { pathToFileURL } from "node:url";
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 
 import { config } from "./config.js";
+import rateLimit from "./plugins/rateLimit.js";
+import security from "./plugins/security.js";
 import authRoutes from "./routes/auth.js";
 import commentRoutes from "./routes/comments.js";
 import communityRoutes from "./routes/communities.js";
 import contextRoutes from "./routes/context.js";
+import metricsRoutes from "./routes/metrics.js";
 import postRoutes from "./routes/posts.js";
 import streamRoutes from "./realtime/stream.js";
 
@@ -25,6 +29,11 @@ export async function build(): Promise<FastifyInstance> {
     credentials: true,
   });
 
+  // Cross-cutting plugins (register BEFORE routes so their global hooks apply to
+  // every response/request): XC-3 security headers (CSP) + XC-9 rate limiting.
+  await app.register(security);
+  await app.register(rateLimit);
+
   // Health check.
   app.get("/health", async () => ({ status: "ok" }));
 
@@ -34,6 +43,7 @@ export async function build(): Promise<FastifyInstance> {
   await app.register(postRoutes, { prefix: "/" });
   await app.register(commentRoutes, { prefix: "/" });
   await app.register(contextRoutes, { prefix: "/" });
+  await app.register(metricsRoutes, { prefix: "/" });
   await app.register(streamRoutes, { prefix: "/" });
 
   return app;
