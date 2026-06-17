@@ -15,12 +15,16 @@
 // L1: nothing here ever touches an API key. AI authorship is signalled purely
 // by authorId === null.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { ApiError, getCommunities, getComments, getPost } from '../api/rest';
-import type { Community, Post } from '../api/types';
+import type { Comment, Community, Post } from '../api/types';
+import { useAuthStore } from '../stores/authStore';
+import { usePostIntentStore } from '../stores/postIntentStore';
 import { useThreadStore } from '../stores/threadStore';
 import { useThreadStream, type StreamStatus } from '../stream/useThreadStream';
+import { runPrimaryReply } from '../engine/contextEngine';
+import { retryAiBubble } from '../engine/retryAiBubble';
 import ChatBubble from '../components/ChatBubble';
 import Composer from '../components/Composer';
 import PersonaBadge from '../components/PersonaBadge';
@@ -69,6 +73,16 @@ export default function Thread() {
   const bubbles = useThreadStore((s) => s.bubbles);
   const setInitial = useThreadStore((s) => s.setInitial);
   const reset = useThreadStore((s) => s.reset);
+
+  const myUserId = useAuthStore((s) => s.userId);
+  const consumeFirstAiReply = usePostIntentStore((s) => s.consumeFirstAiReply);
+
+  // transient toast for AI-side failures surfaced from the engine.
+  const [aiToast, setAiToast] = useState<string | null>(null);
+  function showAiToast(msg: string) {
+    setAiToast(msg);
+    window.setTimeout(() => setAiToast(null), 3000);
+  }
 
   // SSE live stream (also drives initial replay via Last-Event-ID / afterSeq).
   const { status } = useThreadStream(postId);
@@ -131,6 +145,75 @@ export default function Thread() {
       reset();
     };
   }, [postId, reset, setInitial]);
+
+  // ----- AI-5: primary reply trigger (FR-4.3) -----
+  // Fire EXACTLY ONCE per mount, when arriving at a just-created post with the
+  // "1차 AI 답변 받기" toggle ON AND the current user is the author AND no AI
+  // reply exists yet. consumeFirstAiReply clears the one-shot flag so a refresh
+  // never re-triggers. If no key, surface the key prompt instead.
+  const primaryFiredRef = useRef(false);
+  useEffect(() => {
+    if (!postId || !post || loading) return;
+    if (primaryFiredRef.current) return;
+
+    // Only the author drives the primary reply (it uses the author's key).
+    if (!myUserId || post.authorId !== myUserId) return;
+
+    // One-shot intent set by CreatePost; reading it also clears it.
+    const wantsPrimary = consumeFirstAiReply(postId);
+    if (!wantsPrimary) return;
+
+    // From here on we are committed to a single attempt this mount.
+    primaryFiredRef.current = true;
+
+    // If an AI reply already exists (e.g. returning to the thread), skip.
+    const aiExists = useThreadStore
+      .getState()
+      .bubbles.some((b) => b.authorId === null && b.type === 'AI_REPLY');
+    if (aiExists) return;
+
+    const apiKey = useAuthStore.getState().googleApiKey;
+    if (!apiKey) {
+      showAiToast('1차 AI 답변에는 Gemini 키가 필요합니다 — 로그인에서 키를 등록하세요.');
+      return;
+    }
+
+    void runPrimaryReply({
+      postId,
+      communityPersonaPrompt: community?.personaPrompt ?? '',
+      apiKey,
+    }).then((res) => {
+      if (!res.ok && res.errorMessage) showAiToast(res.errorMessage);
+    });
+  }, [postId, post, loading, myUserId, community, consumeFirstAiReply]);
+
+  // ----- FE-12: retry a FAILED AI bubble in place -----
+  const handleRetry = useCallback(
+    (comment: Comment) => {
+      if (!postId) return;
+      // Only AI bubbles are retryable here; human retry is the Composer's job.
+      if (comment.authorId !== null) return;
+      if (!comment.clientId) {
+        showAiToast('재시도할 수 없습니다 — 식별자가 없습니다.');
+        return;
+      }
+      const apiKey = useAuthStore.getState().googleApiKey;
+      if (!apiKey) {
+        showAiToast('재시도에는 Gemini 키가 필요합니다 — 로그인에서 키를 등록하세요.');
+        return;
+      }
+      void retryAiBubble({
+        postId,
+        aiCommentId: comment.id,
+        clientId: comment.clientId,
+        communityPersonaPrompt: community?.personaPrompt ?? '',
+        apiKey,
+      }).then((res) => {
+        if (!res.ok && res.errorMessage) showAiToast(res.errorMessage);
+      });
+    },
+    [postId, community],
+  );
 
   // Auto-scroll the chat list to the newest bubble as it grows.
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -200,6 +283,7 @@ export default function Thread() {
                 comment={c}
                 personaName={personaName}
                 personaIcon={personaIcon}
+                onRetry={handleRetry}
               />
             ))}
             <div ref={bottomRef} />
@@ -212,8 +296,18 @@ export default function Thread() {
         )}
       </div>
 
+      {/* AI-side failure toast (engine errors; human bubbles are untouched) */}
+      {aiToast && (
+        <div
+          role="alert"
+          className="mx-3 mb-1 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
+        >
+          {aiToast}
+        </div>
+      )}
+
       {/* Composer fixed at the bottom */}
-      <Composer postId={postId} />
+      <Composer postId={postId} communityPersonaPrompt={community?.personaPrompt ?? ''} />
     </div>
   );
 }

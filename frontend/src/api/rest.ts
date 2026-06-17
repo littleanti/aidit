@@ -1,6 +1,8 @@
 import type {
   Comment,
+  CommentStatus,
   Community,
+  ContextResponse,
   CreateCommentRequest,
   Post,
   PostListItem,
@@ -186,5 +188,36 @@ export function getComments(
 ): Promise<Comment[]> {
   return request<Comment[]>(`/posts/${postId}/comments`, {
     query: { afterSeq },
+  });
+}
+
+/**
+ * GET /posts/:id/context — assembled context for a direct Gemini call (M3).
+ * L5: built from the active ContextSegment; L1: NO key crosses the wire.
+ */
+export function getContext(postId: string): Promise<ContextResponse> {
+  return request<ContextResponse>(`/posts/${postId}/context`);
+}
+
+export interface PatchCommentBody {
+  status?: CommentStatus;
+  body?: string;
+  /** L12: carried for AI-bubble authz (matches @@unique([postId, clientId])). */
+  clientId?: string;
+}
+
+/**
+ * PATCH /comments/:id — update an AI/human comment's status or body once the
+ * browser-side Gemini call resolves. L1: NO key. x-user-id sent when present.
+ */
+export function patchComment(
+  id: string,
+  body: PatchCommentBody,
+  userId?: string,
+): Promise<Comment> {
+  return request<Comment>(`/comments/${id}`, {
+    method: 'PATCH',
+    body,
+    userId,
   });
 }

@@ -6,6 +6,7 @@ import { config } from "./config.js";
 import authRoutes from "./routes/auth.js";
 import commentRoutes from "./routes/comments.js";
 import communityRoutes from "./routes/communities.js";
+import contextRoutes from "./routes/context.js";
 import postRoutes from "./routes/posts.js";
 import streamRoutes from "./realtime/stream.js";
 
@@ -32,6 +33,7 @@ export async function build(): Promise<FastifyInstance> {
   await app.register(communityRoutes, { prefix: "/" });
   await app.register(postRoutes, { prefix: "/" });
   await app.register(commentRoutes, { prefix: "/" });
+  await app.register(contextRoutes, { prefix: "/" });
   await app.register(streamRoutes, { prefix: "/" });
 
   return app;

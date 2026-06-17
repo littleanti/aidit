@@ -4,7 +4,11 @@ import { prisma } from "../db.js";
 import { hotScore } from "../domain/hotScore.js";
 import { findActiveSegment } from "../domain/segment.js";
 import { publish } from "../realtime/publish.js";
-import { EVENT_COMMENT_CREATED, type CommentDTO } from "../realtime/events.js";
+import {
+  EVENT_COMMENT_CREATED,
+  EVENT_COMMENT_UPDATED,
+  type CommentDTO,
+} from "../realtime/events.js";
 
 // WP BE-6 + BE-11 — Comments route.
 //
@@ -82,6 +86,13 @@ interface CreateCommentBody {
   clientId?: string;
   segmentExpected?: string;
   tokenCount?: number;
+}
+
+interface PatchCommentBody {
+  status?: CommentStatus;
+  body?: string;
+  // AI-bubble ownership proof (L1: NOT an apiKey).
+  clientId?: string;
 }
 
 // --- plugin ----------------------------------------------------------------
@@ -274,6 +285,91 @@ const plugin: FastifyPluginAsync = async (app) => {
       });
 
       return reply.send({ items: rows.map(toCommentDTO) });
+    },
+  );
+
+  // BE-8: Patch a comment's status and/or body. KEY-BLIND (L1): NO apiKey.
+  //
+  // AUTHZ (PLAN L12 / §6 resolved):
+  //  - HUMAN comment (authorId != null): require x-user-id === comment.authorId.
+  //  - AI bubble  (authorId === null):   require body.clientId === comment.clientId
+  //    (the browser that created the PENDING AI bubble owns it).
+  //
+  // After commit we publish a 'comment.updated' event so all viewers transition
+  // the bubble (AI loading -> complete/failed, or human body edit).
+  app.patch<{ Params: { id: string }; Body: PatchCommentBody }>(
+    "/comments/:id",
+    async (req, reply) => {
+      const commentId = req.params.id;
+      const { status, body, clientId } = req.body ?? {};
+
+      if (
+        status !== undefined &&
+        status !== "PENDING" &&
+        status !== "COMPLETE" &&
+        status !== "FAILED"
+      ) {
+        return reply.code(400).send({ error: "Invalid status" });
+      }
+      if (body !== undefined && typeof body !== "string") {
+        return reply.code(400).send({ error: "Invalid body" });
+      }
+      if (status === undefined && body === undefined) {
+        return reply.code(400).send({ error: "Nothing to update" });
+      }
+
+      const target = await prisma.comment.findUnique({
+        where: { id: commentId },
+        select: { id: true, authorId: true, clientId: true },
+      });
+      if (!target) {
+        return reply.code(404).send({ error: "Comment not found" });
+      }
+
+      // Ownership check.
+      if (target.authorId !== null) {
+        // HUMAN comment — owner is the acting user.
+        const userId = actingUserId(req);
+        if (!userId) {
+          return reply.code(401).send({ error: "Missing x-user-id" });
+        }
+        if (userId !== target.authorId) {
+          return reply.code(403).send({ error: "Not the comment author" });
+        }
+      } else {
+        // AI bubble — owner is the creating browser, proven by clientId.
+        if (typeof clientId !== "string" || clientId.length === 0) {
+          return reply.code(401).send({ error: "clientId required" });
+        }
+        if (clientId !== target.clientId) {
+          return reply.code(403).send({ error: "Not the bubble owner" });
+        }
+      }
+
+      const data: { status?: CommentStatus; body?: string } = {};
+      if (status !== undefined) data.status = status;
+      if (body !== undefined) data.body = body;
+
+      const updated = await prisma.comment.update({
+        where: { id: commentId },
+        data,
+        include: commentInclude,
+      });
+
+      const dto = toCommentDTO(updated);
+
+      // Notify all SSE subscribers of the new body/status (RT-5).
+      publish(updated.postId, {
+        type: EVENT_COMMENT_UPDATED,
+        data: {
+          id: dto.id,
+          body: dto.body,
+          status: dto.status,
+          seq: dto.seq,
+        },
+      });
+
+      return reply.send(dto);
     },
   );
 };

@@ -10,9 +10,12 @@
 //     the optimistic bubble; we upsert the server DTO too as a fast path.
 //  6. on failure: remove/mark the optimistic bubble + show a toast.
 //
-// '@AI' mention is detected & highlighted here; actual AI invocation is M3 —
-// for now we only post the human comment.
-// L1: nothing here ever sends a key; only { type, body, clientId } crosses the wire.
+// '@AI' mention is detected & highlighted here. M3: when the sent comment
+// contains '@AI', after the human comment is committed we fire the engine's
+// runAtAiReply with the CALLER's key (BYOK). Non-@AI comments behave as before.
+// L1: nothing here ever sends a key to the Aidit server; the Gemini key is
+// handed straight to the engine (browser->Gemini) and only { type, body,
+// clientId } crosses the Aidit wire.
 
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -20,9 +23,12 @@ import { useAuthStore } from '../stores/authStore';
 import { useThreadStore } from '../stores/threadStore';
 import { postComment } from '../api/rest';
 import type { Comment } from '../api/types';
+import { runAtAiReply } from '../engine/contextEngine';
 
 interface ComposerProps {
   postId: string;
+  /** community persona prompt — passed to the engine for @AI replies. */
+  communityPersonaPrompt?: string;
 }
 
 const AI_MENTION = /@AI\b/i;
@@ -34,7 +40,7 @@ function tempSeq(): number {
   return Number.MAX_SAFE_INTEGER - Math.floor(Math.random() * 1_000_000);
 }
 
-export default function Composer({ postId }: ComposerProps) {
+export default function Composer({ postId, communityPersonaPrompt }: ComposerProps) {
   const navigate = useNavigate();
   const userId = useAuthStore((s) => s.userId);
 
@@ -60,6 +66,16 @@ export default function Composer({ postId }: ComposerProps) {
 
     // 1. require login.
     if (!userId) {
+      navigate('/login');
+      return;
+    }
+
+    // 1b. @AI requires a personal Gemini key (BYOK). Block before posting so we
+    // never commit a human '@AI ...' turn that can't be answered.
+    const willInvokeAi = AI_MENTION.test(text);
+    const apiKey = useAuthStore.getState().googleApiKey;
+    if (willInvokeAi && !apiKey) {
+      showToast('@AI 사용에는 Gemini 키가 필요합니다 — 로그인에서 키를 등록하세요.');
       navigate('/login');
       return;
     }
@@ -91,11 +107,13 @@ export default function Composer({ postId }: ComposerProps) {
     setText('');
     setSending(true);
 
+    let humanCommentId: string | null = null;
     try {
-      // 4. post the human comment (M3 will additionally fire the @AI call).
+      // 4. post the human comment FIRST (FR-6.2: human before AI).
       const saved = await postComment(postId, { type: 'HUMAN', body, clientId }, userId);
       // 5. fast-path reconcile; SSE 'comment.created' dedupes by clientId too.
       upsertComment(saved);
+      humanCommentId = saved.id;
     } catch {
       // 6. mark/remove optimistic bubble + toast.
       upsertComment({ ...optimistic, status: 'FAILED' });
@@ -105,6 +123,25 @@ export default function Composer({ postId }: ComposerProps) {
     } finally {
       setSending(false);
       taRef.current?.focus();
+    }
+
+    // 7. @AI invocation (AI-7). Only after the human comment is committed; the
+    // engine fetches context (which now includes this turn), posts a PENDING
+    // AI_REPLY (rendered via SSE), then resolves it with the CALLER's key.
+    // The PENDING/FAILED AI bubble surfaces in the thread via SSE; we don't
+    // need to touch the human bubble on AI failure (NFR-5).
+    if (willInvokeAi && humanCommentId && apiKey) {
+      const callerUsername = useAuthStore.getState().username ?? '사용자';
+      void runAtAiReply({
+        postId,
+        humanCommentId,
+        communityPersonaPrompt: communityPersonaPrompt ?? '',
+        callerUsername,
+        callerApiKey: apiKey,
+        humanCommentBody: body,
+      }).then((res) => {
+        if (!res.ok && res.errorMessage) showToast(res.errorMessage);
+      });
     }
   }
 
