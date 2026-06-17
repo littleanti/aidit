@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ApiError, getCommunities, getComments, getPost } from '../api/rest';
+import { ApiError, getCommunities, getComments, getContext, getPost } from '../api/rest';
 import type { Comment, Community, Post } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
 import { usePostIntentStore } from '../stores/postIntentStore';
@@ -48,6 +48,13 @@ function relativeTime(iso: string): string {
   });
 }
 
+// FR-7.4 / WIREFRAME §7: imminent-summary threshold. The hard summary trigger
+// is 128_000 (A-2); we warn the user once the active segment's tokenSum is
+// within the warning band [120_000, 128_000] so they know the NEXT @AI call
+// will run a summary first (and pay for it with their own key).
+const SUMMARY_WARN_FLOOR = 120_000;
+const SUMMARY_HARD_THRESHOLD = 128_000;
+
 /** Small offline / reconnecting banner driven by the SSE stream status. */
 function StreamBanner({ status }: { status: StreamStatus }) {
   if (status === 'open') return null;
@@ -71,6 +78,7 @@ export default function Thread() {
   const [error, setError] = useState<string | null>(null);
 
   const bubbles = useThreadStore((s) => s.bubbles);
+  const activeSegmentIndex = useThreadStore((s) => s.activeSegmentIndex);
   const setInitial = useThreadStore((s) => s.setInitial);
   const reset = useThreadStore((s) => s.reset);
 
@@ -86,6 +94,15 @@ export default function Thread() {
 
   // SSE live stream (also drives initial replay via Last-Event-ID / afterSeq).
   const { status } = useThreadStream(postId);
+
+  // FR-7.4 imminent-summary badge: source the active segment's tokenSum from
+  // GET /posts/:id/context (the same L5 128K basis the engine uses). We fetch
+  // on load and re-fetch whenever the bubble count changes (a new bubble may
+  // have pushed the active segment closer to the threshold). This is a cheap,
+  // event-driven refresh — no background polling timer.
+  const [activeTokenSum, setActiveTokenSum] = useState<number | null>(null);
+  // server-confirmed summaryNeeded (tokenSum already > hard threshold).
+  const [summaryNeeded, setSummaryNeeded] = useState(false);
 
   // Load post + community + initial comment snapshot.
   useEffect(() => {
@@ -221,6 +238,27 @@ export default function Thread() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [bubbles.length]);
 
+  // FR-7.4: refresh the active segment's tokenSum from GET /context. Triggered
+  // on load, whenever the bubble count changes (a new comment may push the
+  // active segment toward 128K), and whenever activeSegmentIndex changes (a
+  // segment.opened reset the count to the fresh summary baseline).
+  useEffect(() => {
+    if (!postId || loading) return;
+    let cancelled = false;
+    void getContext(postId)
+      .then((ctx) => {
+        if (cancelled) return;
+        setActiveTokenSum(ctx.tokenSum);
+        setSummaryNeeded(ctx.summaryNeeded);
+      })
+      .catch(() => {
+        // non-critical UX hint; leave the previous estimate in place.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [postId, loading, bubbles.length, activeSegmentIndex]);
+
   if (!postId) {
     return <p className="text-sm text-slate-500">잘못된 주소입니다.</p>;
   }
@@ -238,6 +276,15 @@ export default function Thread() {
   const personaIcon = community?.personaIcon ?? null;
   const authorName = post.author?.username ?? '익명';
   const hasComments = bubbles.length > 0;
+
+  // FR-7.4: show the imminent-summary badge when the active segment is in the
+  // warning band [120K, 128K), OR the server already reports summaryNeeded
+  // (tokenSum has crossed 128K and the next @AI call will summarize first).
+  const showSummaryBadge =
+    summaryNeeded ||
+    (activeTokenSum !== null &&
+      activeTokenSum >= SUMMARY_WARN_FLOOR &&
+      activeTokenSum <= SUMMARY_HARD_THRESHOLD);
 
   // Full-screen chat column. The page lives inside AppLayout's <main>; we make
   // this region fill the viewport below the app bar (h-12) and bottom tab bar.
@@ -303,6 +350,26 @@ export default function Thread() {
           className="mx-3 mb-1 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
         >
           {aiToast}
+        </div>
+      )}
+
+      {/* FR-7.4 imminent-summary badge: warns that the NEXT @AI call will run
+          a 128K summary first, on the caller's own key (cost transparency). */}
+      {showSummaryBadge && (
+        <div className="px-3 pb-1">
+          <div
+            className="group relative inline-flex items-center gap-1.5 rounded-full border border-purple-300 bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700"
+            title="다음 @AI 호출 시 먼저 요약이 실행됩니다. 요약은 호출한 분의 Gemini 키로 생성됩니다(비용 발생)."
+          >
+            <span aria-hidden>🟣</span>
+            <span>{summaryNeeded ? '다음 @AI 호출 시 요약됩니다' : '곧 대화가 요약됩니다'}</span>
+            <span
+              aria-hidden
+              className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-purple-200 text-[10px] text-purple-700"
+            >
+              ?
+            </span>
+          </div>
         </div>
       )}
 

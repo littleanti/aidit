@@ -10,6 +10,7 @@
 
 import { useAuthStore } from '../stores/authStore';
 import type { Comment } from '../api/types';
+import SummaryBubble from './SummaryBubble';
 
 /** Compact relative time in Korean (방금 / N분 / N시간 / N일 / N주, else date). */
 function relativeTime(iso: string): string {
@@ -76,27 +77,15 @@ export default function ChatBubble({
 
   const time = relativeTime(comment.createdAt);
 
-  // ---- AI_SUMMARY: full-width amber/purple band (basic M1 version). ----
+  // ---- AI_SUMMARY: delegate to the full-width SummaryBubble band (FE-13a).
+  // It conveys the segment boundary + "이후 대화는 위 요약 기준" microcopy.
   if (isSummary) {
     return (
-      <div className="my-2 w-full px-1">
-        <div className="rounded-lg border border-amber-300 bg-gradient-to-r from-amber-50 to-purple-50 px-3 py-2.5">
-          <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-amber-700">
-            <span aria-hidden>≈</span>
-            <span>요약</span>
-            <span aria-hidden>≈</span>
-          </div>
-          {isPending ? (
-            <div className="text-amber-800">
-              <TypingDots />
-            </div>
-          ) : (
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">
-              {comment.body}
-            </p>
-          )}
-        </div>
-      </div>
+      <SummaryBubble
+        comment={comment}
+        personaName={personaName}
+        personaIcon={personaIcon}
+      />
     );
   }
 

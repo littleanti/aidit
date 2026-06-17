@@ -91,8 +91,15 @@ export interface CreateCommentRequest {
   replyToId?: string | null;
   /** idempotency key (L12). */
   clientId: string;
-  /** segment the client believes is active, for optimistic checks (L5). */
-  segmentExpected?: string;
+  /**
+   * Segment index the client believes is active, for optimistic concurrency
+   * (L5). REQUIRED (integer >= 0) when type === 'AI_SUMMARY' (BE-7 idempotency
+   * guard): the server returns 409 if the active index !== segmentExpected so
+   * the loser re-assembles instead of double-opening a segment.
+   */
+  segmentExpected?: number;
+  /** optional pre-computed token count (else server estimates ~chars/4). */
+  tokenCount?: number;
 }
 
 /**

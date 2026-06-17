@@ -34,8 +34,20 @@ import {
   type GenerationConfig,
   GeminiError,
 } from '../api/gemini';
-import { getContext, postComment, patchComment } from '../api/rest';
+import { getContext, postComment, patchComment, ApiError } from '../api/rest';
 import { useAuthStore } from '../stores/authStore';
+
+/** Product threshold (A-2 / FR-7): active-segment token budget. Above this the
+ *  next @AI caller must summarize first. Kept here so the engine's lazy-summary
+ *  branch has a named constant; the server's GET /context computes summaryNeeded
+ *  (tokenSum > THIS) authoritatively — we branch on that flag, not this value. */
+export const SUMMARY_TOKEN_THRESHOLD = 128_000;
+
+/** Summary directive appended to the persona for the summarization call (AI-6).
+ *  Faithfully preserves facts/decisions/open questions for use as the opening
+ *  context turn of the next segment. */
+export const SUMMARY_DIRECTIVE =
+  '이 토론의 사실/결정/미해결 질문을 충실히 보존해 요약하라. 새 질문에 답하기 위한 컨텍스트로 쓰일 것.';
 
 // ---------------------------------------------------------------------------
 // AI-4 + XC-4: buildGeminiRequest — the assembly chokepoint.
@@ -292,6 +304,122 @@ export interface RunAtAiReplyArgs {
   humanCommentBody?: string;
 }
 
+// ---------------------------------------------------------------------------
+// AI-6 + AI-8 + AI-9: lazy 128K summarization (FR-7, L3).
+//
+// L3 (lazy): the server is KEY-BLIND, so the 128K summary is performed with the
+// NEXT @AI caller's own key. When GET /context reports summaryNeeded, the caller
+// (1) generates an AI_SUMMARY with its key (AI-6), (2) POSTs it with
+// segmentExpected = current active index so the server's BE-7 guard opens EXACTLY
+// one new segment (winner) or rejects with 409 (loser), then (3) re-fetches
+// GET /context so the answer is built ONLY from (summary opening turn + bubbles
+// after) of the now-active segment N+1 (AI-9 reassembly).
+// ---------------------------------------------------------------------------
+
+export interface EnsureSummaryArgs {
+  postId: string;
+  /** Community persona — combined with the summary directive for systemInstruction. */
+  communityPersonaPrompt: string;
+  /** Caller username (unused in the summary request itself, kept for symmetry/logging). */
+  callerUsername: string;
+  /** The CALLER'S Gemini key (lazy L3/FR-7.3): the summary runs on this key. */
+  callerApiKey: string;
+  /** The pre-summary ContextResponse (summaryNeeded === true) to summarize. */
+  currentContext: ContextResponse;
+}
+
+export interface EnsureSummaryResult {
+  /** The context to use for the actual @AI answer (the now-active segment). */
+  context: ContextResponse;
+  /** How the transition resolved (for tests / observability). */
+  outcome: 'summarized' | 'concurrent_loser' | 'summary_failed_fallback';
+}
+
+/**
+ * AI-6: ensure a 128K summary exists before answering, opening a new segment.
+ *
+ * Flow:
+ *  1. Build a summary request: systemInstruction = persona + SUMMARY_DIRECTIVE
+ *     (XC-4: persona/directive ONLY in systemInstruction; the discussion stays as
+ *     role:'user'/'model' DATA turns). Call generateContent with the CALLER'S key.
+ *  2. POST the AI_SUMMARY bubble with segmentExpected = currentContext.segmentIndex
+ *     (BE-7 idempotency guard). authorId is null server-side (key-blind).
+ *       - 201 winner: the server opened segment N+1 (published comment.created +
+ *         segment.opened). Re-fetch GET /context -> reassembled context (AI-9).
+ *       - 409 loser: a peer already summarized. Do NOT error — re-fetch
+ *         GET /context (now scoped to the new active segment) and use it (AI-9).
+ *  3. If the summary Gemini call FAILS (GeminiError): graceful fallback (TRD §11)
+ *     — proceed to answer using the EXISTING pre-summary context. We do NOT lose
+ *     the human comment and we never block the answer on a summarization failure.
+ *     (Chosen over surfacing a hard error: the @AI answer is the user-visible goal;
+ *     a failed summary just means we answer against the larger context this turn,
+ *     and the next caller will retry the summary.)
+ *
+ * Returns the post-summary ContextResponse to use for the actual answer.
+ */
+export async function ensureSummary(
+  args: EnsureSummaryArgs,
+): Promise<EnsureSummaryResult> {
+  const {
+    postId,
+    communityPersonaPrompt,
+    callerApiKey,
+    currentContext,
+  } = args;
+
+  // (1) Generate the summary on the CALLER'S key. XC-4: persona + directive go
+  // ONLY into systemInstruction; the discussion contents stay as data turns.
+  const systemInstruction = `${communityPersonaPrompt.trim()}\n\n${SUMMARY_DIRECTIVE}`.trim();
+  const summaryContents: GeminiContent[] = currentContext.contents.map(
+    (turn) => ({ role: turn.role, parts: [{ text: turn.text }] }),
+  );
+
+  let summaryText: string;
+  try {
+    summaryText = await generateContent({
+      apiKey: callerApiKey,
+      systemInstruction,
+      contents: summaryContents,
+    });
+  } catch {
+    // (3) Graceful fallback (TRD §11): the summary Gemini call failed (any
+    // GeminiError/unknown). Do NOT block the answer or lose the human comment —
+    // answer against the existing pre-summary context; the next caller retries.
+    return { context: currentContext, outcome: 'summary_failed_fallback' };
+  }
+
+  // (2) POST the AI_SUMMARY bubble with the BE-7 idempotency guard.
+  const clientId = makeClientId();
+  const userId = useAuthStore.getState().userId ?? undefined;
+  try {
+    await postComment(
+      postId,
+      {
+        type: 'AI_SUMMARY',
+        body: summaryText,
+        status: 'COMPLETE',
+        clientId,
+        segmentExpected: currentContext.segmentIndex,
+        tokenCount: estimateTokens(summaryText),
+      },
+      userId ?? '',
+    );
+    // 201 winner: server opened segment N+1. Re-fetch reassembled context (AI-9).
+    const reassembled = await getContext(postId);
+    return { context: reassembled, outcome: 'summarized' };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) {
+      // 409 loser (BE-7): a peer already summarized. Re-fetch the now-active
+      // segment's context and answer against it (AI-9). NOT an error.
+      const reassembled = await getContext(postId);
+      return { context: reassembled, outcome: 'concurrent_loser' };
+    }
+    // Any other POST/fetch failure: fall back to the pre-summary context so the
+    // human comment is never lost and the @AI answer can still proceed.
+    return { context: currentContext, outcome: 'summary_failed_fallback' };
+  }
+}
+
 /**
  * AI-7: generate an AI reply to an @AI mention.
  *
@@ -325,18 +453,25 @@ export async function runAtAiReply(
     };
   }
 
-  // ===================== M4 SEAM (summarization) =====================
-  // When the active segment exceeds the 128K product threshold, a summary
-  // AI_SUMMARY turn must be generated and a new segment opened BEFORE we build
-  // the reply request, so the new segment's context (opening summary + recent
-  // bubbles) is what we send. In M3 we deliberately do NOT summarize — we just
-  // proceed with the current (full) context.
+  // ===================== AI-8: lazy summarization (M4) =====================
+  // When the active segment exceeds the 128K product threshold (summaryNeeded),
+  // generate an AI_SUMMARY turn and open a new segment BEFORE building the reply
+  // request (L3 lazy / FR-7: performed with THIS caller's key, server is
+  // key-blind). ensureSummary returns the now-active segment's context — the
+  // reassembled (summary opening turn + bubbles after) context (AI-9) on a
+  // winner OR 409-loser, or the unchanged pre-summary context on a graceful
+  // summary failure. We then build the reply request from that context.
   if (context.summaryNeeded) {
-    // TODO(M4): await ensureSummary({ postId, context, apiKey: callerApiKey });
-    //           then re-fetch context = await getContext(postId);
-    // M3: proceed without summarizing.
+    const summaryRes = await ensureSummary({
+      postId,
+      communityPersonaPrompt,
+      callerUsername,
+      callerApiKey,
+      currentContext: context,
+    });
+    context = summaryRes.context;
   }
-  // ===================================================================
+  // =========================================================================
 
   // The @AI human turn should already be inside context.contents because we
   // fetched AFTER it was committed. We only append defensively if the caller

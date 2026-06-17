@@ -2,11 +2,12 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 
 import { prisma } from "../db.js";
 import { hotScore } from "../domain/hotScore.js";
-import { findActiveSegment } from "../domain/segment.js";
+import { findActiveSegment, openSummarySegment } from "../domain/segment.js";
 import { publish } from "../realtime/publish.js";
 import {
   EVENT_COMMENT_CREATED,
   EVENT_COMMENT_UPDATED,
+  EVENT_SEGMENT_OPENED,
   type CommentDTO,
 } from "../realtime/events.js";
 
@@ -84,7 +85,9 @@ interface CreateCommentBody {
   status?: CommentStatus;
   replyToId?: string | null;
   clientId?: string;
-  segmentExpected?: string;
+  /** Optimistic-concurrency hint: the segment index the client believes is
+   * active. REQUIRED for AI_SUMMARY (BE-7 guard); ignored otherwise. */
+  segmentExpected?: number;
   tokenCount?: number;
 }
 
@@ -159,6 +162,119 @@ const plugin: FastifyPluginAsync = async (app) => {
         providedTokenCount >= 0
           ? Math.floor(providedTokenCount)
           : estimateTokens(body);
+
+      // --- AI_SUMMARY: segment-open transition (BE-5s / BE-7 / RT-8) -------
+      //
+      // A summary bubble is NOT an ordinary comment: it OPENS a new segment N+1
+      // and is that segment's lowest-seq (opening) bubble. The idempotency guard
+      // ensures only one summary opens per transition. clientId idempotency
+      // (above) already short-circuited duplicate retries before we get here.
+      if (type === "AI_SUMMARY") {
+        const { segmentExpected } = req.body ?? {};
+        if (
+          typeof segmentExpected !== "number" ||
+          !Number.isInteger(segmentExpected) ||
+          segmentExpected < 0
+        ) {
+          return reply
+            .code(400)
+            .send({ error: "segmentExpected (number) is required for AI_SUMMARY" });
+        }
+
+        let summaryResult: Awaited<ReturnType<typeof openSummarySegment>>;
+        try {
+          summaryResult = await prisma.$transaction(async (tx) => {
+            // L4: assign seq = (max seq for this post) + 1, inside the tx.
+            const last = await tx.comment.findFirst({
+              where: { postId },
+              orderBy: { seq: "desc" },
+              select: { seq: true },
+            });
+            const seq = (last?.seq ?? 0) + 1;
+
+            const result = await openSummarySegment(
+              tx,
+              {
+                postId,
+                body,
+                tokenCount,
+                clientId,
+                seq,
+                replyToId: replyToId ?? null,
+              },
+              segmentExpected,
+            );
+
+            // Only the winner mutates post counters; the conflict path must not.
+            if (result.kind === "opened") {
+              const newCommentCount = await tx.post
+                .update({
+                  where: { id: postId },
+                  data: { commentCount: { increment: 1 } },
+                  select: { commentCount: true },
+                })
+                .then((p) => p.commentCount);
+
+              const newHot = hotScore(
+                post.score,
+                newCommentCount,
+                post.createdAt,
+              );
+              await tx.post.update({
+                where: { id: postId },
+                data: { hotScore: newHot },
+              });
+            }
+
+            return result;
+          });
+        } catch (err) {
+          // Idempotency race on (postId, clientId): a concurrent request already
+          // inserted this exact summary. Return it (200), no double-open.
+          if (
+            err instanceof Error &&
+            "code" in err &&
+            (err as { code?: string }).code === "P2002"
+          ) {
+            const raced = await prisma.comment.findUnique({
+              where: { postId_clientId: { postId, clientId } },
+              include: commentInclude,
+            });
+            if (raced) {
+              return reply.code(200).send(toCommentDTO(raced));
+            }
+          }
+          throw err;
+        }
+
+        // BE-7 guard: someone already opened this transition → 409 with the
+        // CURRENT active segment so the loser re-assembles against it.
+        if (summaryResult.kind === "conflict") {
+          return reply.code(409).send({
+            segmentIndex: summaryResult.segmentIndex,
+            summaryCommentId: summaryResult.summaryCommentId,
+          });
+        }
+
+        const summaryDto = toCommentDTO(summaryResult.comment as CommentRow);
+
+        // RT-8 server side: publish BOTH events, ordered by seq. The summary
+        // bubble first (comment.created), then the segment.opened transition.
+        publish(postId, {
+          type: EVENT_COMMENT_CREATED,
+          data: { comment: summaryDto },
+        });
+        publish(postId, {
+          type: EVENT_SEGMENT_OPENED,
+          data: {
+            segmentIndex: summaryResult.newSegmentIndex,
+            summaryCommentId: summaryResult.summaryCommentId,
+            seq: summaryDto.seq,
+          },
+        });
+
+        return reply.code(201).send(summaryDto);
+      }
 
       let created: CommentRow;
       try {
