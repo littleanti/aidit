@@ -2,6 +2,13 @@
 
 > Companion to [PRD.md](./PRD.md) & [TRD.md](./TRD.md). Mobile-first (360–430px). ASCII low-fi wireframes.
 > 범례: `[버튼]` `(입력)` `‹좌버블›` `›우버블‹` `≈요약버블≈` `⟳로딩`
+>
+> **2026-06-18 비주얼 리디자인 (v0.3)** — 게시글(Thread) 화면을 레퍼런스 모바일 채팅 UI에 맞춰
+> 리팩토링한다. 핵심 변경: ① **브랜드 컬러 블루(#2563eb) → 바이올렛(#7c3aed)**, ② 모든 버블에
+> **아바타** 추가(타인/AI=좌, 본인=우), ③ Thread 상단을 **글 상세 헤더**(‹뒤로 · 제목 · 북마크 · ⋯)로,
+> ④ 원본 게시글 카드에 **📌 라벨 + 아바타 + 좋아요/댓글 카운트 + 북마크**, ⑤ Composer를
+> **알약형 입력 + ＋첨부 + 바이올렛 원형 전송**, ⑥ 본인 버블 **읽음 체크(✓)**, AI 타이핑
+> **✨ 반짝임 인디케이터**. 정확한 토큰/클래스 사양은 **§6.3 비주얼 리팩토링 사양**을 단일 출처로 따른다.
 
 ---
 
@@ -150,47 +157,49 @@ Login ──▶ Home ──┬──▶ Community(검색결과/상세) ──▶
 
 ---
 
-## 6. Thread (★ 핵심: 상단 원본 + 채팅방형 댓글)
+## 6. Thread (★ 핵심: 상단 원본 + 채팅방형 댓글) — **v0.3 리디자인**
 
 ```
 ┌────────────────────────────┐
-│ ‹ r/cooking · 🍳 ChefBot     │  헤더(커뮤니티+페르소나)
-│ ┌── 원본 게시글 (고정) ──────┐ │
-│ │ 계란만 있을 때 뭐 해먹지?    │ │  ← 상단 항상 원본(FR-5.1)
-│ │ by yoon · ▲12 · 3h        │ │
-│ │ 본문 텍스트…               │ │
-│ └──────────────────────────┘ │
+│ ‹  Aidit 사용자 경험에 대한…  🔖 ⋯│  ← 글 상세 헤더(뒤로·제목 중앙·북마크·메뉴)
+│ ┌──────────────────────────┐ │
+│ │ 📌 원본 게시글             │ │  ← 바이올렛 라벨
+│ │ Aidit에서 가장 좋았던 점은?  │ │  ← 제목(굵게)
+│ │ (👤) 익명 사용자 · 1시간 전  ♡12 💬8 │ │ ← 아바타+작성자·시간 / 우측 좋아요·댓글
+│ └──────────────────────────┘ │  (카드: 흰 배경, 라운드, 옅은 그림자)
 │ ─────── 대화 ───────          │
 │                            │
-│ ‹ChefBot🍳                  │  ← AI = 좌(FR-5.2), 페르소나 표시
-│  계란 스크램블 어때요? 1)…   │
-│  3h                        │
+│ (🟢)타인 사용자 A            │  ← 타인 = 좌, 아바타 좌측
+│  └‹ 깔끔한 UI가 마음에 들어요  │     회색 버블, 꼬리 좌하
+│    1시간 전                  │
 │                            │
-│          나(yoon) ▶         │  ← 본인 = 우(FR-5.2)
-│        › 소금이 없는데?? ‹    │
-│                    3h      │
+│        나 ▶ 저는 AI 요약이…›┐(👩)│  ← 본인 = 우, 아바타 우측
+│              1시간 전 ✓     │     바이올렛 채움, 꼬리 우하, 읽음 ✓
 │                            │
-│ ‹minji                      │  ← 타인 = 좌
-│  간장으로 대체돼요           │
+│ (🟣)Aidit AI [AI]           │  ← AI = 좌, 그라데이션 로봇 아바타 + AI 배지
+│  └‹ 핵심 포인트는 … (연보라)  │
+│    59분 전                  │
 │                            │
-│          나(yoon) ▶         │
-│   › @AI 간장 계란밥 레시피? ‹ │  ← @AI 멘션(FR-6)
-│                            │
-│ ‹ChefBot🍳  ⟳ 입력 중…       │  ← AI 답변 로딩(PENDING)
+│ (🟣)Aidit AI [AI]           │  ← AI 답변 로딩(PENDING)
+│  └‹ ✨ AI가 답변을 작성 중… •••│
 │ ──────────────────────────  │
-│ (＠AI 멘션 포함 가능…    )[↑] │  ← Composer
+│ (＋) ( 메시지를 입력하세요…  ) (↑)│  ← Composer: ＋첨부·알약입력·바이올렛 전송
 └────────────────────────────┘
 ```
 
-### 6.1 버블 타입별 스타일
-| 타입 | 위치 | 색/표시 |
-|------|------|---------|
-| 본인 사람댓글 | 우측 | 브랜드색 채움, 꼬리 우 |
-| 타인 사람댓글 | 좌측 | 회색, 상단 작성자명 |
-| AI 답변 | 좌측 | 연보라 테두리 + 🤖페르소나명, "AI" 배지 |
-| **AI 요약** | 좌측(전폭 띠) | **앰버/보라 배경 + ≈요약≈ 라벨**(색 구분, FR-7.4) |
-| 로딩 | 해당 위치 | `⟳ 입력 중…` 점 애니메이션 |
-| 실패 | 해당 위치 | 빨강 테두리 + `↻ 재시도` |
+### 6.1 버블 타입별 스타일 (v0.3)
+| 타입 | 위치 | 아바타 | 색/표시 |
+|------|------|--------|---------|
+| 본인 사람댓글 | 우측 | 우측(본인) | **바이올렛 채움**(`bg-brand`/흰 글씨), 꼬리 우하, 메타에 **읽음 ✓** |
+| 타인 사람댓글 | 좌측 | 좌측(시드색) | 회색(`bg-slate-100`), 상단 작성자명, 꼬리 좌하 |
+| AI 답변 | 좌측 | 좌측(그라데이션 로봇) | 연보라(`bg-purple-50` 테두리`purple-200`) + 페르소나명 + "AI" 배지 |
+| **AI 요약** | 좌측(전폭 띠) | 없음 | **앰버→보라 그라데이션 + ≈요약≈ 라벨**(색 구분, FR-7.4) |
+| 로딩(사람) | 해당 위치 | 해당 | `⟳ 입력 중…` 점 애니메이션 |
+| 로딩(AI) | 좌측 | 로봇 | **`✨ AI가 답변을 작성하고 있어요… •••`** |
+| 실패 | 해당 위치 | 해당 | 빨강 테두리(`border-red-400`/`bg-red-50`) + `↻ 재시도` |
+
+> 버블 최대폭 78%, 아바타는 `h-8 w-8`(32px) 원형, 버블과 `gap-2`. 본인 행은 `flex-row-reverse`로
+> 버블 우측·아바타 더 우측. 타인/AI 행은 아바타 좌측·버블 우측.
 
 ### 6.2 @AI 인터랙션 타임라인 (FR-6.2)
 ```
@@ -201,6 +210,88 @@ Login ──▶ Home ──┬──▶ Community(검색결과/상세) ──▶
  t3  (초과 시) §7 요약 분기 먼저
  t4  Gemini 응답 → ‹AI 답변› 으로 placeholder 교체, SSE 전원 동기화
 ```
+
+---
+
+## 6.3 비주얼 리팩토링 사양 (v0.3, 2026-06-18) — **구현 단일 출처**
+
+> 레퍼런스 이미지 2종(모바일 채팅형 게시글 UI) 분석 결과. 아래 토큰/클래스를 **그대로** 구현한다.
+> 기존 동작·라우팅·BYOK·SSE·상태 로직은 **불변**(L1/L4/L5 그대로). 순수 표현 계층만 변경.
+
+### A. 디자인 토큰 (전역)
+| 토큰 | Before | After | 적용처 |
+|------|--------|-------|--------|
+| `brand.DEFAULT` | `#2563eb` (blue-600) | **`#7c3aed`** (violet-600) | 본인 버블, 전송 버튼, 로고, 활성 탭, 링크 |
+| `brand.dark` | `#1d4ed8` | **`#6d28d9`** (violet-700) | hover/pressed |
+| AI 액센트 | `purple-*` | `purple-*` 유지 | AI 버블·배지·요약 |
+| `index.html` `theme-color` | `#0f172a` | **`#7c3aed`** | PWA 상태바 |
+
+`tailwind.config.js`의 `colors.brand`만 교체하면 `bg-brand`/`text-brand`/`border-brand` 전부 자동 반영
+(AppLayout 로고, BottomTabBar 활성색, Composer/ChatBubble 본인측, Login 버튼 등). **하드코딩된 blue-600
+잔재가 없는지** 확인.
+
+### B. Avatar 컴포넌트 (신규 `frontend/src/components/Avatar.tsx`)
+원형 아바타. **Tailwind purge 안전을 위해 색상은 동적 문자열 금지** — 아래 정적 클래스 배열에서 선택.
+```
+props: { kind: 'user' | 'me' | 'ai'; seed?: string | null; size?: 'sm'|'md'; className? }
+size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
+```
+- **user/me**: 시드(username) 해시로 팔레트 인덱스 선택 → 정적 클래스 사용. 내용은 사람 실루엣 SVG
+  (또는 username 첫 글자 이니셜, 흰 글씨). 팔레트(정적, 6색):
+  `['bg-violet-500','bg-emerald-500','bg-sky-500','bg-rose-500','bg-amber-500','bg-indigo-500']`
+  해시: `seed`의 코드포인트 합 `% 6`. seed 없으면 `bg-slate-400`.
+- **ai**: `bg-gradient-to-br from-violet-500 to-purple-600`, 흰 로봇 글리프(🤖 또는 SVG).
+- 공통: `flex shrink-0 items-center justify-center rounded-full text-white`. 터치 무관(표시용, `aria-hidden`).
+
+### C. Thread 글 상세 헤더 (Thread.tsx `<header>` 교체)
+기존 `PersonaBadge`만 있던 헤더 → 글 상세 헤더로 교체:
+```
+[‹ 뒤로]  [ 글 제목(중앙, 1줄 truncate, font-semibold) ]  [🔖 북마크]  [⋯ 메뉴]
+```
+- 컨테이너: `flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2`.
+- 뒤로: `navigate(-1)` 동작, `h-9 w-9` 터치 타깃, ‹ chevron(SVG/문자).
+- 제목: `flex-1 truncate text-center text-base font-semibold text-slate-900` = `post.title`.
+- 북마크: **로컬 토글(useState, 표시용)** — 채워짐/비움 토글, `aria-pressed`. 백엔드 미연동(주석 명시).
+- 메뉴(⋯): 표시용 버튼, 현재 동작 없음(placeholder, `aria-label`만). 페르소나 정보는 이 메뉴/원본 카드로 이전.
+
+### D. 원본 게시글 카드 (Thread.tsx `<article>` 재스타일)
+```
+┌ (카드: rounded-2xl border border-slate-200 bg-white shadow-sm px-4 py-3, mx-3 my-3) ┐
+│ 📌 원본 게시글            ← inline-flex, text-xs font-semibold text-brand, 📌 아이콘
+│ {post.title}              ← text-base font-bold text-slate-900 (mt-1)
+│ {SafeMarkdown(post.body)} ← mt-2 text-sm text-slate-700 (있을 때만)
+│ ─ 메타행(mt-3 flex items-center gap-2 text-xs text-slate-500) ─
+│ (Avatar sm, seed=authorName) u/{authorName} · {상대시간}   [우측 ml-auto] ▲{score} 💬{commentCount}
+└────────────────────────────────────────────────────────┘
+```
+- 좋아요/점수: 기존 `post.score`를 `▲`(또는 하트) 아이콘과 함께 표시(읽기 전용, 기존과 동일 비기능).
+- 댓글 수: `post.commentCount`. (Post DTO에 존재.)
+
+### E. ChatBubble (행 레이아웃 전면 교체)
+행 컨테이너: `flex w-full items-end gap-2 px-2 py-1` + 본인이면 `flex-row-reverse`.
+1. **아바타**(행 끝): `<Avatar kind={isAi?'ai':side==='right'?'me':'user'} seed={authorUsername} size="md" />`.
+   - PENDING/연속 동일 작성자 묶음 최적화는 범위 외(매 버블 아바타 표시로 단순화).
+2. **버블 묶음**(`flex max-w-[78%] flex-col`):
+   - 좌측 헤더(타인=작성자명, AI=페르소나명+`AI`배지) — 기존 유지, 아바타로 이동했으므로 이모지 중복 제거.
+   - 버블 surface:
+     - 본인(우): `bg-brand text-white rounded-2xl rounded-br-md`.
+     - 타인(좌): `bg-slate-100 text-slate-800 rounded-2xl rounded-bl-md`.
+     - AI(좌): `bg-purple-50 text-slate-800 border border-purple-200 rounded-2xl rounded-bl-md`.
+     - 실패: `!border !border-red-400 !bg-red-50 !text-red-900` 오버라이드(기존 유지).
+   - 메타행: 시간 + **본인 COMPLETE면 읽음 `✓`**(`text-brand`/`opacity-70`), 실패면 `↻ 재시도`.
+3. **AI 로딩(PENDING)**: 점 3개 대신 `✨ AI가 답변을 작성하고 있어요… •••` (sparkle + 점 애니메이션).
+   사람 PENDING은 기존 `⟳ 입력 중…` 유지.
+
+### F. Composer (입력 행 재스타일)
+- 컨테이너 배경/토글행은 유지하되 색을 바이올렛 계열로(`accent-violet-600`, `text-brand`).
+- 입력 행: 왼쪽 **＋ 첨부 버튼**(`h-9 w-9 rounded-full text-slate-400`, 표시용 placeholder — 동작 없음, 주석 명시)
+  + **알약형 입력**(`flex-1 rounded-full border bg-slate-50 px-4`) + **원형 전송 버튼**
+  (`h-11 w-11 rounded-full bg-brand`(@AI/AI모드면 `bg-purple-600`) `text-white`, ↑ 아이콘).
+- placeholder: `메시지를 입력하세요…` (AI모드면 `AI에게 메시지 보내기…`). 기존 @AI 칩/감지 로직 유지.
+
+### G. 변경 없음(불변)
+- 라우팅, 스토어, 엔진(contextEngine/retry), SSE, BYOK 키 흐름, 요약 트리거 로직, 접근성 터치≥44px.
+- SummaryBubble은 토큰만 정합(이미 amber→purple). PersonaBadge는 `bg-brand/10`로 자동 바이올렛.
 
 ---
 
@@ -264,6 +355,7 @@ Login ──▶ Home ──┬──▶ Community(검색결과/상세) ──▶
 | `LoginForm` | Login | FR-2 |
 | `PersonaEditor` | CreateCommunity | FR-3 |
 | `PostComposer` | CreatePost | FR-4 |
+| `Avatar`(user/me/ai) | Thread/원본카드 | FR-5 (v0.3 비주얼) |
 | `ChatBubble`(left/right/ai/summary) | Thread | FR-5, FR-7.4 |
 | `Composer`(@AI 감지) | Thread | FR-6 |
 | `SummaryBubble` | Thread | FR-7 |

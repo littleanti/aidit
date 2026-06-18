@@ -13,8 +13,8 @@ export default {
       },
       colors: {
         brand: {
-          DEFAULT: '#2563eb',
-          dark: '#1d4ed8',
+          DEFAULT: '#7c3aed',
+          dark: '#6d28d9',
         },
       },
     },
