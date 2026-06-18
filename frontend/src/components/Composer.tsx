@@ -21,6 +21,7 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useThreadStore } from '../stores/threadStore';
+import { useAiModeStore } from '../stores/aiModeStore';
 import { postComment } from '../api/rest';
 import type { Comment } from '../api/types';
 import { runAtAiReply } from '../engine/contextEngine';
@@ -31,6 +32,7 @@ interface ComposerProps {
   communityPersonaPrompt?: string;
 }
 
+// Manual one-off @AI shortcut: a leading or whitespace-preceded '@AI' token.
 const AI_MENTION = /@AI\b/i;
 
 /** A monotonic-ish temp seq for optimistic bubbles; far above real seqs so it
@@ -47,6 +49,10 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
   const addOptimistic = useThreadStore((s) => s.addOptimistic);
   const upsertComment = useThreadStore((s) => s.upsertComment);
 
+  // Thread-scoped AI-mode toggle (session-only, default OFF per post).
+  const aiMode = useAiModeStore((s) => s.byPost[postId] ?? false);
+  const toggleAiMode = useAiModeStore((s) => s.toggle);
+
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -54,6 +60,10 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
 
   const trimmed = text.trim();
   const hasMention = AI_MENTION.test(text);
+  // Unified routing: the message goes to the AI if the thread toggle is ON OR
+  // the user manually typed an '@AI' token (one-off shortcut). A single source
+  // of truth so we never double-trigger when both are true.
+  const wantsAI = aiMode || hasMention;
   const canSend = trimmed.length > 0 && !sending;
 
   function showToast(msg: string) {
@@ -70,16 +80,21 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
       return;
     }
 
-    // 1b. @AI requires a personal Gemini key (BYOK). Block before posting so we
-    // never commit a human '@AI ...' turn that can't be answered.
-    const willInvokeAi = AI_MENTION.test(text);
+    // 1b. AI invocation requires a personal Gemini key (BYOK). Block before
+    // posting so we never commit a human turn that can't be answered. The
+    // decision unifies the thread toggle and the manual '@AI' shortcut.
+    const willInvokeAi = wantsAI;
     const apiKey = useAuthStore.getState().googleApiKey;
     if (willInvokeAi && !apiKey) {
-      showToast('@AI 사용에는 Gemini 키가 필요합니다 — 로그인에서 키를 등록하세요.');
+      showToast('AI 호출에는 Gemini 키가 필요합니다 — 로그인에서 키를 등록하세요.');
       navigate('/login');
       return;
     }
 
+    // The stored human body is exactly what the user typed (trimmed). A manual
+    // '@AI' mention is preserved verbatim in the human bubble (it drives routing
+    // only, never mutates the body). In toggle-ON mode the text has no '@AI'
+    // prefix at all — the chip is a UI element, never injected into the value.
     const body = trimmed;
     const clientId =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -167,29 +182,66 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
         </div>
       )}
 
-      {hasMention && (
-        <div className="px-3 pt-2 text-xs font-medium text-purple-600">
+      {/* Thin control row: thread-scoped AI-mode toggle + BYOK cost hint. */}
+      <div className="flex items-center gap-2 px-3 pt-2">
+        <label className="group inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-600">
+          <input
+            type="checkbox"
+            checked={aiMode}
+            onChange={() => toggleAiMode(postId)}
+            className="h-4 w-4 shrink-0 cursor-pointer accent-purple-600"
+          />
+          <span>🤖 AI에게 묻기</span>
+        </label>
+        <span
+          className="text-[11px] text-slate-400"
+          title="AI에게 묻기가 켜져 있으면 보내는 메시지마다 내 Gemini 키로 호출됩니다(비용 발생)."
+        >
+          메시지마다 내 키로 호출됩니다
+        </span>
+      </div>
+
+      {hasMention && !aiMode && (
+        <div className="px-3 pt-1 text-xs font-medium text-purple-600">
           🤖 @AI 멘션 포함 — AI가 응답합니다
         </div>
       )}
 
       <div className="flex items-end gap-2 px-3 py-2">
-        <textarea
-          ref={taRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          rows={1}
-          placeholder="＠AI 멘션 포함 가능…"
-          aria-label="댓글 입력"
-          className="max-h-32 min-h-[44px] flex-1 resize-none rounded-2xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm leading-relaxed text-slate-900 outline-none placeholder:text-slate-400 focus:border-brand focus:bg-white"
-        />
+        <div
+          className={`flex max-h-32 min-h-[44px] flex-1 items-center gap-2 rounded-2xl border bg-slate-50 px-3 py-1 focus-within:bg-white ${
+            aiMode
+              ? 'border-purple-300 focus-within:border-purple-500'
+              : 'border-slate-300 focus-within:border-brand'
+          }`}
+        >
+          {aiMode && (
+            <span
+              aria-label="AI에게 전송"
+              className="shrink-0 select-none rounded-full bg-purple-100 px-2 py-0.5 text-xs font-bold text-purple-700"
+            >
+              @AI
+            </span>
+          )}
+          <textarea
+            ref={taRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            rows={1}
+            placeholder={aiMode ? 'AI에게 메시지 보내기…' : '＠AI 멘션 포함 가능…'}
+            aria-label="댓글 입력"
+            className="max-h-28 min-h-[42px] flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed text-slate-900 outline-none placeholder:text-slate-400"
+          />
+        </div>
         <button
           type="button"
           onClick={() => void handleSend()}
           disabled={!canSend}
           aria-label="전송"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand text-lg font-bold text-white transition active:scale-95 disabled:opacity-40"
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white transition active:scale-95 disabled:opacity-40 ${
+            wantsAI ? 'bg-purple-600' : 'bg-brand'
+          }`}
         >
           <span aria-hidden>↑</span>
         </button>

@@ -11,6 +11,7 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-18
+- **[feat]** Composer "🤖 AI에게 묻기" 토글(스레드별, 기본 OFF): ON이면 보내는 모든 메시지가 기존 `@AI` 흐름으로 AI에 전달되며 입력창 앞에 편집 불가 "@AI" 칩이 표시(텍스트 주입이 아닌 UI 요소)되고 전송 버튼이 AI 강조색으로 전환. 전송 판단은 `wantsAI = 토글 ON || 수동 @AI 감지`로 단일화해 중복 호출 없이 `runAtAiReply`를 정확히 1회 발화. 수동 `@AI` 타이핑은 일회성 단축키로 유지. BYOK 비용 힌트("메시지마다 내 키로 호출") 노출. 세션 한정·postId별·미영속(새로고침 시 OFF로 초기화)인 신규 `aiModeStore` 도입. (§3, §5)
 - **[feat]** 네비게이션/검색/프로필: 도달 가능한 검색 페이지(`/search`), 프로필 페이지(`/me`: 로그아웃·API 키 변경·내 커뮤니티·내 글), PostCard→커뮤니티 링크, `authStore.updateKey`, `GET /users/:id/posts`·`/users/:id/communities`. (commit `f281c45`, §4.2, §5)
 - **[fix]** 피드 응답 형태 불일치: `toFeedCard`가 중첩 `community{}`/`author{}`를 반환했으나 `PostListItem`은 평탄(`communitySlug` 등) → 홈 피드 커뮤니티 라벨 공백. 서버를 평탄 동결 계약에 맞춤. (commit `f281c45`, §4.2-7)
 - **[fix]** `POST /posts` 201 응답에 최상위 `authorId` 누락 (Post DTO 계약 드리프트): `GET /posts/:id`는 이미 `authorId`를 포함하도록 고쳤으나 형제 `POST /posts` 직렬화기는 `communityId`만 보내 `authorId` 없는 Post 반환. `rest.ts`가 런타임 검증 없이 캐스팅해 tsc가 못 잡는 재발 드리프트 클래스. 직렬화기를 동결 Post DTO에 맞춤. (§4.2-8, `server/src/routes/posts.ts`)
@@ -133,6 +134,7 @@ TRD §4 표는 인증 칼럼을 "username"으로 적었으나, **실제 구현�
 - **마크다운 sanitize chokepoint(XC-3)**: `frontend/src/lib/sanitize.ts`의 `renderMarkdownSafe(md)`(marked → DOMPurify 엄격 allowlist) + `SafeMarkdown` 컴포넌트가 **유일한** `dangerouslySetInnerHTML` 경로. 모든 사용자 콘텐츠(ChatBubble/SummaryBubble/PostCard/Thread 원본 본문)가 이를 경유. `javascript:`/`data:`/`iframe`/`script`/이벤트 핸들러 제거, 실패 시 평문 폴백.
 - **hot decay(XC-8)**: 읽기 시점 재계산 방식 채택(PoC). hot 피드 반환 시 `ageDecay`를 반영해 정렬이 현재 경과시간을 반영하도록 함(커서 페이지네이션 유지).
 - **토큰 카운팅(AI-3)**: `countTokens` 우선, 폴백 `Math.ceil(text.length/4)`(`estimateTokens`). 버블 게시 시 `tokenCount`를 함께 보내 서버가 활성 세그먼트 `tokenSum` 누적.
+- **AI 모드 토글 = 의도 플래그(텍스트 prefix 조작 아님)**: "🤖 AI에게 묻기"는 입력 텍스트에 `@AI`를 끼워넣지 않고 별도 의도 플래그로 모델링 → 파싱 결합 없이 견고(본문은 사용자가 친 그대로 게시). 상태는 스레드별·세션 메모리·기본 OFF(`aiModeStore`, 미영속)로 BYOK 비용 안전을 보장. 전송 라우팅은 `wantsAI = 토글 ON || 수동 @AI 감지`로 단일화해 `runAtAiReply` 단일 발화를 보장하고, 수동 `@AI`는 일회성 단축키로 그대로 유지. (§5)
 
 ---
 
@@ -192,6 +194,7 @@ TRD §4 표는 인증 칼럼을 "username"으로 적었으나, **실제 구현�
 - `frontend/src/pages/Profile.tsx` — 프로필 페이지(`/me`: 로그아웃·API 키 변경·내 커뮤니티·내 글). (2026-06-18)
 - `frontend/src/pages/Community.tsx` — 이제 `CommunitySearch`도 export하고 slug 없는 진입 시 리다이렉트 처리. (2026-06-18)
 - `frontend/src/stores/authStore.ts::updateKey` — localStorage API 키 갱신(L1 유지, 키 미전송). (2026-06-18)
+- `frontend/src/stores/aiModeStore.ts` — 스레드별 AI 모드 토글 상태(세션, 미영속). (2026-06-18)
 - 백엔드 `GET /users/:id/posts`·`GET /users/:id/communities` — 프로필 "내 글/내 커뮤니티" 조회용. 각각 평탄 `PostListItem`/`Community` 형상(후자에 비계약 `postCount` 가산 필드 — 무해 additive). (2026-06-18)
 
 ---
