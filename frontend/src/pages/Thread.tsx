@@ -306,7 +306,7 @@ export default function Thread() {
   // Full-screen chat column. The page lives inside AppLayout's <main>; we make
   // this region fill the viewport below the app bar (h-12) and bottom tab bar.
   return (
-    <div className="-mx-4 -mt-4 -mb-20 flex h-[calc(100dvh-3rem)] flex-col desktop:mx-0 desktop:mt-0 desktop:mb-0 desktop:h-[calc(100dvh-3rem)]">
+    <div className="-mx-4 -mt-4 -mb-20 flex h-[calc(100dvh-3rem)] flex-col pb-[calc(3.5rem+var(--safe-bottom,0px))] tablet:pb-0 desktop:mx-0 desktop:mt-0 desktop:mb-0 desktop:h-[calc(100dvh-3rem)]">
       {/* persona / community header */}
       <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
         <PersonaBadge personaIcon={personaIcon} name={personaName} size="sm" />

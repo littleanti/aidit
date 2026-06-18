@@ -168,11 +168,13 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
     }
   }
 
-  // On mobile the fixed bottom tab bar (h ~56px) sits at bottom-0; lift the
-  // composer above it so the send button isn't covered. On tablet+ the tab bar
-  // is hidden, so sit flush at the bottom.
+  // The Composer is a NORMAL bottom flex child of Thread's fixed-height column:
+  // the sibling `flex-1` scroll area shrinks to fit above it (no overlay), so the
+  // newest chat bubble is always visible above the input regardless of how tall
+  // this row grows. Mobile tab-bar clearance is handled at the Thread root
+  // (bottom padding), not by a sticky offset here.
   return (
-    <div className="sticky bottom-16 z-30 border-t border-slate-200 bg-white tablet:bottom-0">
+    <div className="shrink-0 border-t border-slate-200 bg-white">
       {toast && (
         <div
           role="alert"

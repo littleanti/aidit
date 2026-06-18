@@ -11,6 +11,7 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-18
+- **[fix]** Composer에 "🤖 AI에게 묻기" 토글/칩 행이 추가되며 Composer가 더 높아졌고, 그 `sticky` 오버레이가 Thread의 마지막/PENDING("입력 중…") AI 로딩 버블을 가렸다. `sticky` 오버레이를 제거해 Composer를 일반 flex 흐름 자식으로 되돌리고, 모바일 하단 탭바 여백 확보를 Thread 컬럼 레벨에서 처리 → 최신 버블이 항상 입력창 위에 보이도록 수정. (§4.2-9)
 - **[feat]** Composer "🤖 AI에게 묻기" 토글(스레드별, 기본 OFF): ON이면 보내는 모든 메시지가 기존 `@AI` 흐름으로 AI에 전달되며 입력창 앞에 편집 불가 "@AI" 칩이 표시(텍스트 주입이 아닌 UI 요소)되고 전송 버튼이 AI 강조색으로 전환. 전송 판단은 `wantsAI = 토글 ON || 수동 @AI 감지`로 단일화해 중복 호출 없이 `runAtAiReply`를 정확히 1회 발화. 수동 `@AI` 타이핑은 일회성 단축키로 유지. BYOK 비용 힌트("메시지마다 내 키로 호출") 노출. 세션 한정·postId별·미영속(새로고침 시 OFF로 초기화)인 신규 `aiModeStore` 도입. (§3, §5)
 - **[feat]** 네비게이션/검색/프로필: 도달 가능한 검색 페이지(`/search`), 프로필 페이지(`/me`: 로그아웃·API 키 변경·내 커뮤니티·내 글), PostCard→커뮤니티 링크, `authStore.updateKey`, `GET /users/:id/posts`·`/users/:id/communities`. (commit `f281c45`, §4.2, §5)
 - **[fix]** 피드 응답 형태 불일치: `toFeedCard`가 중첩 `community{}`/`author{}`를 반환했으나 `PostListItem`은 평탄(`communitySlug` 등) → 홈 피드 커뮤니티 라벨 공백. 서버를 평탄 동결 계약에 맞춤. (commit `f281c45`, §4.2-7)
@@ -178,6 +179,9 @@ TRD §4 표는 인증 칼럼을 "username"으로 적었으나, **실제 구현�
 8. **`POST /posts` 201 응답에 최상위 `authorId` 누락 — Post DTO 계약 드리프트**
    - 증상: 동결 `Post` DTO는 `authorId: string`을 **필수**로 선언하고 `GET /posts/:id`는 이미 이를 포함하도록 고쳐졌으나(Thread의 1차 답변 가드 `post.authorId === me` 때문), 형제 `POST /posts` 201 직렬화기는 `communityId`만 보내고 `authorId`를 누락 → `authorId` 없는 Post 반환. `rest.ts`가 런타임 검증 없이 캐스팅해 tsc 미검출. 오늘 시점에는 잠복(CreatePost는 `post.id`만 읽고 이동, 이후 Thread가 `GET /posts/:id`로 재조회해 `authorId` 확보)이나, POST 응답 Post를 그대로 렌더하는 경로가 생기면 조용히 깨지는 정확히 그 재발 드리프트 클래스.
    - 수정: `POST /posts`의 `reply.code(201).send({...})`에 `authorId: post.authorId` 추가(`GET /posts/:id`와 동일하게 직렬화기를 동결 Post DTO에 정렬). 라이브 검증: `POST /posts`가 이제 최상위 `authorId` 반환. 양측 typecheck clean. 파일: `server/src/routes/posts.ts`.
+9. **Composer "AI에게 묻기" 토글 행 추가 후 마지막/PENDING AI 로딩 버블이 가려짐**
+   - 근본 원인: Thread는 고정 높이 flex 컬럼(`h-[calc(100dvh-3rem)] flex flex-col`)에 전용 `flex-1 overflow-y-auto` 스크롤 영역과 형제 `<Composer/>`로 구성되는데, Composer 래퍼가 `sticky bottom-16 z-30`이라 flex 흐름에서 벗어나 스크롤 영역 하단을 **오버레이**했다(스크롤 영역은 컬럼 전체 높이를 점유, Composer는 그 위를 덮음). 여기에 새로 추가된 토글/칩 행이 Composer를 더 높게 만들면서 `scrollIntoView({block:'end'})`로 스크롤포트 바닥에 정렬된 마지막/PENDING("입력 중…") 버블이 더 넓어진 Composer 뒤에 숨었다. 기존 `bottom-16`은 모바일 고정 `BottomTabBar`(`tablet:hidden`, ~56px+safe-area)를 비키려던 본래 핵.
+   - 수정(2파일, 백엔드/계약/테스트 무변경): (1) `frontend/src/components/Composer.tsx` 래퍼를 `sticky bottom-16 z-30 … tablet:bottom-0` → `shrink-0 border-t border-slate-200 bg-white`로 변경 — 오버레이·z-lift·sticky 오프셋 제거, Composer를 자연 높이의 일반 bottom flex 자식으로 환원하니 형제 `flex-1` 스크롤 영역이 그 위로 줄어들어 최신 버블이 입력창 위에 항상 노출. (2) `frontend/src/pages/Thread.tsx` 루트 컬럼에 `pb-[calc(3.5rem+var(--safe-bottom,0px))] tablet:pb-0` 추가 — 모바일 탭바 클리어런스를 컬럼 레벨에서 확보(3.5rem=56px+iOS safe-area). `tablet:pb-0`은 `BottomTabBar`의 `tablet:hidden` 분기와 정확히 일치해 탭바가 없는 tablet+에서는 패딩이 사라지고 Composer가 컬럼 바닥에 flush. 데스크톱 `h-[calc(100dvh-3rem)]`·`-mb-20`은 불변. (양측 typecheck clean, E2E J2가 사람/AI 버블 가시성·순서 가드)
 
 ---
 
