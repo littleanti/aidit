@@ -18,6 +18,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
 
   // Track the in-flight request so a tab switch cancels stale appends.
@@ -30,10 +31,14 @@ export default function Home() {
       setLoading(true);
       setError(null);
       try {
-        const page = await getPosts({ sort: nextSort, cursor });
+        const { items, nextCursor: serverCursor } = await getPosts({
+          sort: nextSort,
+          cursor,
+        });
         if (reqRef.current !== reqId) return; // superseded
-        setPosts((prev) => (cursor ? [...prev, ...page] : page));
-        if (page.length === 0) setDone(true);
+        setPosts((prev) => (cursor ? [...prev, ...items] : items));
+        setNextCursor(serverCursor);
+        setDone(serverCursor == null);
       } catch (err) {
         if (reqRef.current !== reqId) return;
         setError(
@@ -55,6 +60,7 @@ export default function Home() {
   useEffect(() => {
     setPosts([]);
     setDone(false);
+    setNextCursor(null);
     setInitialized(false);
     void loadPage(sort);
   }, [sort, loadPage]);
@@ -62,19 +68,18 @@ export default function Home() {
   // Infinite scroll: load the next page when the sentinel scrolls into view.
   useEffect(() => {
     const el = sentinelRef.current;
-    if (!el || done || loading || posts.length === 0) return;
+    if (!el || done || loading || !nextCursor) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
-          const last = posts[posts.length - 1];
-          void loadPage(sort, last.id);
+          void loadPage(sort, nextCursor);
         }
       },
       { rootMargin: '200px' },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [posts, done, loading, sort, loadPage]);
+  }, [posts, done, loading, nextCursor, sort, loadPage]);
 
   const isEmpty = initialized && !error && posts.length === 0;
 

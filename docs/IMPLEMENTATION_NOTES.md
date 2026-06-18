@@ -10,6 +10,9 @@
 
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
+### 2026-06-19
+- **[fix]** 홈 피드 "Invalid cursor" 무한 루프: `rest.ts::getPosts`가 페이지네이션 envelope를 풀어 `items` 배열만 반환하고 `nextCursor`를 버리자, Home이 마지막 항목의 **원본 id**를 다음 커서로 넘겨 서버가 이를 불투명 커서로 디코드하지 못해 매 페이지 "Invalid cursor"로 실패→재요청을 반복했다. `getPosts`가 서버 envelope **`{ items, nextCursor }`** 를 그대로 반환하도록 되돌리고, Home은 서버가 준 **불투명 `nextCursor`로 페이지네이션**하며 **`null`이면 정지**하도록 수정(원본 id 도출 제거). (§4.5)
+
 ### 2026-06-18
 - **[feat]** **디자인 시스템 v0.3 전 화면 전파**(VR-10, 표현 계층 한정 — 라우팅/스토어/엔진/SSE/BYOK/검증 불변): §6.3에서 확립한 채팅 UI 비주얼 언어를 Thread 외 나머지 화면(Login·Home·Search·Community·CreatePost·CreateCommunity·Profile·AppLayout/BottomTabBar·상태 컴포넌트)에 일관 전파(WIREFRAME §12). 공유 토큰: **카드/리스트 항목 `rounded-2xl border border-slate-200 bg-white shadow-sm`**(클릭형은 `active:bg-slate-50 hover:border-brand/40` 가산), **입력/textarea/select `rounded-xl ... focus:border-brand focus:ring-1 focus:ring-brand`**, **1차 버튼 바이올렛 `rounded-xl bg-brand text-white`**(2차=`border` hover:brand, 위험=red), 토글 액센트 `accent-violet-600`. **Avatar 컴포넌트(§6.3 B)를 Profile(헤더 `👤`→`Avatar md` seed=username)·Community(글 리스트 작성자 `Avatar sm`)에 재사용.** 브랜드 컬러는 §6.3 A 바이올렛 토큰(`brand=#7c3aed`)을 그대로 사용해 대부분 `bg-brand`/`text-brand`로 자동 반영. **순수 표현(클래스/마크업)만 변경 — 동작 변화 없음.** (§4.4)
 - **[feat]** **Thread v0.3 비주얼 리디자인**(VR-9, 표현 계층 한정 — 동작/라우팅/SSE/BYOK 불변): 브랜드 컬러 블루(`#2563eb`)→**바이올렛(`#7c3aed`)**(`tailwind.config.js` `colors.brand`만 교체, `index.html` `theme-color` 동기화), 신규 **`Avatar` 컴포넌트**(user/me=실루엣·시드 해시 팔레트, ai=바이올렛 그라데이션 로봇), Thread 상단을 **글 상세 헤더**(‹뒤로·제목 중앙·🔖북마크·⋯메뉴)로 교체, 원본 게시글을 **📌 라벨 + 아바타 + ▲점수/💬댓글수 핀 카드**로 재스타일, ChatBubble에 **행 끝 아바타 + 본인 COMPLETE 버블 읽음 `✓`**, AI PENDING 로딩을 **`✨ AI가 답변을 작성하고 있어요…`** 스파클 인디케이터로, Composer를 **＋첨부 + 알약형 입력 + 바이올렛 원형 전송**으로 변경. **🔖북마크·⋯메뉴·＋첨부는 표현용 placeholder(백엔드 미연동, 코드 주석 명시).** (§6.3 사양 그대로 구현, 스펙 이탈 없음) (§4.3)
@@ -233,6 +236,14 @@ WIREFRAME §12("디자인 시스템 v0.3 — 전 화면 적용, 구현 단일 �
   - **AppLayout/BottomTabBar**(`layout/AppLayout.tsx`, `layout/BottomTabBar.tsx`): 로고·활성 탭 바이올렛(자동), 구조 변경 없음.
   - **상태 컴포넌트**(`components/states/ErrorState.tsx`·`LoadingState.tsx`·`OfflineBanner.tsx`): 스피너 `border-t-brand`(자동), 배너/카드 radius `rounded-xl` 통일, 동작 불변.
 - **스펙 이탈**: 없음 — §12.1 토큰/클래스를 그대로 따랐고, §12.3("회귀 금지")로 명시된 라우팅·검증·핸들러·스토어·BYOK·인증·스크롤·검색·SSE는 손대지 않았다(클래스/마크업만 변경, 동작 변화 없음).
+
+### 4.5 홈 피드 "Invalid cursor" 무한 루프 (2026-06-19)
+
+§4.1-3의 envelope 정규화(`getPosts`가 `{items}` → 배열 반환)는 크래시/빈 화면은 고쳤으나, 함께 버려진 서버 **`nextCursor`** 가 새 회귀를 낳았다. Home이 다음 페이지 커서를 응답에서 받지 못하니 **마지막 항목의 원본 `id`** 를 커서로 도출해 넘겼는데, 서버 커서는 (정렬 키를 인코딩한) **불투명 토큰**이라 원본 id를 디코드하지 못하고 매 요청을 거부했다.
+
+11. **홈 피드 무한 루프 — 원본 id를 커서로 오용 (envelope `nextCursor` 유실)**
+    - 증상: 홈 피드 무한 스크롤이 첫 페이지 이후 매 추가 요청마다 서버에서 **"Invalid cursor"** 로 실패하고, 클라가 같은 (잘못된) 커서로 재요청을 반복해 **무한 루프**에 빠졌다. `rest.ts::getPosts`가 `{ items, nextCursor }` envelope를 풀어 `items` 배열만 반환하면서 `nextCursor`를 폐기 → Home은 다음 커서를 알 수 없어 `items[items.length-1].id`(원본 정수/문자열 id)를 커서로 넘겼고, 서버는 이를 불투명 커서로 디코드하지 못해 거부했다.
+    - 수정: `getPosts`를 서버 envelope **`{ items, nextCursor }`** 를 그대로 반환하도록 되돌리고(배열 강제 정규화 제거), Home은 서버가 발급한 **불투명 `nextCursor`** 로만 페이지네이션하며 **`nextCursor === null`이면 더 불러오기를 정지**하도록 변경(마지막 항목 id 도출 로직 제거). 이로써 커서 의미 체계가 서버↔클라 간 일치하고 끝 페이지에서 깔끔히 종료된다.
 
 ---
 
