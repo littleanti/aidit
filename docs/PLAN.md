@@ -396,23 +396,23 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 > `npm run test` · `npm run build` 전부 green + 브라우저 시각 검증.
 
 ### 작업 패키지 (WP)
-- [ ] **VR-1 · 디자인 토큰**: `tailwind.config.js` `colors.brand` 블루→바이올렛(`#7c3aed`/`#6d28d9`),
+- [x] **VR-1 · 디자인 토큰**: `tailwind.config.js` `colors.brand` 블루→바이올렛(`#7c3aed`/`#6d28d9`),
   `index.html` `theme-color`→`#7c3aed`. blue-600 하드코딩 잔재 grep 확인. (§6.3 A)
-- [ ] **VR-2 · Avatar 컴포넌트**: 신규 `frontend/src/components/Avatar.tsx`. user/me/ai 종류, 정적
+- [x] **VR-2 · Avatar 컴포넌트**: 신규 `frontend/src/components/Avatar.tsx`. user/me/ai 종류, 정적
   팔레트(purge 안전), 시드 해시 색상, AI 그라데이션 로봇. (§6.3 B)
-- [ ] **VR-3 · Thread 헤더**: PersonaBadge 헤더 → 글 상세 헤더(‹뒤로 `navigate(-1)`·제목 중앙·북마크
+- [x] **VR-3 · Thread 헤더**: PersonaBadge 헤더 → 글 상세 헤더(‹뒤로 `navigate(-1)`·제목 중앙·북마크
   로컬토글·⋯). (§6.3 C)
-- [ ] **VR-4 · 원본 게시글 카드**: 📌 라벨 + 카드(rounded-2xl shadow) + 아바타·작성자·시간 +
+- [x] **VR-4 · 원본 게시글 카드**: 📌 라벨 + 카드(rounded-2xl shadow) + 아바타·작성자·시간 +
   우측 점수/댓글 카운트. (§6.3 D)
-- [ ] **VR-5 · ChatBubble**: 행 레이아웃 아바타화(타인/AI 좌·본인 우 `flex-row-reverse`), 버블
+- [x] **VR-5 · ChatBubble**: 행 레이아웃 아바타화(타인/AI 좌·본인 우 `flex-row-reverse`), 버블
   꼬리/색, 본인 읽음 `✓`, AI 로딩 `✨ … •••`. (§6.3 E)
-- [ ] **VR-6 · Composer**: ＋첨부(placeholder) + 알약형 입력 + 바이올렛 원형 전송, 토글 액센트
+- [x] **VR-6 · Composer**: ＋첨부(placeholder) + 알약형 입력 + 바이올렛 원형 전송, 토글 액센트
   바이올렛. (§6.3 F)
-- [ ] **VR-7 · 주변 정합**: PostCard/PersonaBadge/AppLayout/BottomTabBar 브랜드색 자동반영 확인,
+- [x] **VR-7 · 주변 정합**: PostCard/PersonaBadge/AppLayout/BottomTabBar 브랜드색 자동반영 확인,
   SummaryBubble 토큰 정합. (§6.3 G)
-- [ ] **VR-8 · 검증**: typecheck + vitest + build green, 브라우저(dev)에서 Thread 시각 확인
+- [x] **VR-8 · 검증**: typecheck + vitest + build green, 브라우저(dev)에서 Thread 시각 확인
   (아바타·색·헤더·Composer·읽음표시·AI 로딩).
-- [ ] **VR-9 · 문서 재동기화**: 구현 차이를 [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md)에 기록,
+- [x] **VR-9 · 문서 재동기화**: 구현 차이를 [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md)에 기록,
   WIREFRAME 사양과 실제 구현 일치 확인.
 
 ---
@@ -424,15 +424,15 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 > 완료 게이트: `npm run typecheck` · `npm run test` · `npm run build` green + 브라우저 시각 검증(실 키 로그인).
 
 ### 작업 패키지 (WP) — 파일 소유권 분리(병렬 충돌 방지)
-- [ ] **DS-1 · Login**: 폼 카드화 + 바이올렛 로고 락업 + 입력/버튼 토큰. (§12.2)
-- [ ] **DS-2 · Home + 상태 컴포넌트**: EmptyState 버튼 토큰, 상태 컴포넌트(Empty/Error/Loading/Offline)
+- [x] **DS-1 · Login**: 폼 카드화 + 바이올렛 로고 락업 + 입력/버튼 토큰. (§12.2)
+- [x] **DS-2 · Home + 상태 컴포넌트**: EmptyState 버튼 토큰, 상태 컴포넌트(Empty/Error/Loading/Offline)
   radius 통일. (Home.tsx + components/states/*)
-- [ ] **DS-3 · Community(검색+상세) + Search**: 검색 입력·결과 카드 리스트, 상세 헤더/페르소나 박스/글
+- [x] **DS-3 · Community(검색+상세) + Search**: 검색 입력·결과 카드 리스트, 상세 헤더/페르소나 박스/글
   리스트 카드화, 작성자 Avatar. (Community.tsx, Search.tsx는 재노출만)
-- [ ] **DS-4 · CreatePost + CreateCommunity + PersonaEditor**: 입력/select/textarea/버튼 토큰 통일,
+- [x] **DS-4 · CreatePost + CreateCommunity + PersonaEditor**: 입력/select/textarea/버튼 토큰 통일,
   토글 액센트 바이올렛.
-- [ ] **DS-5 · Profile**: 헤더 Avatar, 섹션 카드화, 리스트 카드형. 키 마스킹/로컬 로직 불변.
-- [ ] **DS-6 · AppLayout + BottomTabBar**: 로고/사이드바/탭 활성색 정합(대부분 자동), 구조 불변.
-- [ ] **DS-7 · 검증**: typecheck + vitest + build green, 브라우저에서 전 화면 시각 확인
+- [x] **DS-5 · Profile**: 헤더 Avatar, 섹션 카드화, 리스트 카드형. 키 마스킹/로컬 로직 불변.
+- [x] **DS-6 · AppLayout + BottomTabBar**: 로고/사이드바/탭 활성색 정합(대부분 자동), 구조 불변.
+- [x] **DS-7 · 검증**: typecheck + vitest + build green, 브라우저에서 전 화면 시각 확인
   (실 키로 로그인 → Home/Search/Community/Create*/Profile/Thread 순회).
-- [ ] **DS-8 · 문서 재동기화 + 푸시**: IMPLEMENTATION_NOTES 기록, WIREFRAME 정합 확인, 커밋·푸시.
+- [x] **DS-8 · 문서 재동기화 + 푸시**: IMPLEMENTATION_NOTES 기록, WIREFRAME 정합 확인, 커밋·푸시.
