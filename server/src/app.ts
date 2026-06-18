@@ -52,7 +52,10 @@ export async function build(): Promise<FastifyInstance> {
 async function start(): Promise<void> {
   const app = await build();
   try {
-    await app.listen({ port: config.port, host: "0.0.0.0" });
+    // Bind host is configurable via HOST (default 0.0.0.0). Set HOST=127.0.0.1
+    // to keep the API reachable only from the local machine (e.g. behind the
+    // frontend dev proxy) and NOT exposed on the LAN.
+    await app.listen({ port: config.port, host: process.env.HOST ?? "0.0.0.0" });
   } catch (err) {
     app.log.error(err);
     process.exit(1);
