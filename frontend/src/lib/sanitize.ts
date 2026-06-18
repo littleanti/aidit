@@ -68,7 +68,7 @@ export function renderMarkdownSafe(md: string): string {
   try {
     // marked.parse is synchronous when async:false (the default here).
     const rawHtml = marked.parse(md, { async: false }) as string;
-    return DOMPurify.sanitize(rawHtml, PURIFY_CONFIG) as string;
+    return (DOMPurify.sanitize(rawHtml, PURIFY_CONFIG) as string).trim();
   } catch {
     return escapeHtml(md);
   }
