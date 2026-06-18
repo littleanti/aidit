@@ -315,6 +315,7 @@ export default function Thread() {
       {/* VR-3: post-detail header. The persona is no longer shown here; it
           lives in the original-post card / menu instead. */}
       <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2">
+        <span aria-hidden className="h-9 w-9 shrink-0" />
         {/* back: returns to the previous route */}
         <button
           type="button"

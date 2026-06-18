@@ -215,7 +215,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
         <button
           type="button"
           aria-label="첨부"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg text-slate-400"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg text-slate-400"
         >
           <span aria-hidden>＋</span>
         </button>

@@ -33,7 +33,7 @@ export default function BottomTabBar() {
                 ].join(' ')
               }
             >
-              <span aria-hidden className="text-lg leading-none">
+              <span aria-hidden className="flex h-6 items-center justify-center text-lg leading-none">
                 {tab.icon}
               </span>
               <span>{tab.label}</span>
