@@ -3,6 +3,7 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import {
   ApiError,
   getCommunities,
+  getCommunity,
   getCommunityPosts,
 } from '../api/rest';
 import type { Community as CommunityDTO, PostListItem } from '../api/types';
@@ -127,6 +128,9 @@ function CommunityDetail({ slug }: { slug: string }) {
   const [posts, setPosts] = useState<PostListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Distinct from a transient load error: a 404 means the slug doesn't exist,
+  // so we show a dedicated not-found state with a way back instead of a retry.
+  const [notFound, setNotFound] = useState(false);
 
   // reload nonce: bump to re-run the fetch effect (used by the retry button).
   const [reloadKey, setReloadKey] = useState(0);
@@ -136,20 +140,23 @@ function CommunityDetail({ slug }: { slug: string }) {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setNotFound(false);
     (async () => {
       try {
-        // resolve the community by slug via the search endpoint, then its posts
-        const [matches, postList] = await Promise.all([
-          getCommunities(slug),
+        // Resolve the EXACT community by slug (no partial-search / first-match
+        // fallback, which could surface the wrong community), then its posts.
+        const [found, postList] = await Promise.all([
+          getCommunity(slug),
           getCommunityPosts(slug),
         ]);
         if (cancelled) return;
-        const found =
-          matches.find((c) => c.slug === slug) ?? matches[0] ?? null;
         setCommunity(found);
         setPosts(postList);
       } catch (err) {
-        if (!cancelled) {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status === 404) {
+          setNotFound(true);
+        } else {
           setError(
             err instanceof ApiError
               ? err.message
@@ -173,13 +180,28 @@ function CommunityDetail({ slug }: { slug: string }) {
   if (loading) {
     return <LoadingState />;
   }
+  if (notFound) {
+    return (
+      <EmptyState
+        title="커뮤니티를 찾을 수 없어요"
+        hint="주소가 바뀌었거나 삭제된 커뮤니티일 수 있어요."
+        action={
+          <Link
+            to="/search"
+            className="inline-flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark"
+          >
+            커뮤니티 검색으로
+          </Link>
+        }
+        className="py-10"
+      />
+    );
+  }
   if (error) {
     return <ErrorState message={error} onRetry={retry} />;
   }
   if (!community) {
-    return (
-      <EmptyState title="커뮤니티를 찾을 수 없습니다." />
-    );
+    return <EmptyState title="커뮤니티를 찾을 수 없어요" />;
   }
 
   return (

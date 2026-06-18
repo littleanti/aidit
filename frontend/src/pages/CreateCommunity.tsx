@@ -92,6 +92,15 @@ export default function CreateCommunity() {
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        {error && (
+          <div
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700"
+          >
+            {error}
+          </div>
+        )}
+
         <div>
           <label
             htmlFor="name"
@@ -175,8 +184,6 @@ export default function CreateCommunity() {
             AI 답변 옆에 표시될 이모지 또는 짧은 토큰입니다.
           </p>
         </div>
-
-        {error && <p className="text-sm text-red-600">{error}</p>}
 
         <button
           type="submit"

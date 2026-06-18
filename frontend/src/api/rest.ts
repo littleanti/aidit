@@ -66,10 +66,18 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   }
 
   if (!res.ok) {
+    // The Aidit backend reports failures as { error: "..." } (some endpoints
+    // use { message }). Prefer either human-readable field so callers can show
+    // the server's message (e.g. the Korean duplicate-name/slug errors) before
+    // falling back to a generic status line.
+    const obj =
+      parsed && typeof parsed === 'object'
+        ? (parsed as { message?: unknown; error?: unknown })
+        : undefined;
     const message =
-      (parsed && typeof parsed === 'object' && 'message' in parsed
-        ? String((parsed as { message: unknown }).message)
-        : undefined) ?? `Request failed: ${res.status} ${res.statusText}`;
+      (obj && typeof obj.message === 'string' && obj.message) ||
+      (obj && typeof obj.error === 'string' && obj.error) ||
+      `Request failed: ${res.status} ${res.statusText}`;
     throw new ApiError(res.status, message, parsed);
   }
 
@@ -90,6 +98,15 @@ export function postAuthSession(username: string): Promise<SessionResponse> {
 
 export function getCommunities(q?: string): Promise<Community[]> {
   return request<Community[]>('/communities', { query: { q } });
+}
+
+/**
+ * GET /communities/:slug — resolve a SINGLE community by its exact slug.
+ * Throws ApiError(404) when no community matches. Use this for detail views
+ * instead of partial-matching getCommunities() + picking the first result.
+ */
+export function getCommunity(slug: string): Promise<Community> {
+  return request<Community>(`/communities/${encodeURIComponent(slug)}`);
 }
 
 export interface CreateCommunityBody {

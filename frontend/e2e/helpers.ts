@@ -106,8 +106,11 @@ export async function createCommunityAndPost(
   opts: { primaryAi?: boolean } = {},
 ): Promise<string> {
   const slug = uniq('e2e-c-');
+  // Community NAME is now unique (server returns 409 DUPLICATE_NAME on a
+  // duplicate), so each call must use a fresh name or J1/J2/J3 would collide.
+  const name = uniq('E2E 커뮤니티 ');
   await page.goto('/create-community');
-  await page.getByPlaceholder('예) 집밥 레시피').fill('E2E 커뮤니티');
+  await page.getByPlaceholder('예) 집밥 레시피').fill(name);
   await page.getByPlaceholder('home-cooking').fill(slug);
   await page
     .getByPlaceholder(/당신은 친절한 요리 전문가/)

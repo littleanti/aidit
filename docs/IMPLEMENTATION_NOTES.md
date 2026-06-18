@@ -11,6 +11,8 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-18
+- **[feat]** 커뮤니티 **이름 중복 차단**: 기존엔 slug만 `@unique`라 동일 이름 커뮤니티가 다수 생성되어 검색에 같은 이름이 난립했다. `POST /communities`가 생성 전 라우트 레벨에서 이름 중복(대소문자 무시·trim)을 검사해 중복 시 **409 `{ error:"이미 있는 커뮤니티 이름이에요", code:"DUPLICATE_NAME" }`** 반환. slug 중복은 별도 메시지 **409 `{ error:"이미 있는 주소(slug)예요", code:"DUPLICATE_SLUG" }`**(P2002 `meta.target` 분기). `CreateCommunity`가 폼 상단 `role="alert"` 배너로 서버 한국어 메시지를 노출(에러 시 미이동)하도록 보강. 스키마/마이그레이션 무변경. (§4.2-10)
+- **[fix]** 중복/부분일치 커뮤니티 해소 버그: `CommunityDetail`이 부분검색 `getCommunities(slug)` + `matches[0]` 폴백으로 커뮤니티를 해소해 **같은 이름의 다른 커뮤니티(잘못된 항목)** 가 열릴 수 있었다. 정확 단건 **`GET /communities/:slug`**(unique slug, `postCount` 포함) 엔드포인트를 추가하고 `rest.ts::getCommunity(slug)`로 교체 → `matches[0]` 폴백 제거, 404 시 not-found `EmptyState` 표시. E2E 헬퍼 `createCommunityAndPost`도 고정명 "E2E 커뮤니티"에서 고유 이름으로 변경(이름 유니크 하에서 J1/J2/J3 충돌 방지). (§4.2-10)
 - **[fix]** Composer에 "🤖 AI에게 묻기" 토글/칩 행이 추가되며 Composer가 더 높아졌고, 그 `sticky` 오버레이가 Thread의 마지막/PENDING("입력 중…") AI 로딩 버블을 가렸다. `sticky` 오버레이를 제거해 Composer를 일반 flex 흐름 자식으로 되돌리고, 모바일 하단 탭바 여백 확보를 Thread 컬럼 레벨에서 처리 → 최신 버블이 항상 입력창 위에 보이도록 수정. (§4.2-9)
 - **[feat]** Composer "🤖 AI에게 묻기" 토글(스레드별, 기본 OFF): ON이면 보내는 모든 메시지가 기존 `@AI` 흐름으로 AI에 전달되며 입력창 앞에 편집 불가 "@AI" 칩이 표시(텍스트 주입이 아닌 UI 요소)되고 전송 버튼이 AI 강조색으로 전환. 전송 판단은 `wantsAI = 토글 ON || 수동 @AI 감지`로 단일화해 중복 호출 없이 `runAtAiReply`를 정확히 1회 발화. 수동 `@AI` 타이핑은 일회성 단축키로 유지. BYOK 비용 힌트("메시지마다 내 키로 호출") 노출. 세션 한정·postId별·미영속(새로고침 시 OFF로 초기화)인 신규 `aiModeStore` 도입. (§3, §5)
 - **[feat]** 네비게이션/검색/프로필: 도달 가능한 검색 페이지(`/search`), 프로필 페이지(`/me`: 로그아웃·API 키 변경·내 커뮤니티·내 글), PostCard→커뮤니티 링크, `authStore.updateKey`, `GET /users/:id/posts`·`/users/:id/communities`. (commit `f281c45`, §4.2, §5)
@@ -182,6 +184,21 @@ TRD §4 표는 인증 칼럼을 "username"으로 적었으나, **실제 구현�
 9. **Composer "AI에게 묻기" 토글 행 추가 후 마지막/PENDING AI 로딩 버블이 가려짐**
    - 근본 원인: Thread는 고정 높이 flex 컬럼(`h-[calc(100dvh-3rem)] flex flex-col`)에 전용 `flex-1 overflow-y-auto` 스크롤 영역과 형제 `<Composer/>`로 구성되는데, Composer 래퍼가 `sticky bottom-16 z-30`이라 flex 흐름에서 벗어나 스크롤 영역 하단을 **오버레이**했다(스크롤 영역은 컬럼 전체 높이를 점유, Composer는 그 위를 덮음). 여기에 새로 추가된 토글/칩 행이 Composer를 더 높게 만들면서 `scrollIntoView({block:'end'})`로 스크롤포트 바닥에 정렬된 마지막/PENDING("입력 중…") 버블이 더 넓어진 Composer 뒤에 숨었다. 기존 `bottom-16`은 모바일 고정 `BottomTabBar`(`tablet:hidden`, ~56px+safe-area)를 비키려던 본래 핵.
    - 수정(2파일, 백엔드/계약/테스트 무변경): (1) `frontend/src/components/Composer.tsx` 래퍼를 `sticky bottom-16 z-30 … tablet:bottom-0` → `shrink-0 border-t border-slate-200 bg-white`로 변경 — 오버레이·z-lift·sticky 오프셋 제거, Composer를 자연 높이의 일반 bottom flex 자식으로 환원하니 형제 `flex-1` 스크롤 영역이 그 위로 줄어들어 최신 버블이 입력창 위에 항상 노출. (2) `frontend/src/pages/Thread.tsx` 루트 컬럼에 `pb-[calc(3.5rem+var(--safe-bottom,0px))] tablet:pb-0` 추가 — 모바일 탭바 클리어런스를 컬럼 레벨에서 확보(3.5rem=56px+iOS safe-area). `tablet:pb-0`은 `BottomTabBar`의 `tablet:hidden` 분기와 정확히 일치해 탭바가 없는 tablet+에서는 패딩이 사라지고 Composer가 컬럼 바닥에 flush. 데스크톱 `h-[calc(100dvh-3rem)]`·`-mb-20`은 불변. (양측 typecheck clean, E2E J2가 사람/AI 버블 가시성·순서 가드)
+10. **커뮤니티 이름 중복 허용 + 부분일치 상세 해소 버그 (2026-06-18)**
+    - **이름 유니크(라우트 레벨)**: Prisma 스키마는 `Community.slug`만 `@unique`이고 `name`은 유니크가 아니라 동일 이름 커뮤니티가 무제한 생성되어 검색에 같은 이름이 난립했다. 마이그레이션 없이(운영자 미실행) **라우트 레벨**에서 막는다. `POST /communities`는 생성 전 `findFirst({ where:{ name:{ contains: trimmedName } } })`로 선필터한 뒤 JS에서 **trim + 소문자 정규화 정확 일치**(`sameName.name.trim().toLowerCase() === trimmedName.toLowerCase()`)로 판정 — 한국어(무대소문자) 정확 일치와 ASCII 대소문자 변형을 모두 차단하되 `"test"`가 기존 `"testing"`에 걸리지 않도록 부분일치는 배제. 중복 시 **409 `{ error:"이미 있는 커뮤니티 이름이에요", code:"DUPLICATE_NAME" }`**.
+    - **두 개의 구분된 409**: slug 중복은 P2002 백스톱에서 `err.meta?.target`에 `"name"` 포함 시 `DUPLICATE_NAME`, 아니면 **409 `{ error:"이미 있는 주소(slug)예요", code:"DUPLICATE_SLUG" }`**로 분기(현 스키마에선 항상 slug 메시지; 향후 name 인덱스/레이스 대비). 클라(`rest.ts::request`)는 기존에 `body.message`만 읽어 서버의 `{ error }` 메시지가 표면화되지 않았으므로 `message → error → 폴백` 순으로 읽도록 정정 → `CreateCommunity` 폼 상단 `role="alert"` 배너에 한국어 409가 노출되고 에러 시 미이동.
+    - **상세 해소 버그(근본 원인)**: `CommunityDetail`이 정확 단건 조회 대신 부분검색 `getCommunities(slug)`를 호출하고 `found = matches.find(c=>c.slug===slug) ?? matches[0] ?? null`로 폴백해, 동일 이름 커뮤니티가 많을 때 `matches[0]`가 **엉뚱한 같은 이름 커뮤니티**를 열 수 있었다. 정확 단건 **`GET /communities/:slug`**(`findUnique` + `_count.posts`, 목록과 동일한 `postCount` 포함 형상; 부재 시 `404 { error:"커뮤니티를 찾을 수 없어요" }`)를 추가하고 프론트를 `getCommunity(slug)`로 교체해 `matches[0]` 폴백을 제거. 404 시 not-found `EmptyState`(검색으로 이동 링크) 렌더. `CommunitySearch`는 결과를 `c.id` 키·`c.slug` 링크로 다루므로 중복 무관(수정 불필요). E2E 헬퍼 `createCommunityAndPost`는 고정명 → 고유명으로 변경. 파일: `server/src/routes/communities.ts`, `frontend/src/api/rest.ts`, `frontend/src/pages/Community.tsx`, `frontend/src/pages/CreateCommunity.tsx`, `frontend/e2e/helpers.ts`. (양측 typecheck clean)
+    - 생성 유니크 판정 흐름:
+      ```mermaid
+      flowchart TD
+        A["입력 (name, slug)"] --> B{name 중복?}
+        B -- yes --> C["409 이미 있는 커뮤니티 이름이에요<br/>code: DUPLICATE_NAME"]
+        B -- no --> D{slug 중복?}
+        D -- yes --> E["409 이미 있는 주소(slug)예요<br/>code: DUPLICATE_SLUG"]
+        D -- no --> F["201 커뮤니티 생성"]
+        F --> G["스레드/커뮤니티로 이동"]
+      ```
+    - 미반영(의도/플래그): `PATCH /communities/:id`(이름 수정)는 이름 유니크를 강제하지 않음 — 과제 범위는 생성(POST) 한정이라 스코프 유지, 추후 동일 가드 적용 여지로 플래그.
 
 ---
 

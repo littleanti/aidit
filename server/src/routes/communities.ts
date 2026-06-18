@@ -136,11 +136,31 @@ const plugin: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "personaIcon must be a string" });
     }
 
+    const trimmedName = body.name.trim();
+    const trimmedSlug = body.slug.trim();
+
+    // Name-uniqueness is enforced here at the route level (the Prisma schema
+    // keeps `name` non-unique; only `slug` has a DB unique index). SQLite's
+    // default LIKE is case-insensitive for ASCII, so a `contains` match on the
+    // full name plus a case-insensitive exact compare catches both the Korean
+    // (no-case) exact match and common ASCII casing variants.
+    const sameName = await prisma.community.findFirst({
+      where: { name: { contains: trimmedName } },
+    });
+    if (
+      sameName &&
+      sameName.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    ) {
+      return reply
+        .code(409)
+        .send({ error: "이미 있는 커뮤니티 이름이에요", code: "DUPLICATE_NAME" });
+    }
+
     try {
       const community = await prisma.community.create({
         data: {
-          name: body.name.trim(),
-          slug: body.slug.trim(),
+          name: trimmedName,
+          slug: trimmedSlug,
           description: body.description ?? null,
           personaPrompt: body.personaPrompt,
           personaIcon: body.personaIcon ?? null,
@@ -153,10 +173,52 @@ const plugin: FastifyPluginAsync = async (app) => {
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === "P2002"
       ) {
-        return reply.code(409).send({ error: "slug already exists" });
+        // P2002 backstops the slug unique index (also guards a name race that
+        // slipped past the findFirst check above, if a name unique index is
+        // ever added). The target tells us which field collided.
+        const target = err.meta?.target;
+        const onName = Array.isArray(target)
+          ? target.includes("name")
+          : typeof target === "string" && target.includes("name");
+        if (onName) {
+          return reply
+            .code(409)
+            .send({ error: "이미 있는 커뮤니티 이름이에요", code: "DUPLICATE_NAME" });
+        }
+        return reply
+          .code(409)
+          .send({ error: "이미 있는 주소(slug)예요", code: "DUPLICATE_SLUG" });
       }
       throw err;
     }
+  });
+
+  // GET /communities/:slug — resolve a SINGLE community by its EXACT slug.
+  // Mirrors the GET /communities list item shape (incl. postCount). This is
+  // the canonical detail lookup; the UI no longer abuses the partial search.
+  // Distinct path from GET /communities/:slug/posts, so no route conflict.
+  app.get("/communities/:slug", async (req, reply) => {
+    const { slug } = req.params as { slug: string };
+
+    const c = await prisma.community.findUnique({
+      where: { slug },
+      include: { _count: { select: { posts: true } } },
+    });
+    if (!c) {
+      return reply.code(404).send({ error: "커뮤니티를 찾을 수 없어요" });
+    }
+
+    return {
+      id: c.id,
+      slug: c.slug,
+      name: c.name,
+      description: c.description,
+      personaPrompt: c.personaPrompt,
+      personaIcon: c.personaIcon,
+      creatorId: c.creatorId,
+      createdAt: c.createdAt,
+      postCount: c._count.posts,
+    };
   });
 
   // PATCH /communities/:id — only the creator may edit.
