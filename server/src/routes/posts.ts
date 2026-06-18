@@ -139,6 +139,11 @@ const plugin: FastifyPluginAsync = async (app) => {
       return reply.code(201).send({
         id: post.id,
         communityId: post.communityId,
+        // Top-level scalar FK per the Post DTO (frontend types.ts). Mirrors the
+        // GET /posts/:id fix: authorId is a required Post field, and the Thread's
+        // primary-reply guard reads post.authorId. Omitting it here let a
+        // POST-then-render path see an authorId-less Post (silent contract drift).
+        authorId: post.authorId,
         title: post.title,
         body: post.body,
         score: post.score,

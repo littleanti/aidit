@@ -11,6 +11,9 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-18
+- **[feat]** 네비게이션/검색/프로필: 도달 가능한 검색 페이지(`/search`), 프로필 페이지(`/me`: 로그아웃·API 키 변경·내 커뮤니티·내 글), PostCard→커뮤니티 링크, `authStore.updateKey`, `GET /users/:id/posts`·`/users/:id/communities`. (commit `f281c45`, §4.2, §5)
+- **[fix]** 피드 응답 형태 불일치: `toFeedCard`가 중첩 `community{}`/`author{}`를 반환했으나 `PostListItem`은 평탄(`communitySlug` 등) → 홈 피드 커뮤니티 라벨 공백. 서버를 평탄 동결 계약에 맞춤. (commit `f281c45`, §4.2-7)
+- **[fix]** `POST /posts` 201 응답에 최상위 `authorId` 누락 (Post DTO 계약 드리프트): `GET /posts/:id`는 이미 `authorId`를 포함하도록 고쳤으나 형제 `POST /posts` 직렬화기는 `communityId`만 보내 `authorId` 없는 Post 반환. `rest.ts`가 런타임 검증 없이 캐스팅해 tsc가 못 잡는 재발 드리프트 클래스. 직렬화기를 동결 Post DTO에 맞춤. (§4.2-8, `server/src/routes/posts.ts`)
 - **[docs]** 본 구현 노트에 변경 이력(Changelog) 절 추가 — 날짜·역순 정리.
 
 ### 2026-06-17
@@ -163,6 +166,17 @@ TRD §4 표는 인증 칼럼을 "username"으로 적었으나, **실제 구현�
    - 증상: Thread의 Composer가 `sticky bottom-0`인데 모바일 고정 하단 탭바(`fixed bottom-0 z-20`)와 겹쳐 **전송 버튼이 탭바에 가려 클릭 불가**(Playwright Pixel 7에서 pointer-intercept로 발견; 데스크톱은 탭바 `tablet:hidden`이라 비노출).
    - 수정: Composer를 모바일에서 탭바 위로 올림(`sticky bottom-16 z-30 tablet:bottom-0`). 파일: `frontend/src/components/Composer.tsx`.
 
+### 4.2 네비게이션/검색/프로필 + 피드 형태 (2026-06-18)
+
+검색·프로필 도달성 보강과 함께, **서버 직렬화기 ↔ 동결 `frontend/src/api/types.ts` DTO 드리프트**가 다시 드러났다. `rest.ts`의 `request<T>`가 런타임 검증 없이 응답을 `T`로 캐스팅하므로 tsc가 잡지 못하고 **브라우저 런타임에서만** 표면화되는 재발 버그 클래스다(§4.1-3/5와 동일 뿌리).
+
+7. **피드 응답 형태 불일치 — `toFeedCard` 중첩 vs `PostListItem` 평탄**
+   - 증상: 서버 `toFeedCard`가 `community{}`/`author{}` 중첩 객체를 반환했으나 동결 `PostListItem`은 평탄 필드(`communityId`/`communitySlug`/`communityName`/`communityPersonaIcon`/`authorId`/`authorUsername`)로 고정. 캐스팅 때문에 tsc는 통과했으나 런타임에서 홈/커뮤니티/유저 피드 카드의 **커뮤니티 라벨이 공백**으로 렌더.
+   - 수정: 서버 `toFeedCard` 직렬화기를 평탄 동결 계약에 맞춰 평탄 필드를 직접 내보냄. (commit `f281c45`)
+8. **`POST /posts` 201 응답에 최상위 `authorId` 누락 — Post DTO 계약 드리프트**
+   - 증상: 동결 `Post` DTO는 `authorId: string`을 **필수**로 선언하고 `GET /posts/:id`는 이미 이를 포함하도록 고쳐졌으나(Thread의 1차 답변 가드 `post.authorId === me` 때문), 형제 `POST /posts` 201 직렬화기는 `communityId`만 보내고 `authorId`를 누락 → `authorId` 없는 Post 반환. `rest.ts`가 런타임 검증 없이 캐스팅해 tsc 미검출. 오늘 시점에는 잠복(CreatePost는 `post.id`만 읽고 이동, 이후 Thread가 `GET /posts/:id`로 재조회해 `authorId` 확보)이나, POST 응답 Post를 그대로 렌더하는 경로가 생기면 조용히 깨지는 정확히 그 재발 드리프트 클래스.
+   - 수정: `POST /posts`의 `reply.code(201).send({...})`에 `authorId: post.authorId` 추가(`GET /posts/:id`와 동일하게 직렬화기를 동결 Post DTO에 정렬). 라이브 검증: `POST /posts`가 이제 최상위 `authorId` 반환. 양측 typecheck clean. 파일: `server/src/routes/posts.ts`.
+
 ---
 
 ## 5. 스펙에 없던 추가 보조 자산
@@ -174,6 +188,11 @@ TRD §4 표는 인증 칼럼을 "username"으로 적었으나, **실제 구현�
 - `frontend/src/lib/SafeMarkdown.tsx` — `renderMarkdownSafe` 래퍼 컴포넌트(XC-3 렌더 편의).
 - `frontend/src/components/states/` — `EmptyState` / `ErrorState` / `LoadingState` / `OfflineBanner` (FE-14 재사용 컴포넌트 집합).
 - `server/src/domain/segment.ts::openSummarySegment` — 요약 전환 트랜잭션 헬퍼(BE-5s/BE-7 응집).
+- `frontend/src/pages/Search.tsx` — 도달 가능한 검색 페이지(`/search`). (2026-06-18)
+- `frontend/src/pages/Profile.tsx` — 프로필 페이지(`/me`: 로그아웃·API 키 변경·내 커뮤니티·내 글). (2026-06-18)
+- `frontend/src/pages/Community.tsx` — 이제 `CommunitySearch`도 export하고 slug 없는 진입 시 리다이렉트 처리. (2026-06-18)
+- `frontend/src/stores/authStore.ts::updateKey` — localStorage API 키 갱신(L1 유지, 키 미전송). (2026-06-18)
+- 백엔드 `GET /users/:id/posts`·`GET /users/:id/communities` — 프로필 "내 글/내 커뮤니티" 조회용. 각각 평탄 `PostListItem`/`Community` 형상(후자에 비계약 `postCount` 가산 필드 — 무해 additive). (2026-06-18)
 
 ---
 
