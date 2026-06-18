@@ -311,42 +311,59 @@ export default function Thread() {
   // Full-screen chat column. The page lives inside AppLayout's <main>; we make
   // this region fill the viewport below the app bar (h-12) and bottom tab bar.
   return (
-    <div className="-mx-4 -mt-4 -mb-20 flex h-[calc(100dvh-3rem)] flex-col pb-[calc(3.5rem+var(--safe-bottom,0px))] tablet:pb-0 desktop:mx-0 desktop:mt-0 desktop:mb-0 desktop:h-[calc(100dvh-3rem)]">
+    <div className="-mx-4 -mt-4 -mb-20 flex h-[calc(100dvh-3rem)] flex-col pb-[calc(3.5rem+var(--safe-bottom,0px))] tablet:pb-0 desktop:mx-0 desktop:mt-0 desktop:mb-0 desktop:h-[calc(100dvh-6rem)]">
       {/* VR-3: post-detail header. The persona is no longer shown here; it
           lives in the original-post card / menu instead. */}
       <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2">
-        {/* back: returns to the previous route */}
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          aria-label="뒤로"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl text-slate-600 hover:bg-slate-100"
-        >
-          ‹
-        </button>
-        <h1 className="flex-1 truncate text-center text-base font-semibold text-slate-900">
+        {/* left group (flex-1 mirrors the right group so the title stays centered) */}
+        <div className="flex flex-1 items-center justify-start">
+          {/* back: returns to the previous route */}
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            aria-label="뒤로"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-6 w-6"
+              aria-hidden
+            >
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        </div>
+        <h1 className="min-w-0 truncate px-1 text-center text-base font-semibold text-slate-900">
           {post.title}
         </h1>
-        {/* bookmark: LOCAL visual toggle only — NOT backend-wired. */}
-        <button
-          type="button"
-          onClick={() => setBookmarked((b) => !b)}
-          aria-pressed={bookmarked}
-          aria-label={bookmarked ? '북마크 해제' : '북마크'}
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg hover:bg-slate-100 ${
-            bookmarked ? 'opacity-100' : 'opacity-40'
-          }`}
-        >
-          🔖
-        </button>
-        {/* menu: visual placeholder — no handler yet. */}
-        <button
-          type="button"
-          aria-label="메뉴"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg text-slate-600 hover:bg-slate-100"
-        >
-          ⋯
-        </button>
+        {/* right group */}
+        <div className="flex flex-1 items-center justify-end gap-1">
+          {/* bookmark: LOCAL visual toggle only — NOT backend-wired. */}
+          <button
+            type="button"
+            onClick={() => setBookmarked((b) => !b)}
+            aria-pressed={bookmarked}
+            aria-label={bookmarked ? '북마크 해제' : '북마크'}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg hover:bg-slate-100 ${
+              bookmarked ? 'opacity-100' : 'opacity-40'
+            }`}
+          >
+            🔖
+          </button>
+          {/* menu: visual placeholder — no handler yet. */}
+          <button
+            type="button"
+            aria-label="메뉴"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg text-slate-600 hover:bg-slate-100"
+          >
+            ⋯
+          </button>
+        </div>
       </header>
 
       <OfflineBanner show={degraded} label={bannerLabel} />

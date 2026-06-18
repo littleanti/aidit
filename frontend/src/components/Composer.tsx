@@ -209,13 +209,13 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
         </div>
       )}
 
-      <div className="flex items-end gap-2 px-3 py-2">
+      <div className="flex items-center gap-2 px-3 py-2">
         {/* Leading attach button — VISUAL placeholder only. Non-functional;
             no handler is wired. Reserved for a future attachment feature. */}
         <button
           type="button"
           aria-label="첨부"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg text-slate-400"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg text-slate-400"
         >
           <span aria-hidden>＋</span>
         </button>
@@ -242,7 +242,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
             rows={1}
             placeholder={aiMode ? 'AI에게 메시지 보내기…' : '메시지를 입력하세요…'}
             aria-label="댓글 입력"
-            className="max-h-28 min-h-[42px] flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed text-slate-900 outline-none placeholder:text-slate-400"
+            className="max-h-28 flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed text-slate-900 outline-none placeholder:text-slate-400"
           />
         </div>
         <button
