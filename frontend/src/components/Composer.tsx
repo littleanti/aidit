@@ -191,7 +191,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
             type="checkbox"
             checked={aiMode}
             onChange={() => toggleAiMode(postId)}
-            className="h-4 w-4 shrink-0 cursor-pointer accent-purple-600"
+            className="h-4 w-4 shrink-0 cursor-pointer accent-violet-600"
           />
           <span>🤖 AI에게 묻기</span>
         </label>
@@ -210,8 +210,17 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
       )}
 
       <div className="flex items-end gap-2 px-3 py-2">
+        {/* Leading attach button — VISUAL placeholder only. Non-functional;
+            no handler is wired. Reserved for a future attachment feature. */}
+        <button
+          type="button"
+          aria-label="첨부"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg text-slate-400"
+        >
+          <span aria-hidden>＋</span>
+        </button>
         <div
-          className={`flex max-h-32 min-h-[44px] flex-1 items-center gap-2 rounded-2xl border bg-slate-50 px-3 py-1 focus-within:bg-white ${
+          className={`flex max-h-32 min-h-[44px] flex-1 items-center gap-2 rounded-full border bg-slate-50 px-4 py-1 focus-within:bg-white ${
             aiMode
               ? 'border-purple-300 focus-within:border-purple-500'
               : 'border-slate-300 focus-within:border-brand'
@@ -231,7 +240,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
-            placeholder={aiMode ? 'AI에게 메시지 보내기…' : '＠AI 멘션 포함 가능…'}
+            placeholder={aiMode ? 'AI에게 메시지 보내기…' : '메시지를 입력하세요…'}
             aria-label="댓글 입력"
             className="max-h-28 min-h-[42px] flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed text-slate-900 outline-none placeholder:text-slate-400"
           />

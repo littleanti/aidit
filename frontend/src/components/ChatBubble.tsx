@@ -12,6 +12,7 @@ import { useAuthStore } from '../stores/authStore';
 import type { Comment } from '../api/types';
 import SummaryBubble from './SummaryBubble';
 import SafeMarkdown from '../lib/SafeMarkdown';
+import Avatar from './Avatar';
 
 /** Compact relative time in Korean (방금 / N분 / N시간 / N일 / N주, else date). */
 function relativeTime(iso: string): string {
@@ -34,8 +35,6 @@ function relativeTime(iso: string): string {
   });
 }
 
-const DEFAULT_PERSONA_ICON = '🤖';
-
 interface ChatBubbleProps {
   comment: Comment;
   /** persona display name for AI bubbles (community persona). */
@@ -46,15 +45,36 @@ interface ChatBubbleProps {
   onRetry?: (comment: Comment) => void;
 }
 
-/** PENDING typing indicator: three bouncing dots + label. */
-function TypingDots() {
+/** Three bouncing dots used by both PENDING variants. */
+function BouncingDots() {
+  return (
+    <span className="inline-flex gap-0.5" aria-hidden>
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current" />
+    </span>
+  );
+}
+
+/**
+ * PENDING typing indicator. AI uses a sparkle + "답변을 작성하고 있어요…" label
+ * (§6.3 E.3); human keeps the existing "⟳ 입력 중…" label. Both share the dots.
+ */
+function TypingDots({ isAi }: { isAi: boolean }) {
+  if (isAi) {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5"
+        aria-label="AI가 답변을 작성하고 있어요"
+      >
+        <span className="text-xs opacity-70">✨ AI가 답변을 작성하고 있어요…</span>
+        <BouncingDots />
+      </span>
+    );
+  }
   return (
     <span className="inline-flex items-center gap-1.5" aria-label="입력 중">
-      <span className="inline-flex gap-0.5" aria-hidden>
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current" />
-      </span>
+      <BouncingDots />
       <span className="text-xs opacity-70">⟳ 입력 중…</span>
     </span>
   );
@@ -90,62 +110,78 @@ export default function ChatBubble({
     );
   }
 
-  const alignClass = side === 'right' ? 'items-end' : 'items-start';
   const personaLabel =
     personaName && personaName.trim() ? personaName : 'AI 페르소나';
-  const personaEmoji =
-    personaIcon && personaIcon.trim() ? personaIcon : DEFAULT_PERSONA_ICON;
+
+  // Avatar kind: AI -> robot glyph, own -> 'me', everyone else -> 'user'.
+  const avatarKind: 'user' | 'me' | 'ai' = isAi
+    ? 'ai'
+    : side === 'right'
+      ? 'me'
+      : 'user';
 
   // Bubble surface classes per variant.
   let bubbleClass: string;
   if (side === 'right') {
     // own human — brand filled.
-    bubbleClass = 'bg-brand text-white rounded-2xl rounded-br-sm';
+    bubbleClass = 'bg-brand text-white rounded-2xl rounded-br-md';
   } else if (isAi) {
     // AI reply — light purple border.
     bubbleClass =
-      'bg-purple-50 text-slate-800 border border-purple-300 rounded-2xl rounded-bl-sm';
+      'bg-purple-50 text-slate-800 border border-purple-200 rounded-2xl rounded-bl-md';
   } else {
     // other human — gray.
-    bubbleClass = 'bg-slate-100 text-slate-800 rounded-2xl rounded-bl-sm';
+    bubbleClass = 'bg-slate-100 text-slate-800 rounded-2xl rounded-bl-md';
   }
   if (isFailed) {
     bubbleClass += ' !border !border-red-400 !bg-red-50 !text-red-900';
   }
 
-  return (
-    <div className={`flex w-full flex-col gap-1 px-1 py-1 ${alignClass}`}>
-      {/* author / persona header (left bubbles only) */}
-      {side === 'left' && (
-        <div className="flex items-center gap-1 px-1 text-xs text-slate-500">
-          {isAi ? (
-            <>
-              <span aria-hidden className="text-sm leading-none">
-                {personaEmoji}
-              </span>
-              <span className="font-medium text-purple-700">{personaLabel}</span>
-              <span className="rounded bg-purple-100 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-purple-700">
-                AI
-              </span>
-            </>
-          ) : (
-            <span className="font-medium text-slate-600">
-              {comment.authorUsername ?? '익명'}
-            </span>
-          )}
-        </div>
-      )}
+  // Read-receipt ✓ shows only for OWN COMPLETE human bubbles (§6.3 E.2).
+  const showReadReceipt =
+    side === 'right' && !isAi && comment.status === 'COMPLETE';
 
+  return (
+    <div
+      className={`flex w-full items-end gap-2 px-2 py-1 ${
+        side === 'right' ? 'flex-row-reverse' : 'flex-row'
+      }`}
+    >
+      {/* avatar at the row end (right for own, left for everyone else) */}
+      <Avatar kind={avatarKind} seed={comment.authorUsername} size="md" />
+
+      {/* bubble cluster */}
       <div
         className={`flex max-w-[78%] flex-col ${
           side === 'right' ? 'items-end' : 'items-start'
         }`}
       >
+        {/* author / persona header (left bubbles only) — emoji now lives in
+            the avatar, so it is no longer duplicated here. */}
+        {side === 'left' && (
+          <div className="flex items-center gap-1 px-1 text-xs text-slate-500">
+            {isAi ? (
+              <>
+                <span className="font-medium text-purple-700">
+                  {personaLabel}
+                </span>
+                <span className="rounded bg-purple-100 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-purple-700">
+                  AI
+                </span>
+              </>
+            ) : (
+              <span className="font-medium text-slate-600">
+                {comment.authorUsername ?? '익명'}
+              </span>
+            )}
+          </div>
+        )}
+
         <div
           className={`min-h-[44px] px-3 py-2 text-sm leading-relaxed ${bubbleClass}`}
         >
           {isPending ? (
-            <TypingDots />
+            <TypingDots isAi={isAi} />
           ) : (
             // XC-3: user/AI body is untrusted markdown — render via the
             // sanitize chokepoint, never as raw HTML.
@@ -156,13 +192,18 @@ export default function ChatBubble({
           )}
         </div>
 
-        {/* meta line: time + retry on failure */}
+        {/* meta line: time + read-receipt (own complete) / retry on failure */}
         <div
           className={`mt-0.5 flex items-center gap-2 px-1 text-[11px] text-slate-400 ${
             side === 'right' ? 'flex-row-reverse' : 'flex-row'
           }`}
         >
           {time && <time dateTime={comment.createdAt}>{time}</time>}
+          {showReadReceipt && (
+            <span aria-hidden className="text-brand opacity-70">
+              ✓
+            </span>
+          )}
           {isFailed && (
             <button
               type="button"

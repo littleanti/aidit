@@ -40,7 +40,7 @@ export default function PostCard({ post }: PostCardProps) {
           navigate(`/p/${post.id}`);
         }
       }}
-      className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 transition active:bg-slate-50 hover:border-slate-300"
+      className="cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-3 transition active:bg-slate-50 hover:border-slate-300"
     >
       {/* community + persona line — links to the community; stops propagation
           so it doesn't also trigger the card's post navigation. */}

@@ -152,22 +152,31 @@ export interface GetPostsParams {
   cursor?: string;
 }
 
-// The server returns a paginated envelope { items, nextCursor? } for post
+// The server returns a paginated envelope { items, nextCursor } for post
 // listings (a bare array for some other resources). Normalize to an array here
 // so callers can rely on the declared PostListItem[] return type. The next
-// cursor is derived client-side from the last item's id.
+// cursor is an OPAQUE token minted by the server (base64url of "value|id"); it
+// must be passed back verbatim as the `cursor` query param to fetch the next
+// page, and is null on the last page. Never derive a cursor from item ids.
 type PostListResponse = PostListItem[] | { items: PostListItem[] };
 function toItems(r: PostListResponse): PostListItem[] {
   return Array.isArray(r) ? r : (r?.items ?? []);
 }
 
-export async function getPosts(
-  params: GetPostsParams = {},
-): Promise<PostListItem[]> {
-  const r = await request<PostListResponse>('/posts', {
-    query: { sort: params.sort, cursor: params.cursor },
-  });
-  return toItems(r);
+/** One page of the /posts listing: items plus the server's opaque next cursor. */
+export interface PostsPage {
+  items: PostListItem[];
+  nextCursor: string | null;
+}
+
+export async function getPosts(params: GetPostsParams = {}): Promise<PostsPage> {
+  const r = await request<PostListResponse | { items: PostListItem[]; nextCursor?: string | null }>(
+    '/posts',
+    { query: { sort: params.sort, cursor: params.cursor } },
+  );
+  const nextCursor =
+    !Array.isArray(r) && 'nextCursor' in r ? (r.nextCursor ?? null) : null;
+  return { items: toItems(r), nextCursor };
 }
 
 export async function getCommunityPosts(slug: string): Promise<PostListItem[]> {

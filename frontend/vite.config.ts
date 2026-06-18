@@ -54,7 +54,7 @@ export default defineConfig({
         name: 'Aidit',
         short_name: 'Aidit',
         description: 'Reddit-style community where every post is a shared AI chat thread.',
-        theme_color: '#0f172a',
+        theme_color: '#7c3aed',
         background_color: '#0f172a',
         display: 'standalone',
         orientation: 'portrait',

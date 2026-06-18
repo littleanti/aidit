@@ -16,7 +16,7 @@
 // by authorId === null.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError, getCommunities, getComments, getContext, getPost } from '../api/rest';
 import type { Comment, Community, Post } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
@@ -25,9 +25,9 @@ import { useThreadStore } from '../stores/threadStore';
 import { useThreadStream } from '../stream/useThreadStream';
 import { runPrimaryReply } from '../engine/contextEngine';
 import { retryAiBubble } from '../engine/retryAiBubble';
+import Avatar from '../components/Avatar';
 import ChatBubble from '../components/ChatBubble';
 import Composer from '../components/Composer';
-import PersonaBadge from '../components/PersonaBadge';
 import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '../components/states';
 import SafeMarkdown from '../lib/SafeMarkdown';
 
@@ -59,6 +59,11 @@ const SUMMARY_HARD_THRESHOLD = 128_000;
 
 export default function Thread() {
   const { postId } = useParams<{ postId: string }>();
+  const navigate = useNavigate();
+
+  // VR-3: bookmark toggle is presentation-only (visual state). It is NOT
+  // backend-wired — there is no bookmark API/DTO; this is a local UI flag only.
+  const [bookmarked, setBookmarked] = useState(false);
 
   const [post, setPost] = useState<Post | null>(null);
   const [community, setCommunity] = useState<Community | null>(null);
@@ -307,9 +312,41 @@ export default function Thread() {
   // this region fill the viewport below the app bar (h-12) and bottom tab bar.
   return (
     <div className="-mx-4 -mt-4 -mb-20 flex h-[calc(100dvh-3rem)] flex-col pb-[calc(3.5rem+var(--safe-bottom,0px))] tablet:pb-0 desktop:mx-0 desktop:mt-0 desktop:mb-0 desktop:h-[calc(100dvh-3rem)]">
-      {/* persona / community header */}
-      <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
-        <PersonaBadge personaIcon={personaIcon} name={personaName} size="sm" />
+      {/* VR-3: post-detail header. The persona is no longer shown here; it
+          lives in the original-post card / menu instead. */}
+      <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2">
+        {/* back: returns to the previous route */}
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          aria-label="뒤로"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl text-slate-600 hover:bg-slate-100"
+        >
+          ‹
+        </button>
+        <h1 className="flex-1 truncate text-center text-base font-semibold text-slate-900">
+          {post.title}
+        </h1>
+        {/* bookmark: LOCAL visual toggle only — NOT backend-wired. */}
+        <button
+          type="button"
+          onClick={() => setBookmarked((b) => !b)}
+          aria-pressed={bookmarked}
+          aria-label={bookmarked ? '북마크 해제' : '북마크'}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg hover:bg-slate-100 ${
+            bookmarked ? 'opacity-100' : 'opacity-40'
+          }`}
+        >
+          🔖
+        </button>
+        {/* menu: visual placeholder — no handler yet. */}
+        <button
+          type="button"
+          aria-label="메뉴"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg text-slate-600 hover:bg-slate-100"
+        >
+          ⋯
+        </button>
       </header>
 
       <OfflineBanner show={degraded} label={bannerLabel} />
@@ -317,18 +354,28 @@ export default function Thread() {
       {/* scrolling region: pinned original post + chat list */}
       <div className="flex-1 overflow-y-auto">
         {/* PINNED original post (FR-5.1) */}
-        <article className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-          <h1 className="text-base font-bold leading-snug text-slate-900">
+        <article className="mx-3 my-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <span className="inline-flex items-center text-xs font-semibold text-brand">
+            📌 원본 게시글
+          </span>
+          <h2 className="mt-1 text-base font-bold leading-snug text-slate-900">
             {post.title}
-          </h1>
-          <p className="mt-1 text-xs text-slate-500">
-            u/{authorName} · ▲{post.score} · {relativeTime(post.createdAt)}
-          </p>
+          </h2>
           {post.body && (
             <div className="mt-2 break-words text-sm leading-relaxed text-slate-700">
               <SafeMarkdown text={post.body} />
             </div>
           )}
+          <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+            <Avatar kind="user" seed={authorName} size="sm" />
+            <span>
+              u/{authorName} · {relativeTime(post.createdAt)}
+            </span>
+            <span className="ml-auto flex items-center gap-2">
+              <span>▲{post.score}</span>
+              <span>💬{post.commentCount}</span>
+            </span>
+          </div>
         </article>
 
         {/* divider */}

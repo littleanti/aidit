@@ -1,7 +1,7 @@
 # Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
 
 > 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
-> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-18
+> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-18 (디자인 시스템 v0.3 전 화면 전파)
 > 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
 
 ---
@@ -10,7 +10,12 @@
 
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
+### 2026-06-19
+- **[fix]** 홈 피드 "Invalid cursor" 무한 루프: `rest.ts::getPosts`가 페이지네이션 envelope를 풀어 `items` 배열만 반환하고 `nextCursor`를 버리자, Home이 마지막 항목의 **원본 id**를 다음 커서로 넘겨 서버가 이를 불투명 커서로 디코드하지 못해 매 페이지 "Invalid cursor"로 실패→재요청을 반복했다. `getPosts`가 서버 envelope **`{ items, nextCursor }`** 를 그대로 반환하도록 되돌리고, Home은 서버가 준 **불투명 `nextCursor`로 페이지네이션**하며 **`null`이면 정지**하도록 수정(원본 id 도출 제거). (§4.5)
+
 ### 2026-06-18
+- **[feat]** **디자인 시스템 v0.3 전 화면 전파**(VR-10, 표현 계층 한정 — 라우팅/스토어/엔진/SSE/BYOK/검증 불변): §6.3에서 확립한 채팅 UI 비주얼 언어를 Thread 외 나머지 화면(Login·Home·Search·Community·CreatePost·CreateCommunity·Profile·AppLayout/BottomTabBar·상태 컴포넌트)에 일관 전파(WIREFRAME §12). 공유 토큰: **카드/리스트 항목 `rounded-2xl border border-slate-200 bg-white shadow-sm`**(클릭형은 `active:bg-slate-50 hover:border-brand/40` 가산), **입력/textarea/select `rounded-xl ... focus:border-brand focus:ring-1 focus:ring-brand`**, **1차 버튼 바이올렛 `rounded-xl bg-brand text-white`**(2차=`border` hover:brand, 위험=red), 토글 액센트 `accent-violet-600`. **Avatar 컴포넌트(§6.3 B)를 Profile(헤더 `👤`→`Avatar md` seed=username)·Community(글 리스트 작성자 `Avatar sm`)에 재사용.** 브랜드 컬러는 §6.3 A 바이올렛 토큰(`brand=#7c3aed`)을 그대로 사용해 대부분 `bg-brand`/`text-brand`로 자동 반영. **순수 표현(클래스/마크업)만 변경 — 동작 변화 없음.** (§4.4)
+- **[feat]** **Thread v0.3 비주얼 리디자인**(VR-9, 표현 계층 한정 — 동작/라우팅/SSE/BYOK 불변): 브랜드 컬러 블루(`#2563eb`)→**바이올렛(`#7c3aed`)**(`tailwind.config.js` `colors.brand`만 교체, `index.html` `theme-color` 동기화), 신규 **`Avatar` 컴포넌트**(user/me=실루엣·시드 해시 팔레트, ai=바이올렛 그라데이션 로봇), Thread 상단을 **글 상세 헤더**(‹뒤로·제목 중앙·🔖북마크·⋯메뉴)로 교체, 원본 게시글을 **📌 라벨 + 아바타 + ▲점수/💬댓글수 핀 카드**로 재스타일, ChatBubble에 **행 끝 아바타 + 본인 COMPLETE 버블 읽음 `✓`**, AI PENDING 로딩을 **`✨ AI가 답변을 작성하고 있어요…`** 스파클 인디케이터로, Composer를 **＋첨부 + 알약형 입력 + 바이올렛 원형 전송**으로 변경. **🔖북마크·⋯메뉴·＋첨부는 표현용 placeholder(백엔드 미연동, 코드 주석 명시).** (§6.3 사양 그대로 구현, 스펙 이탈 없음) (§4.3)
 - **[feat]** 커뮤니티 **이름 중복 차단**: 기존엔 slug만 `@unique`라 동일 이름 커뮤니티가 다수 생성되어 검색에 같은 이름이 난립했다. `POST /communities`가 생성 전 라우트 레벨에서 이름 중복(대소문자 무시·trim)을 검사해 중복 시 **409 `{ error:"이미 있는 커뮤니티 이름이에요", code:"DUPLICATE_NAME" }`** 반환. slug 중복은 별도 메시지 **409 `{ error:"이미 있는 주소(slug)예요", code:"DUPLICATE_SLUG" }`**(P2002 `meta.target` 분기). `CreateCommunity`가 폼 상단 `role="alert"` 배너로 서버 한국어 메시지를 노출(에러 시 미이동)하도록 보강. 스키마/마이그레이션 무변경. (§4.2-10)
 - **[fix]** 중복/부분일치 커뮤니티 해소 버그: `CommunityDetail`이 부분검색 `getCommunities(slug)` + `matches[0]` 폴백으로 커뮤니티를 해소해 **같은 이름의 다른 커뮤니티(잘못된 항목)** 가 열릴 수 있었다. 정확 단건 **`GET /communities/:slug`**(unique slug, `postCount` 포함) 엔드포인트를 추가하고 `rest.ts::getCommunity(slug)`로 교체 → `matches[0]` 폴백 제거, 404 시 not-found `EmptyState` 표시. E2E 헬퍼 `createCommunityAndPost`도 고정명 "E2E 커뮤니티"에서 고유 이름으로 변경(이름 유니크 하에서 J1/J2/J3 충돌 방지). (§4.2-10)
 - **[fix]** Composer에 "🤖 AI에게 묻기" 토글/칩 행이 추가되며 Composer가 더 높아졌고, 그 `sticky` 오버레이가 Thread의 마지막/PENDING("입력 중…") AI 로딩 버블을 가렸다. `sticky` 오버레이를 제거해 Composer를 일반 flex 흐름 자식으로 되돌리고, 모바일 하단 탭바 여백 확보를 Thread 컬럼 레벨에서 처리 → 최신 버블이 항상 입력창 위에 보이도록 수정. (§4.2-9)
@@ -199,6 +204,46 @@ TRD §4 표는 인증 칼럼을 "username"으로 적었으나, **실제 구현�
         F --> G["스레드/커뮤니티로 이동"]
       ```
     - 미반영(의도/플래그): `PATCH /communities/:id`(이름 수정)는 이름 유니크를 강제하지 않음 — 과제 범위는 생성(POST) 한정이라 스코프 유지, 추후 동일 가드 적용 여지로 플래그.
+
+### 4.3 Thread v0.3 비주얼 리디자인 (VR-9, 2026-06-18)
+
+WIREFRAME §6.3("비주얼 리팩토링 사양 — 구현 단일 출처")을 그대로 구현한 **순수 표현 계층** 변경. 라우팅·스토어·엔진(contextEngine/retry)·SSE·BYOK 키 흐름·요약 트리거 로직은 **불변**이며, 백엔드/API 계약/테스트는 무변경. 변경 파일: `frontend/tailwind.config.js`, `frontend/index.html`, `frontend/src/components/Avatar.tsx`(신규), `frontend/src/components/ChatBubble.tsx`, `frontend/src/components/Composer.tsx`, `frontend/src/components/PostCard.tsx`, `frontend/src/pages/Thread.tsx`.
+
+- **브랜드 컬러 블루→바이올렛(§6.3 A)**: `tailwind.config.js`의 `colors.brand`만 `#2563eb/#1d4ed8` → **`#7c3aed`(violet-600) / `#6d28d9`(violet-700)**로 교체 → `bg-brand`/`text-brand`/`border-brand`를 쓰는 모든 자리(본인 버블, 전송 버튼, 로고, 활성 탭, 링크 등)가 자동 반영. `index.html`의 PWA `theme-color`도 `#0f172a → #7c3aed`로 동기화. (AI 액센트 `purple-*`는 유지.)
+- **Avatar 컴포넌트(신규, §6.3 B)**: `frontend/src/components/Avatar.tsx`. props `{ kind:'user'|'me'|'ai'; seed?; size?:'sm'|'md' }`. Tailwind purge 안전을 위해 **정적 클래스 배열**만 사용(동적 문자열 금지) — user/me는 6색 팔레트(`violet/emerald/sky/rose/amber/indigo-500`)를 `seed` 코드포인트 합 `% 6`으로 선택(시드 없으면 `bg-slate-400`)하고 흰 사람 실루엣 SVG, ai는 `bg-gradient-to-br from-violet-500 to-purple-600` + 흰 로봇 SVG. 표시 전용(`aria-hidden`).
+- **Thread 글 상세 헤더(§6.3 C)**: 기존 `PersonaBadge` 헤더를 **‹뒤로 · 제목(중앙 truncate, font-semibold) · 🔖북마크 · ⋯메뉴**로 교체. 뒤로 버튼은 `navigate(-1)`. 페르소나 표시는 헤더에서 제거(원본 카드/아바타로 이전).
+- **원본 게시글 핀 카드(§6.3 D)**: 기존 `bg-slate-50` 영역을 **`rounded-2xl border bg-white shadow-sm` 카드**로 재스타일. **📌 원본 게시글** 바이올렛 라벨 + 제목(`<h2>`) + (있을 때) `SafeMarkdown` 본문 + 메타행(Avatar sm·`u/{author}`·상대시간 / 우측 `▲{post.score}` `💬{post.commentCount}`). 점수/댓글수는 기존 `Post` DTO 필드(읽기 전용·비기능, 기존과 동일).
+- **ChatBubble 아바타 + 읽음 ✓(§6.3 E)**: 행 컨테이너를 `flex items-end gap-2`(본인이면 `flex-row-reverse`)로 바꾸고 행 끝에 `<Avatar>` 추가(AI=로봇, 본인=me, 타인=user; `seed=authorUsername`). 좌측 헤더의 페르소나 **이모지 중복 제거**(아바타로 이전)하고 페르소나명+`AI` 배지는 유지. 본인 **COMPLETE** 사람 버블 메타행에 바이올렛 읽음 `✓` 추가(PENDING/실패엔 미표시). 버블 꼬리 라운드를 `rounded-b*-sm → rounded-b*-md`로, AI 테두리를 `purple-300 → purple-200`으로 미세 조정. 실패 오버라이드(빨강)·재시도 버튼은 불변.
+- **AI 스파클 로딩(§6.3 E.3)**: 기존 `TypingDots`를 `isAi` 분기로 분리 — AI PENDING은 **`✨ AI가 답변을 작성하고 있어요… •••`**(스파클 + 바운싱 점), 사람 PENDING은 기존 **`⟳ 입력 중…`** 유지.
+- **알약형 Composer(§6.3 F)**: 입력 행 앞에 **＋ 첨부 버튼** 추가, 입력 박스를 `rounded-2xl → rounded-full px-4`(알약형)로, AI모드 토글 `accent-purple-600 → accent-violet-600`. 전송 버튼은 기존 `bg-brand`(@AI/AI모드면 `bg-purple-600`) 원형 유지. 기본 placeholder를 `메시지를 입력하세요…`로 변경(AI모드 placeholder·@AI 칩/감지 로직은 불변).
+- **표현용 placeholder(백엔드 미연동) — 명시**: 헤더 **🔖 북마크**(`Thread.tsx`의 `bookmarked` 로컬 `useState` 토글, 북마크 API/DTO 없음), 헤더 **⋯ 메뉴**(핸들러 없음), Composer **＋ 첨부**(핸들러 없음) 세 버튼은 **순수 시각 요소**다. 각 코드에 주석으로 비연동을 명시했고, 향후 백엔드 연동 시 와이어링 지점으로 남겨둠.
+- **스펙 이탈**: 없음 — §6.3 A–G 토큰/클래스/동작을 그대로 따랐고, §6.3 G("변경 없음")로 명시된 라우팅·스토어·엔진·SSE·BYOK·요약·접근성 터치 타깃은 손대지 않았다. `PersonaBadge`는 §6.3 G대로 `bg-brand/10`을 통해 자동 바이올렛화(개별 수정 불필요)되고, Thread 헤더에서만 제거됐다.
+
+### 4.4 디자인 시스템 v0.3 전 화면 전파 (VR-10, 2026-06-18)
+
+WIREFRAME §12("디자인 시스템 v0.3 — 전 화면 적용, 구현 단일 출처")를 그대로 구현한 **순수 표현 계층** 변경. §6.3에서 Thread에 확립한 비주얼 언어(바이올렛 브랜드·카드·아바타)를 나머지 모든 화면에 일관 전파. 라우팅·폼 검증·제출 핸들러·스토어·BYOK 키 흐름(마스킹·localStorage)·인증 가드·무한 스크롤·디바운스 검색·SSE는 **불변**이며, 백엔드/API 계약/테스트는 무변경.
+
+- **공유 토큰(§12.1)**: (a) **카드/리스트 항목** = `rounded-2xl border border-slate-200 bg-white shadow-sm`(기존 `rounded-lg`/`rounded-xl`·무그림자 → 통일), 클릭형은 `transition active:bg-slate-50 hover:border-brand/40` 가산. (b) **입력/textarea/select** = `rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand`(기존 `rounded-lg` → `rounded-xl`). (c) **1차 버튼** = `rounded-xl bg-brand text-white font-semibold hover:bg-brand-dark`(바이올렛, `min-h-[44px]`), **2차** = `border border-slate-300 hover:border-brand hover:text-brand`, **위험(로그아웃)** = `border border-red-200 text-red-600 hover:bg-red-50`. (d) 토글 액센트 `accent-violet-600`. 브랜드 컬러는 §6.3 A 바이올렛 토큰(`brand=#7c3aed`)을 그대로 써서 대부분 `bg-brand`/`text-brand`로 자동 반영(개별 하드코딩 없음).
+- **Avatar 재사용(§6.3 B)**: 신규 컴포넌트를 신원 표시에 확대 적용. **Profile**(`frontend/src/pages/Profile.tsx`) 헤더의 `👤` 이모지를 `<Avatar kind="user" seed={username} size="md" />`로 교체. **Community**(`frontend/src/pages/Community.tsx`) 글 리스트 항목에 작성자 `<Avatar kind="user" seed={p.authorUsername} size="sm" />` 추가. (ChatBubble/Thread는 §6.3 E/D에서 이미 적용.)
+- **화면별 델타(§12.2)**:
+  - **Login**(`pages/Login.tsx`): 폼을 카드로 감싸고 바이올렛 로고 락업, 입력/버튼 §12.1, 키 경고/링크 유지.
+  - **Home**(`pages/Home.tsx`): 인기/최신 탭 활성 `border-brand text-brand`(자동), PostCard는 이미 v0.3 카드, EmptyState 1차 버튼 §12.1.
+  - **Search/CommunitySearch**(`pages/Search.tsx`, `pages/Community.tsx`): 검색 입력 §12.1, 결과 항목을 카드형 클릭 리스트(`rounded-2xl ... shadow-sm ... hover:border-brand/40`), PersonaBadge 유지, "결과 없음" 박스 radius 통일.
+  - **Community 상세**(`pages/Community.tsx`): "이 커뮤니티에 글쓰기" 1차 버튼, 페르소나 박스 카드화, 글 리스트 카드형(제목·메타 + 작성자 Avatar sm).
+  - **CreatePost**(`pages/CreatePost.tsx`): 입력/select/textarea §12.1, 게시 1차 버튼, AI 1차답변 토글 `accent-violet-600`.
+  - **CreateCommunity**(`pages/CreateCommunity.tsx`, `components/PersonaEditor.tsx`): 입력/슬러그/설명/아이콘 §12.1, PersonaEditor textarea 정합, 만들기 1차 버튼.
+  - **Profile**(`pages/Profile.tsx`): 헤더 Avatar md, API 키/로그아웃 섹션 카드화(위험 버튼), 내 커뮤니티/내 글 리스트 카드형. 마스킹/로컬 키 로직 불변.
+  - **AppLayout/BottomTabBar**(`layout/AppLayout.tsx`, `layout/BottomTabBar.tsx`): 로고·활성 탭 바이올렛(자동), 구조 변경 없음.
+  - **상태 컴포넌트**(`components/states/ErrorState.tsx`·`LoadingState.tsx`·`OfflineBanner.tsx`): 스피너 `border-t-brand`(자동), 배너/카드 radius `rounded-xl` 통일, 동작 불변.
+- **스펙 이탈**: 없음 — §12.1 토큰/클래스를 그대로 따랐고, §12.3("회귀 금지")로 명시된 라우팅·검증·핸들러·스토어·BYOK·인증·스크롤·검색·SSE는 손대지 않았다(클래스/마크업만 변경, 동작 변화 없음).
+
+### 4.5 홈 피드 "Invalid cursor" 무한 루프 (2026-06-19)
+
+§4.1-3의 envelope 정규화(`getPosts`가 `{items}` → 배열 반환)는 크래시/빈 화면은 고쳤으나, 함께 버려진 서버 **`nextCursor`** 가 새 회귀를 낳았다. Home이 다음 페이지 커서를 응답에서 받지 못하니 **마지막 항목의 원본 `id`** 를 커서로 도출해 넘겼는데, 서버 커서는 (정렬 키를 인코딩한) **불투명 토큰**이라 원본 id를 디코드하지 못하고 매 요청을 거부했다.
+
+11. **홈 피드 무한 루프 — 원본 id를 커서로 오용 (envelope `nextCursor` 유실)**
+    - 증상: 홈 피드 무한 스크롤이 첫 페이지 이후 매 추가 요청마다 서버에서 **"Invalid cursor"** 로 실패하고, 클라가 같은 (잘못된) 커서로 재요청을 반복해 **무한 루프**에 빠졌다. `rest.ts::getPosts`가 `{ items, nextCursor }` envelope를 풀어 `items` 배열만 반환하면서 `nextCursor`를 폐기 → Home은 다음 커서를 알 수 없어 `items[items.length-1].id`(원본 정수/문자열 id)를 커서로 넘겼고, 서버는 이를 불투명 커서로 디코드하지 못해 거부했다.
+    - 수정: `getPosts`를 서버 envelope **`{ items, nextCursor }`** 를 그대로 반환하도록 되돌리고(배열 강제 정규화 제거), Home은 서버가 발급한 **불투명 `nextCursor`** 로만 페이지네이션하며 **`nextCursor === null`이면 더 불러오기를 정지**하도록 변경(마지막 항목 id 도출 로직 제거). 이로써 커서 의미 체계가 서버↔클라 간 일치하고 끝 페이지에서 깔끔히 종료된다.
 
 ---
 

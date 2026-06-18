@@ -9,6 +9,7 @@ import {
 import type { Community as CommunityDTO, PostListItem } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
 import PersonaBadge from '../components/PersonaBadge';
+import Avatar from '../components/Avatar';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
 
 // FE-5: community detail (/c/:slug). The slug-less case redirects to the
@@ -70,7 +71,7 @@ export function CommunitySearch() {
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="커뮤니티 이름으로 검색"
-        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
       />
 
       {error && <ErrorState variant="banner" message={error} />}
@@ -83,7 +84,7 @@ export function CommunitySearch() {
             <li key={c.id}>
               <Link
                 to={`/c/${c.slug}`}
-                className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5 transition hover:border-brand hover:bg-brand/5"
+                className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition active:bg-slate-50 hover:border-brand/40"
               >
                 <PersonaBadge
                   personaIcon={c.personaIcon}
@@ -102,7 +103,7 @@ export function CommunitySearch() {
       )}
 
       {!loading && !error && results.length === 0 && (
-        <div className="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-center text-sm text-slate-500">
+        <div className="rounded-xl border border-dashed border-slate-300 px-3 py-4 text-center text-sm text-slate-500">
           결과 없음?{' '}
           <Link
             to="/create-community"
@@ -188,7 +189,7 @@ function CommunityDetail({ slug }: { slug: string }) {
         action={
           <Link
             to="/search"
-            className="inline-flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark"
+            className="inline-flex min-h-[44px] items-center rounded-xl bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
           >
             커뮤니티 검색으로
           </Link>
@@ -232,7 +233,7 @@ function CommunityDetail({ slug }: { slug: string }) {
           <p className="text-sm text-slate-600">{community.description}</p>
         )}
 
-        <div className="rounded-lg bg-slate-50 px-3 py-2.5">
+        <div className="rounded-xl bg-slate-50 px-3 py-2.5">
           <p className="mb-1 text-xs font-semibold text-slate-500">페르소나</p>
           <p className="line-clamp-3 whitespace-pre-wrap text-sm text-slate-700">
             {community.personaPrompt}
@@ -241,7 +242,7 @@ function CommunityDetail({ slug }: { slug: string }) {
 
         <Link
           to={`/c/${community.slug}/create-post`}
-          className="inline-block rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark"
+          className="inline-block rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
         >
           + 이 커뮤니티에 글쓰기
         </Link>
@@ -257,7 +258,7 @@ function CommunityDetail({ slug }: { slug: string }) {
             action={
               <Link
                 to={`/c/${community.slug}/create-post`}
-                className="inline-flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark"
+                className="inline-flex min-h-[44px] items-center rounded-xl bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
               >
                 + 첫 글 쓰기
               </Link>
@@ -270,7 +271,7 @@ function CommunityDetail({ slug }: { slug: string }) {
               <li key={p.id}>
                 <Link
                   to={`/p/${p.id}`}
-                  className="block rounded-lg border border-slate-200 px-3 py-2.5 transition hover:border-brand hover:bg-brand/5"
+                  className="block rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition active:bg-slate-50 hover:border-brand/40"
                 >
                   <p className="truncate font-medium text-slate-800">
                     {p.title}
@@ -278,7 +279,8 @@ function CommunityDetail({ slug }: { slug: string }) {
                   <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">
                     {p.body}
                   </p>
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
+                    <Avatar kind="user" seed={p.authorUsername} size="sm" />
                     u/{p.authorUsername} · 점수 {p.score} · 댓글{' '}
                     {p.commentCount}
                   </p>

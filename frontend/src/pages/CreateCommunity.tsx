@@ -95,7 +95,7 @@ export default function CreateCommunity() {
         {error && (
           <div
             role="alert"
-            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700"
+            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700"
           >
             {error}
           </div>
@@ -113,7 +113,7 @@ export default function CreateCommunity() {
             type="text"
             value={name}
             onChange={(e) => handleNameChange(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+            className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
             placeholder="예) 집밥 레시피"
           />
         </div>
@@ -125,7 +125,7 @@ export default function CreateCommunity() {
           >
             주소
           </label>
-          <div className="flex items-center rounded-lg border border-slate-300 focus-within:border-brand focus-within:ring-1 focus-within:ring-brand">
+          <div className="flex items-center rounded-xl border border-slate-300 focus-within:border-brand focus-within:ring-1 focus-within:ring-brand">
             <span className="select-none pl-3 pr-1 text-sm text-slate-400">
               /c/
             </span>
@@ -134,7 +134,7 @@ export default function CreateCommunity() {
               type="text"
               value={slug}
               onChange={(e) => handleSlugChange(e.target.value)}
-              className="w-full rounded-r-lg bg-transparent py-2 pr-3 text-sm outline-none"
+              className="w-full rounded-r-xl bg-transparent py-2.5 pr-3 text-sm outline-none"
               placeholder="home-cooking"
             />
           </div>
@@ -156,7 +156,7 @@ export default function CreateCommunity() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
-            className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+            className="w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
             placeholder="이 커뮤니티가 어떤 곳인지 한 줄로 소개해 보세요."
           />
         </div>
@@ -177,7 +177,7 @@ export default function CreateCommunity() {
             value={personaIcon}
             onChange={(e) => setPersonaIcon(e.target.value)}
             maxLength={8}
-            className="w-20 rounded-lg border border-slate-300 px-3 py-2 text-center text-lg outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+            className="w-20 rounded-xl border border-slate-300 px-3 py-2.5 text-center text-lg outline-none focus:border-brand focus:ring-1 focus:ring-brand"
             placeholder="🤖"
           />
           <p className="mt-1 text-xs text-slate-500">
@@ -188,7 +188,7 @@ export default function CreateCommunity() {
         <button
           type="submit"
           disabled={!canSubmit || submitting}
-          className="w-full rounded-lg bg-brand py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-[44px] w-full rounded-xl bg-brand py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? '만드는 중…' : '커뮤니티 만들기'}
         </button>
