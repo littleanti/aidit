@@ -1,8 +1,49 @@
 # Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
 
 > 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
-> 상태: M1–M5 구현 완료 · 날짜: 2026-06-17
+> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-18
 > 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
+
+---
+
+## 변경 이력 (Changelog)
+
+> 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
+
+### 2026-06-18
+- **[docs]** 본 구현 노트에 변경 이력(Changelog) 절 추가 — 날짜·역순 정리.
+
+### 2026-06-17
+
+**라이브 검증 (실제 Gemini 키, claude-in-chrome MCP + Playwright)** — commit `6a19d3a`
+- **[fix]** 페이지네이션 envelope 미해제: `getPosts`/`getCommunityPosts`/`getComments`가 `{items}`를 배열로 반환 안 함 → 커뮤니티 페이지 크래시·홈 빈 화면·스레드 로딩 실패. (§4.1-3, `frontend/src/api/rest.ts`)
+- **[fix]** PENDING AI 버블 빈 본문 거부 → `@AI`/1차 답변 400으로 미생성. PENDING이면 빈 본문 허용. (§4.1-4, `server/src/routes/comments.ts`)
+- **[fix]** `GET /posts/:id`에 `authorId`/`communityId` 누락 → 1차 AI 답변(FR-4.3/수용 #3) 미발화. 스칼라 FK 포함. (§4.1-5, `server/src/routes/posts.ts`)
+- **[fix]** 모바일 하단 탭바가 Composer 전송 버튼 가림 → 폰에서 클릭 불가. 탭바 위로 올림. (§4.1-6, `frontend/src/components/Composer.tsx`)
+- **[test]** E2E J1/J2/J3를 실제 UI 흐름(`createCommunityAndPost`/`seedOverThreshold`)으로 재작성 + 실키 `real-key-byok.spec.ts` 추가 → **E2E 4/4 green**. (§6)
+
+**문서화** — commit `4000d01`
+- **[docs]** 구현 노트 최초 작성(스펙 대비 확정/추가/변경, 버그, 스택 버전, 실행 방법) + TRD §4(`x-user-id`·`/metrics`)·PLAN §9(DoD 현황) 갱신.
+
+**M5 — 다듬기** — commit `45a5ece`
+- **[feat]** 지표+VisitEvent(BE-13), hot decay(XC-8), CSP 헤더/메타(XC-3), 레이트리밋(XC-9), PWA(FE-13), DOMPurify sanitize(XC-3), 빈/에러/오프라인 상태(FE-14), 클라 계측(XC-10), MIT 헤더(XC-11), 통합 테스트(XC-T). (§2.2, §3, §5, §6)
+- **[fix]** CSP·레이트리밋 플러그인 캡슐화로 전역 훅 미적용(L2 위반) → `fastify-plugin`으로 de-encapsulate. (§4-1)
+
+**M4 — 요약 엔진** — commit `08e2d27`
+- **[feat]** 128K 지연 요약(AI-6/8/9, 호출자 키), 세그먼트 전환(BE-5s)·요약 멱등 가드 409(BE-7), `segment.opened`(RT-8), SummaryBubble + ~120K 임박 배지(FE-13a). (§3)
+- **[fix]** `CreateCommentRequest.segmentExpected` 타입 정정. (§4-2)
+
+**M3 — AI 코어** — commit `bdf8843`
+- **[feat]** BYOK GeminiClient(브라우저→Google 직접, AI-1/3), `buildContents` 조립 chokepoint + 프롬프트 인젝션 가드(AI-4/XC-4), `/context`(BE-12)·`PATCH /comments`(BE-8, clientId/userId 인가), 1차 답변(AI-5)·`@AI` 흐름(AI-7). (§2.1, §3)
+
+**M2 — 실시간** — commit `7ee79bd`
+- **[feat]** per-post SSE(transport·pubsub·publish), `POST/GET /comments`(seq·clientId 멱등, BE-6/11), `/stream` 스냅샷 재생+라이브(RT-4/6), threadStore·ChatBubble·Composer·Thread.
+
+**M1 — 골격** — commit `f516d67`
+- **[feat]** Fastify+Prisma 스캐폴드, 개정 스키마(L12: `clientId`·`personaIcon`·`VisitEvent`), `/auth/session`·커뮤니티·글·홈 피드 라우트, React 셸·`api/types.ts`·`rest.ts`·authStore·Login·피드/커뮤니티/생성 페이지. (§1, §2.1)
+
+**초기 스캐폴드** — commit `7e3455e`
+- **[chore]** repo init, `.gitignore`(`.omc/`·`tmp/` 제외), MIT LICENSE, README, docs.
 
 ---
 
