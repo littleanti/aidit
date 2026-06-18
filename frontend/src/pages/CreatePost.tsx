@@ -124,7 +124,7 @@ export default function CreatePost() {
             value={selectedCommunityId}
             onChange={(e) => setSelectedCommunityId(e.target.value)}
             disabled={communitiesLoading || submitting}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+            className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
           >
             <option value="" disabled>
               {communitiesLoading ? '불러오는 중…' : '커뮤니티 선택'}
@@ -148,7 +148,7 @@ export default function CreatePost() {
           placeholder="제목을 입력하세요"
           maxLength={300}
           disabled={submitting}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+          className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
         />
       </label>
 
@@ -161,7 +161,7 @@ export default function CreatePost() {
           placeholder="내용을 입력하세요"
           rows={8}
           disabled={submitting}
-          className="resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+          className="resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
         />
       </label>
 
@@ -172,7 +172,7 @@ export default function CreatePost() {
           checked={firstAi}
           onChange={(e) => setFirstAi(e.target.checked)}
           disabled={submitting}
-          className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
+          className="h-4 w-4 rounded border-slate-300 accent-violet-600 focus:ring-brand"
         />
         <span>게시 후 AI 1차 답변 받기</span>
       </label>
@@ -187,7 +187,7 @@ export default function CreatePost() {
       <button
         type="submit"
         disabled={!canSubmit}
-        className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        className="min-h-[44px] rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
       >
         {submitting ? '게시 중…' : '게시하기'}
       </button>

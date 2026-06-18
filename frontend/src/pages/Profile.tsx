@@ -6,6 +6,7 @@ import type { Community, PostListItem } from '../api/types';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
 import PostCard from '../components/PostCard';
 import PersonaBadge from '../components/PersonaBadge';
+import Avatar from '../components/Avatar';
 
 // FE: 👤 나 — profile page (WIREFRAME §9).
 // L1: googleApiKey is LOCAL ONLY. It is shown MASKED here and never logged,
@@ -78,7 +79,7 @@ export default function Profile() {
           action={
             <Link
               to="/login"
-              className="inline-flex min-h-[44px] items-center rounded-lg bg-brand px-5 text-sm font-semibold text-white transition hover:bg-brand-dark"
+              className="inline-flex min-h-[44px] items-center rounded-xl bg-brand px-5 text-sm font-semibold text-white transition hover:bg-brand-dark"
             >
               로그인
             </Link>
@@ -115,16 +116,14 @@ export default function Profile() {
     <div className="mx-auto max-w-2xl space-y-8 py-6">
       {/* header */}
       <header className="flex items-center gap-3">
-        <span aria-hidden className="text-3xl">
-          👤
-        </span>
+        <Avatar kind="user" seed={username} size="md" />
         <h1 className="truncate text-xl font-bold text-slate-900">
           {username}
         </h1>
       </header>
 
       {/* 🔑 API Key */}
-      <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
           <span aria-hidden>🔑</span> API 키
         </h2>
@@ -137,7 +136,7 @@ export default function Profile() {
             <button
               type="button"
               onClick={startEditKey}
-              className="inline-flex min-h-[44px] shrink-0 items-center rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:border-brand hover:text-brand"
+              className="inline-flex min-h-[44px] shrink-0 items-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:border-brand hover:text-brand"
             >
               변경
             </button>
@@ -150,21 +149,21 @@ export default function Profile() {
               value={keyDraft}
               onChange={(e) => setKeyDraft(e.target.value)}
               placeholder="AIza..."
-              className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+              className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
             />
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={saveKey}
                 disabled={!keyDraft.trim()}
-                className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-lg bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
               >
                 저장
               </button>
               <button
                 type="button"
                 onClick={cancelEditKey}
-                className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:border-brand hover:text-brand"
               >
                 취소
               </button>
@@ -172,17 +171,17 @@ export default function Profile() {
           </div>
         )}
 
-        <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+        <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
           키는 이 기기(localStorage)에만 저장됩니다.
         </p>
       </section>
 
       {/* 로그아웃 (FR-2.4) */}
-      <section>
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <button
           type="button"
           onClick={handleLogout}
-          className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-red-200 px-4 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+          className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-red-200 px-4 text-sm font-semibold text-red-600 transition hover:bg-red-50"
         >
           로그아웃
         </button>
@@ -230,7 +229,7 @@ export default function Profile() {
                 action={
                   <Link
                     to="/create-community"
-                    className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:border-brand hover:text-brand"
+                    className="inline-flex min-h-[44px] items-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:border-brand hover:text-brand"
                   >
                     커뮤니티 만들기
                   </Link>
@@ -242,7 +241,7 @@ export default function Profile() {
                   <li key={c.id}>
                     <Link
                       to={`/c/${c.slug}`}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 transition active:bg-slate-50 hover:border-slate-300"
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition active:bg-slate-50 hover:border-brand/40"
                     >
                       <PersonaBadge
                         personaIcon={c.personaIcon}

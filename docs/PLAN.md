@@ -414,3 +414,25 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
   (아바타·색·헤더·Composer·읽음표시·AI 로딩).
 - [ ] **VR-9 · 문서 재동기화**: 구현 차이를 [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md)에 기록,
   WIREFRAME 사양과 실제 구현 일치 확인.
+
+---
+
+## 11. M7 — 전 화면 디자인 시스템 전파 (v0.3, 2026-06-18)
+
+> Thread 채팅 UI(M6)에서 확립한 비주얼 언어를 나머지 모든 화면에 일관 적용. 상세 사양:
+> [WIREFRAME.md §12](./WIREFRAME.md). **표현 계층 한정** — 라우팅/스토어/검증/BYOK/SSE 불변.
+> 완료 게이트: `npm run typecheck` · `npm run test` · `npm run build` green + 브라우저 시각 검증(실 키 로그인).
+
+### 작업 패키지 (WP) — 파일 소유권 분리(병렬 충돌 방지)
+- [ ] **DS-1 · Login**: 폼 카드화 + 바이올렛 로고 락업 + 입력/버튼 토큰. (§12.2)
+- [ ] **DS-2 · Home + 상태 컴포넌트**: EmptyState 버튼 토큰, 상태 컴포넌트(Empty/Error/Loading/Offline)
+  radius 통일. (Home.tsx + components/states/*)
+- [ ] **DS-3 · Community(검색+상세) + Search**: 검색 입력·결과 카드 리스트, 상세 헤더/페르소나 박스/글
+  리스트 카드화, 작성자 Avatar. (Community.tsx, Search.tsx는 재노출만)
+- [ ] **DS-4 · CreatePost + CreateCommunity + PersonaEditor**: 입력/select/textarea/버튼 토큰 통일,
+  토글 액센트 바이올렛.
+- [ ] **DS-5 · Profile**: 헤더 Avatar, 섹션 카드화, 리스트 카드형. 키 마스킹/로컬 로직 불변.
+- [ ] **DS-6 · AppLayout + BottomTabBar**: 로고/사이드바/탭 활성색 정합(대부분 자동), 구조 불변.
+- [ ] **DS-7 · 검증**: typecheck + vitest + build green, 브라우저에서 전 화면 시각 확인
+  (실 키로 로그인 → Home/Search/Community/Create*/Profile/Thread 순회).
+- [ ] **DS-8 · 문서 재동기화 + 푸시**: IMPLEMENTATION_NOTES 기록, WIREFRAME 정합 확인, 커밋·푸시.

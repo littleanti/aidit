@@ -124,7 +124,7 @@ export default function Home() {
           action={
             <Link
               to="/create-post"
-              className="inline-flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark"
+              className="inline-flex min-h-[44px] items-center rounded-xl bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
             >
               + 첫 글 쓰기
             </Link>

@@ -1,10 +1,18 @@
-import { Link, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import BottomTabBar from './BottomTabBar';
 
 // Mobile-first shell.
 //  <768px : single column + bottom tab bar.
 //  >=1024px (desktop): multi-column (sidebar + main).
+
+// Desktop sidebar nav item — active state mirrors the bottom tab bar (text-brand).
+function sidebarLinkClass({ isActive }: { isActive: boolean }): string {
+  return isActive
+    ? 'block rounded-lg px-3 py-2 font-medium text-brand bg-slate-100'
+    : 'block rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100 hover:text-brand';
+}
+
 export default function AppLayout() {
   const username = useAuthStore((s) => s.username);
 
@@ -32,24 +40,18 @@ export default function AppLayout() {
       <div className="mx-auto grid max-w-app grid-cols-1 desktop:max-w-5xl desktop:grid-cols-[220px_1fr] desktop:gap-6 desktop:px-4">
         <aside className="hidden desktop:block desktop:py-4">
           <nav className="sticky top-16 space-y-1 text-sm">
-            <Link to="/" className="block rounded px-3 py-2 hover:bg-slate-100">
+            <NavLink to="/" end className={sidebarLinkClass}>
               🏠 홈
-            </Link>
-            <Link
-              to="/search"
-              className="block rounded px-3 py-2 hover:bg-slate-100"
-            >
+            </NavLink>
+            <NavLink to="/search" className={sidebarLinkClass}>
               🔍 검색
-            </Link>
-            <Link
-              to="/create-community"
-              className="block rounded px-3 py-2 hover:bg-slate-100"
-            >
+            </NavLink>
+            <NavLink to="/create-community" className={sidebarLinkClass}>
               ✏️ 커뮤니티 만들기
-            </Link>
-            <Link to="/me" className="block rounded px-3 py-2 hover:bg-slate-100">
+            </NavLink>
+            <NavLink to="/me" className={sidebarLinkClass}>
               👤 나
-            </Link>
+            </NavLink>
           </nav>
         </aside>
 

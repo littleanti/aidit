@@ -26,7 +26,7 @@ export default function OfflineBanner({
     <div
       role="status"
       aria-live="polite"
-      className={`flex items-center justify-center gap-1.5 bg-amber-50 px-3 py-1 text-center text-xs font-medium text-amber-700 ${className}`}
+      className={`flex items-center justify-center gap-1.5 rounded-xl bg-amber-50 px-3 py-1 text-center text-xs font-medium text-amber-700 ${className}`}
     >
       <span
         aria-hidden

@@ -38,10 +38,10 @@ export default function PersonaEditor({
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         rows={rows}
-        className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm leading-relaxed outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm leading-relaxed outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:cursor-not-allowed disabled:opacity-50"
         placeholder="예) 당신은 친절한 요리 전문가입니다. 항상 단계별로 쉽게 설명하고, 재료 대체안을 함께 제안하세요."
       />
-      <p className="mt-2 rounded-md bg-slate-100 px-3 py-2 text-xs leading-relaxed text-slate-600">
+      <p className="mt-2 rounded-xl bg-slate-100 px-3 py-2 text-xs leading-relaxed text-slate-600">
         이 프롬프트는 커뮤니티의 모든 AI 호출에 적용되는 시스템 지침(systemInstruction)이 됩니다.
         AI의 말투·역할·관점을 정해 보세요.
       </p>

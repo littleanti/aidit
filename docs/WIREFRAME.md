@@ -369,3 +369,48 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 - **≥1024px**: 2–3 컬럼(좌 내비 / 중앙 피드·스레드 / 우 커뮤니티 검색·정보).
 - 버블 최대폭 78%, 요약 버블은 전폭 띠. 터치 타깃 ≥44px(NFR-1).
 ```
+
+---
+
+## 12. 디자인 시스템 v0.3 — **전 화면 적용 (구현 단일 출처)**
+
+> 2026-06-18 채팅 UI 리디자인(§6.3)에서 확립한 비주얼 언어를 **나머지 모든 화면**
+> (Login · Home · Search · Community · CreatePost · CreateCommunity · Profile · AppLayout · 상태 컴포넌트)
+> 에 일관되게 전파한다. **표현 계층만 변경** — 라우팅/스토어/엔진/SSE/BYOK/검증 로직 불변.
+> 브랜드 컬러는 §6.3 A의 바이올렛(`brand=#7c3aed`) 토큰을 그대로 사용한다(대부분 `bg-brand`/`text-brand`로 자동 반영).
+
+### 12.1 공유 토큰 (그대로 적용)
+| 요소 | 표준 클래스 | 비고 |
+|------|-------------|------|
+| **카드 / 리스트 항목** | `rounded-2xl border border-slate-200 bg-white shadow-sm` | 기존 `rounded-lg`/`rounded-xl`·무그림자 → 통일. hover: `hover:border-slate-300` |
+| **클릭형 리스트 항목** | 위 + `transition active:bg-slate-50 hover:border-brand/40` | 커뮤니티·글 리스트 |
+| **입력 / textarea / select** | `rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand` | 기존 `rounded-lg` → `rounded-xl` 통일 |
+| **1차 버튼(primary)** | `rounded-xl bg-brand text-white font-semibold hover:bg-brand-dark disabled:opacity-50` | 높이 `min-h-[44px]`/`py-2.5` |
+| **2차 버튼(secondary)** | `rounded-xl border border-slate-300 text-slate-700 hover:border-brand hover:text-brand` | |
+| **위험 버튼(danger)** | `rounded-xl border border-red-200 text-red-600 hover:bg-red-50` | 로그아웃 |
+| **섹션 제목** | `text-sm font-semibold text-slate-700` | |
+| **안내/경고 박스** | `rounded-xl bg-amber-50 ... text-amber-800`(키 경고) / `rounded-xl bg-slate-100`(페르소나 안내) | radius 통일 |
+| **Avatar** | §6.3 B의 `Avatar` 컴포넌트 재사용 | 사용자/프로필/커뮤니티 신원 표시 |
+
+### 12.2 화면별 델타
+- **Login**: 폼을 카드(`rounded-2xl border bg-white shadow-sm p-6`)로 감싸고 상단에 바이올렛
+  로고 락업(작은 `A` 배지 + "Aidit"). 입력/버튼 §12.1 적용. 키 경고/링크 유지.
+- **Home**: 탭(인기/최신) 활성 인디케이터 `border-brand text-brand` 유지(자동 바이올렛). PostCard는
+  이미 v0.3 카드 → 변경 없음. EmptyState 1차 버튼 §12.1.
+- **Search / CommunitySearch**: 검색 입력 §12.1(돋보기 아이콘 접두 선택), 결과 항목을 카드형
+  클릭 리스트로(PersonaBadge 유지). "결과 없음" 박스 radius 통일.
+- **Community(상세)**: 헤더에 큰 PersonaBadge(`lg`) 유지, "이 커뮤니티에 글쓰기" 1차 버튼, 페르소나
+  박스 카드화. 글 리스트 항목을 카드형(제목·요약·메타)으로 — 가능하면 작성자 `Avatar sm` 추가.
+- **CreatePost**: 모든 입력/select/textarea §12.1, 게시 버튼 1차 버튼, AI 1차답변 토글 액센트
+  `accent-violet-600`(또는 `text-brand`).
+- **CreateCommunity**: 입력/슬러그/설명/아이콘 §12.1, PersonaEditor textarea도 정합, 만들기 1차 버튼.
+- **Profile**: 헤더의 `👤` 이모지 → 사용자 `Avatar md`(seed=username). API 키/로그아웃 섹션 카드화,
+  내 커뮤니티/내 글 리스트 카드형(이미 일부 적용). 마스킹/로컬 키 로직 불변.
+- **AppLayout / BottomTabBar**: 로고 바이올렛(자동), 활성 탭 `text-brand`(자동). 데스크톱 사이드바
+  활성/hover 정합. 구조 변경 없음.
+- **상태 컴포넌트(Empty/Error/Loading/Offline)**: 스피너 `border-t-brand`(자동), 배너/카드 radius를
+  `rounded-xl`로 통일. 동작 불변.
+
+### 12.3 불변 (회귀 금지)
+- 라우팅, 폼 검증, 제출 핸들러, 스토어, BYOK 키 흐름(마스킹·localStorage), 인증 가드, 무한 스크롤,
+  디바운스 검색, SSE — 전부 그대로. 클래스/마크업(표현)만 변경.

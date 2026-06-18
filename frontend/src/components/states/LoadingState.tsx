@@ -31,7 +31,7 @@ export default function LoadingState({
         {Array.from({ length: rows }).map((_, i) => (
           <div
             key={i}
-            className="animate-pulse rounded-lg border border-slate-200 px-3 py-3"
+            className="animate-pulse rounded-xl border border-slate-200 px-3 py-3"
           >
             <div className="h-4 w-2/3 rounded bg-slate-200" />
             <div className="mt-2 h-3 w-full rounded bg-slate-100" />
