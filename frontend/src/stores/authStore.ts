@@ -13,6 +13,8 @@ interface AuthState {
   googleApiKey: string | null;
   /** authenticate username, persist { userId, username } and the local key. */
   login: (username: string, key: string) => Promise<void>;
+  /** update ONLY the local Google API key (L1: never sent to the server). */
+  updateKey: (key: string) => void;
   /** clear all identity + key from memory and localStorage. */
   logout: () => void;
 }
@@ -35,6 +37,12 @@ export const useAuthStore = create<AuthState>()(
         // L1: recordVisit sends ONLY x-user-id — the local key is never emitted.
         track('login');
         recordVisit(session.id);
+      },
+
+      // L1: googleApiKey stays LOCAL ONLY (localStorage). Updating it never
+      // touches the network — no server round-trip, no header, no body.
+      updateKey: (key: string) => {
+        set({ googleApiKey: key });
       },
 
       logout: () => {

@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 
 interface Tab {
   to: string;
@@ -14,8 +14,6 @@ const TABS: Tab[] = [
 ];
 
 export default function BottomTabBar() {
-  const navigate = useNavigate();
-
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white tablet:hidden"
@@ -28,13 +26,6 @@ export default function BottomTabBar() {
             <NavLink
               to={tab.to}
               end={tab.to === '/'}
-              onClick={(e) => {
-                // search/me are placeholders for later milestones
-                if (tab.to === '/search' || tab.to === '/me') {
-                  e.preventDefault();
-                  navigate('/');
-                }
-              }}
               className={({ isActive }) =>
                 [
                   'flex flex-col items-center justify-center gap-0.5 py-2 text-xs',

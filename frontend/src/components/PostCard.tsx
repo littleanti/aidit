@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { PostListItem } from '../api/types';
 
 /** Compact relative time in Korean (방금 / N분 / N시간 / N일 / N주, else date). */
@@ -42,8 +42,13 @@ export default function PostCard({ post }: PostCardProps) {
       }}
       className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 transition active:bg-slate-50 hover:border-slate-300"
     >
-      {/* community + persona line */}
-      <div className="flex min-h-[20px] items-center gap-1.5 text-xs text-slate-500">
+      {/* community + persona line — links to the community; stops propagation
+          so it doesn't also trigger the card's post navigation. */}
+      <Link
+        to={`/c/${post.communitySlug}`}
+        onClick={(e) => e.stopPropagation()}
+        className="flex min-h-[20px] w-fit max-w-full items-center gap-1.5 text-xs text-slate-500 transition hover:text-brand"
+      >
         {post.communityPersonaIcon && (
           <span aria-hidden className="text-sm leading-none">
             {post.communityPersonaIcon}
@@ -52,7 +57,7 @@ export default function PostCard({ post }: PostCardProps) {
         <span className="font-medium text-slate-700">{post.communityName}</span>
         <span className="text-slate-400">·</span>
         <span className="truncate">r/{post.communitySlug}</span>
-      </div>
+      </Link>
 
       {/* title — XC-3: user-authored, intentionally rendered as PLAIN text
           (titles stay single-line, no markdown). React auto-escapes the

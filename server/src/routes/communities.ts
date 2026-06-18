@@ -89,6 +89,30 @@ const plugin: FastifyPluginAsync = async (app) => {
     }));
   });
 
+  // GET /users/:id/communities — communities created by a user, newest first.
+  // Public profile view, read-only. Mirrors the GET /communities item shape.
+  app.get("/users/:id/communities", async (req) => {
+    const { id } = req.params as { id: string };
+
+    const communities = await prisma.community.findMany({
+      where: { creatorId: id },
+      orderBy: { createdAt: "desc" },
+      include: { _count: { select: { posts: true } } },
+    });
+
+    return communities.map((c) => ({
+      id: c.id,
+      slug: c.slug,
+      name: c.name,
+      description: c.description,
+      personaPrompt: c.personaPrompt,
+      personaIcon: c.personaIcon,
+      creatorId: c.creatorId,
+      createdAt: c.createdAt,
+      postCount: c._count.posts,
+    }));
+  });
+
   // POST /communities — create a community. Acting user becomes the creator.
   app.post("/communities", async (req, reply) => {
     const creatorId = await resolveActingUser(req, reply);

@@ -36,10 +36,19 @@ export default function AppLayout() {
               🏠 홈
             </Link>
             <Link
+              to="/search"
+              className="block rounded px-3 py-2 hover:bg-slate-100"
+            >
+              🔍 검색
+            </Link>
+            <Link
               to="/create-community"
               className="block rounded px-3 py-2 hover:bg-slate-100"
             >
               ✏️ 커뮤니티 만들기
+            </Link>
+            <Link to="/me" className="block rounded px-3 py-2 hover:bg-slate-100">
+              👤 나
             </Link>
           </nav>
         </aside>

@@ -158,6 +158,28 @@ export async function getCommunityPosts(slug: string): Promise<PostListItem[]> {
   return toItems(r);
 }
 
+// ---- Profile ("my content") ----
+
+/**
+ * GET /users/:id/posts — posts authored by a user (public, read-only).
+ * Normalizes the server's { items } envelope to an array like getPosts.
+ */
+export async function getUserPosts(userId: string): Promise<PostListItem[]> {
+  const r = await request<PostListResponse>(`/users/${userId}/posts`);
+  return toItems(r);
+}
+
+/**
+ * GET /users/:id/communities — communities created by a user (public, read-only).
+ * Normalizes to an array consistently with getCommunities.
+ */
+export async function getUserCommunities(userId: string): Promise<Community[]> {
+  const r = await request<Community[] | { items: Community[] }>(
+    `/users/${userId}/communities`,
+  );
+  return Array.isArray(r) ? r : (r?.items ?? []);
+}
+
 export interface CreatePostBody {
   communityId: string;
   title: string;

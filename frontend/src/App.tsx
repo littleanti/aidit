@@ -6,6 +6,8 @@ import Community from './pages/Community';
 import CreateCommunity from './pages/CreateCommunity';
 import CreatePost from './pages/CreatePost';
 import Thread from './pages/Thread';
+import Search from './pages/Search';
+import Profile from './pages/Profile';
 
 export default function App() {
   return (
@@ -16,6 +18,8 @@ export default function App() {
 
         <Route element={<AppLayout />}>
           <Route path="/" element={<Home />} />
+          <Route path="/search" element={<Search />} />
+          <Route path="/me" element={<Profile />} />
           <Route path="/c/:slug" element={<Community />} />
           <Route path="/c/:slug/create-post" element={<CreatePost />} />
           <Route path="/create-post" element={<CreatePost />} />

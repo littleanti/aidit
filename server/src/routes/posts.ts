@@ -48,14 +48,21 @@ const FEED_PAGE_SIZE = 20;
 // Shape a post row (with community + author) into a feed card. `hotScoreOverride`
 // lets the hot feed surface the read-time effective hotScore (XC-8) instead of the
 // possibly-stale stored value.
+// Returns the FLAT PostListItem shape (frozen contract in frontend
+// api/types.ts): communitySlug/communityName/communityPersonaIcon +
+// authorUsername, NOT a nested community{}/author{}. The feed card UI reads
+// these flat fields; a nested shape silently blanked the community label.
 function toFeedCard(
   p: {
     id: string;
     title: string;
+    body: string;
     score: number;
     commentCount: number;
     hotScore: number;
     createdAt: Date;
+    communityId: string;
+    authorId: string;
     community: { slug: string; name: string; personaIcon: string | null };
     author: { username: string };
   },
@@ -64,16 +71,17 @@ function toFeedCard(
   return {
     id: p.id,
     title: p.title,
+    body: p.body,
     score: p.score,
     commentCount: p.commentCount,
     hotScore: hotScoreOverride ?? p.hotScore,
     createdAt: p.createdAt,
-    community: {
-      slug: p.community.slug,
-      name: p.community.name,
-      personaIcon: p.community.personaIcon,
-    },
-    author: { username: p.author.username },
+    communityId: p.communityId,
+    communitySlug: p.community.slug,
+    communityName: p.community.name,
+    communityPersonaIcon: p.community.personaIcon,
+    authorId: p.authorId,
+    authorUsername: p.author.username,
   };
 }
 
@@ -309,6 +317,20 @@ const plugin: FastifyPluginAsync = async (app) => {
       });
 
       return reply.send({ items: rows.map(toFeedCard) });
+    },
+  );
+
+  // Posts authored by a user (public profile view, read-only), newest first.
+  app.get<{ Params: { id: string } }>(
+    "/users/:id/posts",
+    async (req, reply) => {
+      const rows = await prisma.post.findMany({
+        where: { authorId: req.params.id },
+        orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }],
+        include: feedInclude,
+      });
+
+      return reply.send({ items: rows.map((p) => toFeedCard(p)) });
     },
   );
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import {
   ApiError,
   getCommunities,
@@ -10,17 +10,19 @@ import { useAuthStore } from '../stores/authStore';
 import PersonaBadge from '../components/PersonaBadge';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
 
-// FE-5: community search (no slug) + community detail (/c/:slug).
+// FE-5: community detail (/c/:slug). The slug-less case redirects to the
+// dedicated '/search' route which renders <CommunitySearch /> (see Search.tsx),
+// so the search experience lives at a single canonical URL.
 export default function Community() {
   const { slug } = useParams<{ slug: string }>();
-  return slug ? <CommunityDetail slug={slug} /> : <CommunitySearch />;
+  return slug ? <CommunityDetail slug={slug} /> : <Navigate to="/search" replace />;
 }
 
 // ---------------------------------------------------------------------------
 // Search view
 // ---------------------------------------------------------------------------
 
-function CommunitySearch() {
+export function CommunitySearch() {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<CommunityDTO[]>([]);
   const [loading, setLoading] = useState(false);
