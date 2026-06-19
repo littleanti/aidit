@@ -24,13 +24,43 @@ export async function build(): Promise<FastifyInstance> {
     logger: true,
   });
 
-  // CORS — allow local dev origins (Vite, etc.). The server is key-blind:
+  // CORS — allow local dev origins (Vite, etc.) plus the GitHub Pages frontend
+  // and any extra origins declared in WEB_ORIGIN. The server is key-blind:
   // no apiKey headers are ever read, stored, or relayed.
+  //
+  // Origin resolution order:
+  //   1. localhost / 127.0.0.1 (any port) — always allowed for local dev.
+  //   2. https://littleanti.github.io — always allowed for the Pages frontend.
+  //   3. WEB_ORIGIN — optional comma-separated list of extra allowed origins
+  //      (e.g. WEB_ORIGIN=https://staging.example.com,https://preview.example.com).
+  const DEFAULT_ALLOWED_ORIGINS: Array<string | RegExp> = [
+    /^http:\/\/localhost(:\d+)?$/,
+    /^http:\/\/127\.0\.0\.1(:\d+)?$/,
+    "https://littleanti.github.io",
+  ];
+
+  const extraOrigins: string[] = (process.env.WEB_ORIGIN ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  const allowedOrigins: Array<string | RegExp> = [
+    ...DEFAULT_ALLOWED_ORIGINS,
+    ...extraOrigins,
+  ];
+
   await app.register(cors, {
-    origin: [
-      /^http:\/\/localhost(:\d+)?$/,
-      /^http:\/\/127\.0\.0\.1(:\d+)?$/,
-    ],
+    origin: (origin, cb) => {
+      // Same-origin / server-to-server requests have no Origin header.
+      if (origin === undefined) {
+        cb(null, true);
+        return;
+      }
+      const allowed = allowedOrigins.some((o) =>
+        o instanceof RegExp ? o.test(origin) : o === origin
+      );
+      cb(allowed ? null : new Error("Not allowed by CORS"), allowed);
+    },
     credentials: true,
   });
 

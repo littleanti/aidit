@@ -2,6 +2,8 @@
 // data: prefix). Used to ride an image along a BYOK Gemini call (AI multimodal).
 // L1: these never touch a key — they only encode image bytes.
 
+import { assetUrl } from '../config/api';
+
 export interface InlineImage {
   mimeType: string;
   /** base64 WITHOUT the leading "data:<mime>;base64," prefix. */
@@ -39,7 +41,7 @@ function blobToInlineData(blob: Blob, mimeFallback: string): Promise<InlineImage
  */
 export async function urlToInlineData(url: string): Promise<InlineImage | null> {
   try {
-    const res = await fetch(url);
+    const res = await fetch(assetUrl(url) ?? url);
     if (!res.ok) return null;
     const blob = await res.blob();
     if (!blob.type.startsWith('image/') && blob.size === 0) return null;

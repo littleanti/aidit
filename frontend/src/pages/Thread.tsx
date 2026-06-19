@@ -27,6 +27,7 @@ import { useThreadStream } from '../stream/useThreadStream';
 import { runPrimaryReply } from '../engine/contextEngine';
 import { retryAiBubble } from '../engine/retryAiBubble';
 import { urlToInlineData } from '../lib/imageInline';
+import { assetUrl } from '../config/api';
 import Avatar from '../components/Avatar';
 import ChatBubble from '../components/ChatBubble';
 import Composer from '../components/Composer';
@@ -427,7 +428,7 @@ export default function Thread() {
           )}
           {post.imageUrl && (
             <img
-              src={post.imageUrl}
+              src={assetUrl(post.imageUrl)}
               alt="첨부 이미지"
               className="mt-2 max-w-full rounded-[2px] border border-term-border"
               loading="lazy"

@@ -13,6 +13,7 @@ import type { Comment } from '../api/types';
 import SummaryBubble from './SummaryBubble';
 import SafeMarkdown from '../lib/SafeMarkdown';
 import Avatar from './Avatar';
+import { assetUrl } from '../config/api';
 
 /** Compact relative time in Korean (방금 / N분 / N시간 / N일 / N주, else date). */
 function relativeTime(iso: string): string {
@@ -199,7 +200,7 @@ export default function ChatBubble({
             <>
               {comment.imageUrl && (
                 <img
-                  src={comment.imageUrl}
+                  src={assetUrl(comment.imageUrl)}
                   alt="첨부 이미지"
                   className="mb-1 max-h-60 rounded-[2px] object-contain"
                   loading="lazy"

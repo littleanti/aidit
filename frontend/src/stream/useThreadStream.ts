@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useThreadStore } from '../stores/threadStore';
 import type { Comment } from '../api/types';
+import { API_BASE } from '../config/api';
 
 // RT-7 / FE-10: SSE consumer for a single post's chat-room thread.
 //
@@ -57,7 +58,7 @@ export function useThreadStream(postId: string | undefined): UseThreadStream {
     const afterSeq = bubbles.reduce((max, b) => (b.seq > max ? b.seq : max), 0);
 
     const url =
-      `/api/posts/${postId}/stream` + (afterSeq > 0 ? `?afterSeq=${afterSeq}` : '');
+      `${API_BASE}/posts/${postId}/stream` + (afterSeq > 0 ? `?afterSeq=${afterSeq}` : '');
     const es = new EventSource(url);
 
     const onCreated = (ev: MessageEvent) => {

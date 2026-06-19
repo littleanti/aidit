@@ -9,9 +9,12 @@ import type {
   SessionResponse,
 } from './types';
 
-// REST client base. In dev, Vite proxies /api -> http://localhost:3001
-// (stripping the /api prefix). In prod, configure the reverse proxy similarly.
-const BASE = '/api';
+import { API_BASE } from '../config/api';
+
+// REST client base. In dev (VITE_API_ORIGIN unset), API_BASE is "/api" and
+// Vite proxies /api -> http://localhost:3001 (stripping the prefix). In prod
+// (VITE_API_ORIGIN set), API_BASE is the absolute backend origin + "/api".
+const BASE = API_BASE;
 
 /** Typed error thrown for any non-2xx response. */
 export class ApiError extends Error {

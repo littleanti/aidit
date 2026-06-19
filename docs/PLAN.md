@@ -468,6 +468,24 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 
 ---
 
+## 12. M14 — GitHub Pages 배포 준비(옵션 A) (2026-06-19)
+
+> 프론트엔드 정적 호스팅(GitHub Pages) + 백엔드 외부 호스트(Render 등) 분리 구조.
+> **기능 추가 없음 — 배포 준비만(PREP).** 공개 배포는 `x-user-id` 실인증 교체 후(현재 scope 외).
+> 완료 게이트: 중앙 config 설정 · 404.html 추가 · vite.config CSP 주입 · .nojekyll · CORS allowlist · env 문서화.
+
+### 작업 패키지 (WP)
+- [x] **DEP-1 · 중앙 API 설정**: `frontend/src/config/api.ts` — `VITE_API_ORIGIN` 환경변수(unset=dev 상대경로, set=절대 backend origin) → `API_BASE`/`apiUrl`/`assetUrl` 단일 출처. 기존 `rest.ts` import 일원화. dev는 Vite 프록시 `/api` 불변.
+- [x] **DEP-2 · vite.config CSP 자동화**: `buildCsp(apiOrigin)` 함수 — build 시 `VITE_API_ORIGIN`을 읽어 CSP `connect-src`/`img-src` 에 자동 주입. `cspInjectionPlugin` 적용, dev HMR 영향 없음(apply='build'). manifest scope `start_url` 기본 `/` 또는 `VITE_BASE` 지원.
+- [x] **DEP-3 · SPA 404.html 트릭**: `public/404.html` — 딥 링크(`/posts/123`) → 302 `/index.html?path=/posts/123` → JS 복원(`history.replaceState`). GitHub Pages 자동 폴백 활용.
+- [x] **DEP-4 · .nojekyll**: `public/.nojekyll` — Jekyll 처리 비활성화(빌드 속도·캐시 간섭 회피).
+- [x] **DEP-5 · CORS 백엔드 allowlist**: `server/.env.example` 문서화 — `WEB_ORIGIN` env(comma-sep, e.g. `https://littleanti.github.io,https://staging.example.com`) + 기본 `https://littleanti.github.io` 자동 허용. `@fastify/cors` plugin 수정.
+- [x] **DEP-6 · 환경 변수 문서화**: `frontend/.env.example` — `VITE_API_ORIGIN` 예시·설명 추가. `server/.env.example` — `WEB_ORIGIN` + `HOST=127.0.0.1`(프로덕션 프라이빗 바인드) 예시.
+- [x] **DEP-7 · 보안 게이트 명시**: README "GitHub Pages 배포(옵션 A)" 섹션 — **`x-user-id` 실인증 교체 필수**(현재 username 입력만 기반 → JWT/OAuth 권고) 단일 행 경고.
+- [x] **DEP-8 · 검증**: 빌드 clean(`npm run build`), 정적 output 확인(`.nojekyll`·404.html·manifest), 로컬 dev 여전히 `/api` 프록시 동작.
+
+---
+
 ## 13. M9 — Option A 동선 + 글 이미지(멀티모달) + 로그인 모달 + 커뮤니티 편집 (v0.6, 2026-06-19)
 
 > 레트로 적용(v0.5) 후, 재설계 갤러리에 합의됐으나 코드에 미반영됐던 **기능/동작**을 Option A 합의대로

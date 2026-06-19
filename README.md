@@ -76,9 +76,23 @@ npm run dev
 
 Google AI Studio API 키는 **브라우저 localStorage에만** 저장되고, 호출 직전 메모리에서만 사용되어 Google로 직접 전송됩니다. 어떤 요청 바디/헤더/로그에도 키가 포함되지 않으며 Aidit 서버 DB에 저장되지 않습니다. `server/.env`는 git 추적 대상이 아닙니다(`.env.example`만 커밋).
 
+## GitHub Pages 배포(옵션 A)
+
+프론트엔드는 **GitHub Pages 정적 호스팅**, 백엔드는 **외부 호스트(Render 등)** 에서 운영하는 분리 구조.
+
+- **프론트엔드 빌드**: `VITE_API_ORIGIN=https://your-api.onrender.com npm run build` (또는 `.env`에 설정)
+- **환경 변수**: `VITE_API_ORIGIN` (백엔드 origin, 끝 슬래시/`/api` suffix 제외) 설정 시 절대 URL로 API 호출; unset이면 dev 상대 경로 + Vite 프록시 사용
+- **public/.nojekyll**: GitHub Pages Jekyll 처리 비활성화
+- **404.html SPA 트릭**: 딥 링크 지원(rafryer.github.io/repo-name/posts/123 등)
+- **CSP 자동화**: `vite.config.ts`가 빌드 시 `VITE_API_ORIGIN`을 CSP `connect-src` + `img-src`에 주입
+- **CORS 허용**: 백엔드 `WEB_ORIGIN` env에 `https://username.github.io` 또는 `https://username.github.io/repo-name` 추가
+- **서버 바인드**: 프로덕션에선 `HOST=127.0.0.1`로 로컬 인터페이스만 (LB/프록시 뒤)
+
+**공개 전 필수 보안 게이트**: 현재 `x-user-id` 헤더는 브라우저 username 입력만 기반이므로 **실제 배포 시 JWT·OAuth 같은 실인증으로 교체 필수.**
+
 ## 개발 문서
 
-자세한 사양은 [`docs/`](./docs)를 참조하세요: [PRD](./docs/PRD.md) · [TRD](./docs/TRD.md)(REST API·스키마) · [PLAN](./docs/PLAN.md)(마일스톤 M1–M12) · [WIREFRAME](./docs/WIREFRAME.md) · [디자인 시스템](./docs/DESIGN-SYSTEM.md)(컬러·타이포·로고 자산 SoT) · [구현 노트](./docs/IMPLEMENTATION_NOTES.md)(실제 구현 차이·추가·버그 수정·실행 방법).
+자세한 사양은 [`docs/`](./docs)를 참조하세요: [PRD](./docs/PRD.md) · [TRD](./docs/TRD.md)(REST API·스키마) · [PLAN](./docs/PLAN.md)(마일스톤 M1–M14) · [WIREFRAME](./docs/WIREFRAME.md) · [디자인 시스템](./docs/DESIGN-SYSTEM.md)(컬러·타이포·로고 자산 SoT) · [구현 노트](./docs/IMPLEMENTATION_NOTES.md)(실제 구현 차이·추가·버그 수정·실행 방법).
 
 ## License
 

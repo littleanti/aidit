@@ -4,6 +4,7 @@ import type { PostListItem } from '../api/types';
 import { upvotePost, removeUpvote } from '../api/rest';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
+import { assetUrl } from '../config/api';
 
 /** Compact relative time in Korean (방금 / N분 / N시간 / N일 / N주, else date). */
 function relativeTime(iso: string): string {
@@ -110,7 +111,7 @@ export default function PostCard({ post }: PostCardProps) {
       {/* optional attached image thumbnail */}
       {post.imageUrl && (
         <img
-          src={post.imageUrl}
+          src={assetUrl(post.imageUrl)}
           alt="첨부 이미지"
           className="mt-2 h-32 w-full rounded-[2px] border border-term-border object-cover"
           loading="lazy"
