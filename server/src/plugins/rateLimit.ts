@@ -15,9 +15,13 @@ import fp from "fastify-plugin";
 const POST_WINDOW_MS = 60_000; // 1 minute
 const POST_MAX = 10; // up to 10 posts/min/identity
 const COMMUNITY_COOLDOWN_MS = 180_000; // 1 community / 3 minutes/identity
+const UPLOAD_WINDOW_MS = 60_000; // 1 minute
+const UPLOAD_MAX = 20; // up to 20 uploads/min/identity (only disk-write endpoint)
 
 // Sliding-window timestamps for post creation, per identity.
 const postTimestamps = new Map<string, number[]>();
+// Sliding-window timestamps for image uploads, per identity.
+const uploadTimestamps = new Map<string, number[]>();
 // Last community-creation instant, per identity.
 const lastCommunityAt = new Map<string, number>();
 
@@ -56,6 +60,23 @@ const rateLimitImpl: FastifyPluginAsync = async (app) => {
       }
       arr.push(now);
       postTimestamps.set(id, arr);
+      return;
+    }
+
+    if (routePath === "/uploads") {
+      const arr = (uploadTimestamps.get(id) ?? []).filter(
+        (t) => now - t < UPLOAD_WINDOW_MS,
+      );
+      if (arr.length >= UPLOAD_MAX) {
+        const oldest = arr[0]!;
+        const retryMs = UPLOAD_WINDOW_MS - (now - oldest);
+        void reply.header("Retry-After", Math.ceil(retryMs / 1000));
+        return reply.code(429).send({
+          error: "Rate limit: too many uploads. Try again shortly.",
+        });
+      }
+      arr.push(now);
+      uploadTimestamps.set(id, arr);
       return;
     }
 

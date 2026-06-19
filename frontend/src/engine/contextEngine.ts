@@ -60,6 +60,9 @@ export const SUMMARY_DIRECTIVE =
 export interface AppendedTurn {
   username: string;
   body: string;
+  /** Optional inline image bytes (base64, no data: prefix) attached to this
+   *  fresh-upload turn ONLY. Pushed as a second user-role inlineData part. */
+  image?: { mimeType: string; data: string };
 }
 
 export interface BuildGeminiRequestArgs {
@@ -107,11 +110,21 @@ export function buildGeminiRequest(
   }));
 
   // XC-4: an appended turn is ALWAYS a user data turn with the speaker prefix.
+  // On a fresh-upload turn it additionally carries the local image bytes as a
+  // second inlineData part (still role:'user' — never system).
   if (appended) {
-    contents.push({
-      role: 'user',
-      parts: [{ text: speakerPrefix(appended.username, appended.body) }],
-    });
+    const parts: GeminiContent['parts'] = [
+      { text: speakerPrefix(appended.username, appended.body) },
+    ];
+    if (appended.image) {
+      parts.push({
+        inlineData: {
+          mimeType: appended.image.mimeType,
+          data: appended.image.data,
+        },
+      });
+    }
+    contents.push({ role: 'user', parts });
   }
 
   const systemInstruction = personaPrompt.trim()
@@ -313,6 +326,9 @@ export interface RunAtAiReplyArgs {
   callerApiKey: string;
   /** optional: the @AI text, used only if we must append (context predates it). */
   humanCommentBody?: string;
+  /** optional: inline image bytes (base64) freshly uploaded on THIS turn. When
+   *  present, the appended user turn is FORCED so the image rides this call. */
+  image?: { mimeType: string; data: string };
 }
 
 // ---------------------------------------------------------------------------
@@ -458,6 +474,7 @@ export async function runAtAiReply(
     callerUsername,
     callerApiKey,
     humanCommentBody,
+    image,
   } = args;
 
   let context: ContextResponse;
@@ -495,6 +512,12 @@ export async function runAtAiReply(
   // The @AI human turn should already be inside context.contents because we
   // fetched AFTER it was committed. We only append defensively if the caller
   // tells us the snapshot predates it (rare race) AND we were given the body.
+  //
+  // EXCEPTION (Step 7 / 7.1): when an image was freshly uploaded on THIS turn,
+  // FORCE the appended turn even if the text already matches — the context
+  // snapshot has the text but NEVER the image bytes, so the image must ride
+  // along here. Image-only @AI (empty body + inlineData) is valid: an empty
+  // body yields a valid user turn with the inlineData part, so we do NOT skip.
   const lastTurn = context.contents[context.contents.length - 1];
   const alreadyPresent =
     !!lastTurn &&
@@ -502,8 +525,9 @@ export async function runAtAiReply(
     typeof humanCommentBody === 'string' &&
     lastTurn.text.includes(humanCommentBody);
 
-  const appended =
-    !alreadyPresent && typeof humanCommentBody === 'string'
+  const appended = image
+    ? { username: callerUsername, body: humanCommentBody ?? '', image }
+    : !alreadyPresent && typeof humanCommentBody === 'string'
       ? { username: callerUsername, body: humanCommentBody }
       : undefined;
 

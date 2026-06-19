@@ -11,10 +11,16 @@ import { GEMINI_BASE, GENERATION_CONFIG, MODEL } from '../config/model';
 
 // ---- Wire types (subset of the Gemini REST shapes we use) ----
 
+/** A single content part: either text OR inline image bytes (base64, no
+ *  data: prefix). The inlineData variant rides ONLY on a fresh-upload @AI turn. */
+export type GeminiPart =
+  | { text: string }
+  | { inlineData: { mimeType: string; data: string } };
+
 /** A single turn of conversation content. */
 export interface GeminiContent {
   role: 'user' | 'model';
-  parts: Array<{ text: string }>;
+  parts: GeminiPart[];
 }
 
 /** systemInstruction is a single content block (no role). */
@@ -184,7 +190,7 @@ function estimateContentsTokens(
 ): number {
   let total = systemInstruction ? estimateTokens(systemInstruction) : 0;
   for (const c of contents) {
-    for (const p of c.parts) total += estimateTokens(p.text);
+    for (const p of c.parts) total += estimateTokens('text' in p ? p.text : '');
   }
   return total;
 }

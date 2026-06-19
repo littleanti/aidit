@@ -240,6 +240,51 @@ export function postComment(
 }
 
 /**
+ * POST /uploads — upload a single image via multipart/form-data and return its
+ * server-relative URL. L1: carries ONLY x-user-id (REQUIRED; server 401s
+ * without it), NEVER any API key. We do NOT set Content-Type — the browser sets
+ * the multipart boundary itself. Non-2xx is mapped to ApiError via the server's
+ * { error } shape so the Composer can surface it as a toast.
+ */
+export async function uploadImage(
+  file: File,
+  userId: string,
+): Promise<{ imageUrl: string }> {
+  const fd = new FormData();
+  fd.append('file', file);
+
+  const res = await fetch(`${BASE}/uploads`, {
+    method: 'POST',
+    headers: { 'x-user-id': userId },
+    body: fd,
+  });
+
+  let parsed: unknown = null;
+  const text = await res.text();
+  if (text) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = text;
+    }
+  }
+
+  if (!res.ok) {
+    const obj =
+      parsed && typeof parsed === 'object'
+        ? (parsed as { message?: unknown; error?: unknown })
+        : undefined;
+    const message =
+      (obj && typeof obj.message === 'string' && obj.message) ||
+      (obj && typeof obj.error === 'string' && obj.error) ||
+      `Request failed: ${res.status} ${res.statusText}`;
+    throw new ApiError(res.status, message, parsed);
+  }
+
+  return parsed as { imageUrl: string };
+}
+
+/**
  * GET /posts/:id/comments?afterSeq= — fetch comments, optionally only those
  * after a given seq (L4 ordering key) for incremental catch-up.
  */

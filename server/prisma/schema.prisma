@@ -74,6 +74,7 @@ model Comment {
   type       CommentType
   status     CommentStatus @default(COMPLETE)
   body       String
+  imageUrl   String?       // optional uploaded image (filesystem-served URL); null = no image
   tokenCount Int           @default(0) // estimated, for context summation
   segmentId  String        // owning context segment (§6)
   segment    ContextSegment @relation(fields: [segmentId], references: [id])
