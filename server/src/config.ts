@@ -1,5 +1,18 @@
 // Typed runtime configuration loaded from environment variables.
 
+import { loadEnvFile } from "node:process";
+
+// Load server/.env into process.env BEFORE reading any config below. Without
+// this, only Prisma auto-loads .env (for DATABASE_URL) — the app's own vars
+// (JWT_SECRET, PORT, HOST) would be ignored locally. In production (Fly) there
+// is no .env file, so the load throws and we fall back to the real env vars
+// injected by the platform.
+try {
+  loadEnvFile();
+} catch {
+  // No .env present (e.g. production) — rely on the process environment.
+}
+
 function requireEnv(name: string, fallback?: string): string {
   const value = process.env[name] ?? fallback;
   if (value === undefined || value === "") {

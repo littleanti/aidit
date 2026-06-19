@@ -10,6 +10,9 @@
 
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
+### 2026-06-20
+- **[chore]** **로컬 `.env` 로드 + 실 `JWT_SECRET` 설정**: 기존엔 Prisma만 `.env`를 자동 로드해 앱 자체 변수(`JWT_SECRET`/`HOST`/`PORT`)는 `.env`에 넣어도 무시되고 dev 폴백을 썼다. `server/src/config.ts` 최상단에서 Node 내장 `process.loadEnvFile()`로 `.env`를 먼저 로드(파일 없으면 try/catch로 무시 → 프로덕션은 플랫폼 주입 env 사용). 로컬 `server/.env`(git 미추적)에 무작위 `JWT_SECRET`(48바이트 base64) + `HOST=127.0.0.1`(백엔드 비공개 바인드) 기록. 재기동 후 `[auth] WARNING` 사라짐 + `127.0.0.1:3001` 단독 바인딩으로 확인. (시크릿 회전이므로 이전 dev-폴백 토큰은 무효 → 재로그인 필요)
+
 ### 2026-06-19 (M15 — 실인증 JWT)
 - **[feat]** **실인증(JWT) 보안 게이트 — x-user-id 위조 불가능화**: 기존 passwordless `x-user-id` 헤더(username 입력만 기반, 위조 가능) → **bcrypt+@fastify/jwt 기반 Bearer JWT 토큰**으로 완전 교체(공개 배포 필수). 
   - **백엔드**: (1) User.passwordHash(bcrypt): Prisma 스키마 추가 + 마이그레이션. (2) `POST /auth/register`(회원가입): username+password 입력 → User 생성(중복 409), bcrypt 해싱 저장, JWT 서명 후 `{id, token, username}` 반환. (3) `POST /auth/session`(로그인): username+password 입력 → 기존 User 조회, bcrypt 검증(실패 401), JWT 서명 후 `{id, token, username}` 반환(TRD §4 API 표 `POST /auth/session` 교체). (4) JWT 미들웨어: `Authorization: Bearer <token>` 파싱 → JWT_SECRET으로 검증 → `request.user = {id, username}` 주입; requireAuth(실패 401)/optionalAuth(선택). (5) 환경: JWT_SECRET(필수, .env), JWT_EXPIRES(기본 '7d'). (6) x-user-id 제거: 모든 쓰기 경로(POST/PATCH/DELETE /communities, /posts, /comments, /upvote, /bookmark, /metrics/visit)에서 x-user-id 헤더 참조를 `request.user.id`로 통일. 모든 쓰기는 이제 `Authorization` 헤더만 인증 소스. 서버 코드 x-user-id 0건 확인(grep).
