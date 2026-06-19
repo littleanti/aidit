@@ -32,7 +32,7 @@ Browser (React PWA)  ──REST(텍스트만)──▶  Aidit Server (Node + Fas
    └──────fetch 직접──────▶  Google Generative Language API
 ```
 
-- **Backend** (`server/`): Node 20 + Fastify + TypeScript + Prisma (SQLite PoC → Postgres). 서버는 key-blind.
+- **Backend** (`backend/`): Node 20 + Fastify + TypeScript + Prisma (SQLite PoC → Postgres). 서버는 key-blind.
 - **Frontend** (`frontend/`): React 18 + TypeScript + Vite + Zustand + TailwindCSS, PWA. 모바일 우선, 레트로 그린 인광 CRT 테마.
 - **Realtime**: per-post SSE, `seq` 기반 재생 / `Last-Event-ID` 복구.
 - **Context Engine**: 클라이언트 TS, 128K 지연 요약 + 세그먼트 경계.
@@ -43,7 +43,7 @@ Browser (React PWA)  ──REST(텍스트만)──▶  Aidit Server (Node + Fas
 
 ```bash
 # 1) Backend (포트 3001)
-cd server
+cd backend
 cp .env.example .env          # DATABASE_URL="file:./dev.db", PORT=3001
 npm install
 npm run prisma:migrate        # dev.db 생성 + Prisma 클라이언트 생성
@@ -61,11 +61,11 @@ npm run dev
 
 | 위치 | 명령 | 설명 |
 |------|------|------|
-| `server/` | `npm run dev` | tsx watch 개발 서버(3001) |
-| `server/` | `npm run typecheck` | `tsc --noEmit` |
-| `server/` | `npm test` | vitest(계약/SSE/hotScore 테스트) |
-| `server/` | `npm run prisma:migrate` | 마이그레이션 적용 + 클라이언트 생성 |
-| `server/` | `npm run build` / `npm start` | 빌드 / `dist` 실행 |
+| `backend/` | `npm run dev` | tsx watch 개발 서버(3001) |
+| `backend/` | `npm run typecheck` | `tsc --noEmit` |
+| `backend/` | `npm test` | vitest(계약/SSE/hotScore 테스트) |
+| `backend/` | `npm run prisma:migrate` | 마이그레이션 적용 + 클라이언트 생성 |
+| `backend/` | `npm run build` / `npm start` | 빌드 / `dist` 실행 |
 | `frontend/` | `npm run dev` | Vite 개발 서버(5173) |
 | `frontend/` | `npm run typecheck` | `tsc --noEmit` |
 | `frontend/` | `npm test` | vitest(engine/store/sanitize 테스트) |
@@ -74,7 +74,7 @@ npm run dev
 
 ## 보안 메모
 
-**API 키 (key-blind / L1)**: Google AI Studio API 키는 **브라우저 localStorage에만** 저장되고, 호출 직전 메모리에서만 사용되어 Google로 직접 전송됩니다. 어떤 요청 바디/헤더/로그에도 키가 포함되지 않으며 Aidit 서버 DB에 저장되지 않습니다. `server/.env`는 git 추적 대상이 아닙니다(`.env.example`만 커밋).
+**API 키 (key-blind / L1)**: Google AI Studio API 키는 **브라우저 localStorage에만** 저장되고, 호출 직전 메모리에서만 사용되어 Google로 직접 전송됩니다. 어떤 요청 바디/헤더/로그에도 키가 포함되지 않으며 Aidit 서버 DB에 저장되지 않습니다. `backend/.env`는 git 추적 대상이 아닙니다(`.env.example`만 커밋).
 
 **인증 (JWT 기반 실인증)**: 사용자는 **username+password로 회원가입·로그인**하며, 서버가 **bcrypt 기반 비밀번호 검증 후 JWT 토큰**을 발급합니다. 모든 쓰기 요청은 `Authorization: Bearer <token>` 헤더로 인증되고, 서버는 **JWT_SECRET으로 토큰을 검증**해 사용자를 식별합니다. 이전의 `x-user-id` 헤더(위조 가능)는 완전히 제거되었습니다. **프로덕션 배포 시 JWT_SECRET 환경 변수는 필수이며 강력한 난수값으로 설정**해야 합니다.
 

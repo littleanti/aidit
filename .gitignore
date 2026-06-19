@@ -13,7 +13,7 @@ build/
 .vite/
 
 # --- Uploaded images (filesystem storage, auto-created on boot) ---
-server/uploads/
+backend/uploads/
 
 # --- Environment / secrets ---
 .env
@@ -25,7 +25,7 @@ server/uploads/
 *.db-journal
 *.sqlite
 *.sqlite3
-server/prisma/dev.db*
+backend/prisma/dev.db*
 
 # --- Logs ---
 *.log

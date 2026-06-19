@@ -11,7 +11,7 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-20
-- **[chore]** **로컬 `.env` 로드 + 실 `JWT_SECRET` 설정**: 기존엔 Prisma만 `.env`를 자동 로드해 앱 자체 변수(`JWT_SECRET`/`HOST`/`PORT`)는 `.env`에 넣어도 무시되고 dev 폴백을 썼다. `server/src/config.ts` 최상단에서 Node 내장 `process.loadEnvFile()`로 `.env`를 먼저 로드(파일 없으면 try/catch로 무시 → 프로덕션은 플랫폼 주입 env 사용). 로컬 `server/.env`(git 미추적)에 무작위 `JWT_SECRET`(48바이트 base64) + `HOST=127.0.0.1`(백엔드 비공개 바인드) 기록. 재기동 후 `[auth] WARNING` 사라짐 + `127.0.0.1:3001` 단독 바인딩으로 확인. (시크릿 회전이므로 이전 dev-폴백 토큰은 무효 → 재로그인 필요)
+- **[chore]** **로컬 `.env` 로드 + 실 `JWT_SECRET` 설정**: 기존엔 Prisma만 `.env`를 자동 로드해 앱 자체 변수(`JWT_SECRET`/`HOST`/`PORT`)는 `.env`에 넣어도 무시되고 dev 폴백을 썼다. `backend/src/config.ts` 최상단에서 Node 내장 `process.loadEnvFile()`로 `.env`를 먼저 로드(파일 없으면 try/catch로 무시 → 프로덕션은 플랫폼 주입 env 사용). 로컬 `backend/.env`(git 미추적)에 무작위 `JWT_SECRET`(48바이트 base64) + `HOST=127.0.0.1`(백엔드 비공개 바인드) 기록. 재기동 후 `[auth] WARNING` 사라짐 + `127.0.0.1:3001` 단독 바인딩으로 확인. (시크릿 회전이므로 이전 dev-폴백 토큰은 무효 → 재로그인 필요)
 
 ### 2026-06-19 (M15 — 실인증 JWT)
 - **[feat]** **실인증(JWT) 보안 게이트 — x-user-id 위조 불가능화**: 기존 passwordless `x-user-id` 헤더(username 입력만 기반, 위조 가능) → **bcrypt+@fastify/jwt 기반 Bearer JWT 토큰**으로 완전 교체(공개 배포 필수). 
@@ -23,13 +23,13 @@
 
 ### 2026-06-19 (続き)
 - **[chore]** **favicon/앱 아이콘 레트로 전환** — 기존 SVG 파비콘이 **인디고-바이올렛 그라디언트(`#5B6CF5`/`#6848F8`/`#8B5CF6`)** 채움이라 §6.3 A 디자인 시스템의 "하드코딩 잔재 금지(`#6848F8`·`brand-*` 등)"를 위반하고 있었다. 인앱 `Logo` 마크(그린 인광 삼각형 "A" 오픈 스트로크 `#5cff9a` + drop-shadow 글로우)와 정합하도록 **그린 인광 CRT 테마**로 교체: `public/favicon.svg`를 둥근 사각 CRT 스크린 타일(`bg-term-screen` 라디얼 + `term-border` 테두리) 위 글로우 "A" 스트로크로 재작성. 파생 PNG **6종**(`favicon-16/32`, `apple-touch-icon` 180, `icon-192/512`, `maskable-512`)을 Playwright(Chromium) 렌더로 일괄 재생성 — maskable은 플랫폼 마스크 안전영역(≈80%) 보장을 위해 풀블리드 배경 + 중앙 축소 변형 사용. `index.html` `theme-color`/manifest `theme_color`는 이미 `#04130b`라 무변경. 순수 자산 교체(코드/라우팅 무변경). (§6.3 A·DESIGN-SYSTEM.md)
-- **[fix]** **모바일 upvote "추천 처리에 실패" — CORS 거부(500)**: `vite --host`로 공개된 프론트를 폰(`http://192.168.x.x:5173`)에서 열면 Vite 프록시가 그 **Origin 헤더를 백엔드로 그대로 전달**한다. Pages-prep에서 새로 둔 CORS 허용목록(`localhost`/`127.0.0.1`/`littleanti.github.io`만)에 **사설 LAN IP origin이 없어 거부** → origin 콜백이 `new Error("Not allowed by CORS")`를 던져 **모든 cross-origin 요청이 500**(데스크톱 localhost는 regex 통과라 정상, 폰만 실패). **수정**(`server/src/app.ts`): ① 허용목록에 **사설 LAN IPv4(http) regex** 추가(10/8·172.16-31/12·192.168/16 — http·사설 범위만이라 prod https는 불매치), ② 거부 시 `cb(new Error)` → **`cb(null, false)`(graceful deny)** 로 변경(불허 origin은 CORS 헤더만 빠지고 500이 아님). LAN origin 프리플라이트 `204 + access-control-allow-origin` 확인. 서버 43 tests green.
-- **[feat]** **GitHub Pages 배포 준비(옵션 A) — 중앙 api.ts 설정 + 404.html 트릭 + 빌드타임 CSP + CORS allowlist**: 프론트엔드 정적 호스팅(Pages)과 백엔드 외부 호스트 분리 구조. **중앙 설정(`frontend/src/config/api.ts`)**: `VITE_API_ORIGIN` 환경변수(unset=상대경로+dev프록시, set=절대 backend origin) → `API_BASE`/`assetUrl`에서 사용. **404.html**: SPA 딥 링크(/posts/123) 리다이렉트 → index.html + 복원 스니펫(history.replaceState). **vite.config**: `base` 설정 가능(기본 `/`), 빌드 시 CSP `connect-src`/`img-src`에 `VITE_API_ORIGIN` 자동 주입. **public/.nojekyll**: Jekyll 처리 비활성화. **server/.env.example**: `WEB_ORIGIN` env 문서화(Pages origin + 다중 스테이징 가능) + `HOST=127.0.0.1`(프로덕션 프라이빗 바인드) 예시. **CORS 백엔드**: `https://littleanti.github.io`(기본 허용) + `WEB_ORIGIN` 추가 allowlist. **보안 게이트**: `x-user-id` 헤더 실인증 교체 필수(현재는 username 입력 기반, 공개 배포 시 JWT/OAuth 권고). (§2.3 개발 프록시 불변; REST `/api` base, SSE 동일 출처; 단일 config seam으로 dev↔prod 분기 최소화)
+- **[fix]** **모바일 upvote "추천 처리에 실패" — CORS 거부(500)**: `vite --host`로 공개된 프론트를 폰(`http://192.168.x.x:5173`)에서 열면 Vite 프록시가 그 **Origin 헤더를 백엔드로 그대로 전달**한다. Pages-prep에서 새로 둔 CORS 허용목록(`localhost`/`127.0.0.1`/`littleanti.github.io`만)에 **사설 LAN IP origin이 없어 거부** → origin 콜백이 `new Error("Not allowed by CORS")`를 던져 **모든 cross-origin 요청이 500**(데스크톱 localhost는 regex 통과라 정상, 폰만 실패). **수정**(`backend/src/app.ts`): ① 허용목록에 **사설 LAN IPv4(http) regex** 추가(10/8·172.16-31/12·192.168/16 — http·사설 범위만이라 prod https는 불매치), ② 거부 시 `cb(new Error)` → **`cb(null, false)`(graceful deny)** 로 변경(불허 origin은 CORS 헤더만 빠지고 500이 아님). LAN origin 프리플라이트 `204 + access-control-allow-origin` 확인. 서버 43 tests green.
+- **[feat]** **GitHub Pages 배포 준비(옵션 A) — 중앙 api.ts 설정 + 404.html 트릭 + 빌드타임 CSP + CORS allowlist**: 프론트엔드 정적 호스팅(Pages)과 백엔드 외부 호스트 분리 구조. **중앙 설정(`frontend/src/config/api.ts`)**: `VITE_API_ORIGIN` 환경변수(unset=상대경로+dev프록시, set=절대 backend origin) → `API_BASE`/`assetUrl`에서 사용. **404.html**: SPA 딥 링크(/posts/123) 리다이렉트 → index.html + 복원 스니펫(history.replaceState). **vite.config**: `base` 설정 가능(기본 `/`), 빌드 시 CSP `connect-src`/`img-src`에 `VITE_API_ORIGIN` 자동 주입. **public/.nojekyll**: Jekyll 처리 비활성화. **backend/.env.example**: `WEB_ORIGIN` env 문서화(Pages origin + 다중 스테이징 가능) + `HOST=127.0.0.1`(프로덕션 프라이빗 바인드) 예시. **CORS 백엔드**: `https://littleanti.github.io`(기본 허용) + `WEB_ORIGIN` 추가 allowlist. **보안 게이트**: `x-user-id` 헤더 실인증 교체 필수(현재는 username 입력 기반, 공개 배포 시 JWT/OAuth 권고). (§2.3 개발 프록시 불변; REST `/api` base, SSE 동일 출처; 단일 config seam으로 dev↔prod 분기 최소화)
 
 ### 2026-06-19
 - **[feat]** **추천(업보트) 토글 — ▲ 점수 실동작**(북마크 패턴 1:1 미러): 기존 ▲ 점수는 표시용 `<span>`이고 프론트에 호출 함수가 없어 동작하지 않았다(백엔드 `POST /upvote`는 *score+1·무중복방지* PoC만 존재). **DB**: `Vote` 모델(`@@unique([userId,postId])`) + 마이그레이션. **BE**: `POST /posts/:id/upvote`를 멱등 토글-추가(upsert)로 교체, `DELETE /posts/:id/upvote` 추가 — 둘 다 **`score = vote count`** 로 재계산 후 hotScore 갱신(기존 score+1 폐기). `GET /posts/:id`에 `voted` 추가(북마크 `bookmarked`와 동일), **피드 카드(`toFeedCard`)에도 `voted` 추가** — `GET /posts`·`/communities/:slug/posts`·`/users/:id/posts`·`/users/:id/bookmarks`가 선택 `x-user-id`로 페이지 postId들을 **1회 batch findMany**해 per-card voted 설정. **FE**: `upvotePost`/`removeUpvote`, 피드 fetcher에 acting user id forward, **PostCard ▲**(카드가 navigate 대상이라 `stopPropagation`+`preventDefault`)·**Thread ▲** 인터랙티브 토글(낙관적+서버 score 동기화+실패 롤백, 미로그인 `openLogin()`, voted=true 시 `text-term-amber` 강조). resetDb votes 정리 + contract 8종. 서버 43 / 프론트 30 tests green.
 - **[fix]** **커뮤니티 페르소나가 LLM에 미적용**: `GET /posts/:id`가 응답 `community`에서 **`personaPrompt`를 select/반환하지 않아**(`{id,slug,name,description,personaIcon}`만), Thread가 `community.personaPrompt`를 `undefined`로 받아 `?? ''` → **빈 systemInstruction**으로 모든 `@AI`·1차 답변·재시도·요약을 호출했다(페르소나 전혀 미적용). 엔진 배선(`personaPrompt → systemInstruction`, XC-4/L6)은 정상이었고 단일 원인은 서버 DTO 누락. **수정**: `GET /posts/:id`(및 동일 shape의 `PATCH /posts/:id`)의 Prisma select + DTO에 `personaPrompt` 추가. 폴백 경로(`getCommunities()`)는 personaPrompt를 포함하지만 `loadedPost.community`가 항상 존재해 실행되지 않았음. 회귀 테스트 추가(`GET /posts/:id` → `community.personaPrompt` 단언). 서버 35 tests green.
-- **[docs]** **문서 갭 감사 + README 갱신**: 구현된 23개 엔드포인트를 TRD §4 API 표와 대조해 표에 누락돼 있던 4개를 추가 — `GET /communities/:slug`(단일 조회), `POST /uploads`(이미지 업로드 + 정적 `GET /uploads/*`), `GET /users/:id/posts`·`GET /users/:id/communities`(프로필). README를 현재 기능(글 편집·북마크·이미지 첨부·Gemini 표식·프로필·로그인 모달)과 실행 방법(사전요구·.env·prisma migrate·포트·스크립트 표·보안 메모)으로 전면 갱신. **문서 내 실제 API 키(시크릿) 노출 0건 확인**(모두 BYOK 키 개념 설명문이며 키 값 아님), `server/.env`는 git 미추적(`.env.example`만 커밋).
+- **[docs]** **문서 갭 감사 + README 갱신**: 구현된 23개 엔드포인트를 TRD §4 API 표와 대조해 표에 누락돼 있던 4개를 추가 — `GET /communities/:slug`(단일 조회), `POST /uploads`(이미지 업로드 + 정적 `GET /uploads/*`), `GET /users/:id/posts`·`GET /users/:id/communities`(프로필). README를 현재 기능(글 편집·북마크·이미지 첨부·Gemini 표식·프로필·로그인 모달)과 실행 방법(사전요구·.env·prisma migrate·포트·스크립트 표·보안 메모)으로 전면 갱신. **문서 내 실제 API 키(시크릿) 노출 0건 확인**(모두 BYOK 키 개념 설명문이며 키 값 아님), `backend/.env`는 git 미추적(`.env.example`만 커밋).
 - **[feat]** **Gemini 연결 표식(헤더 배지)**: 상단바 `[ {username} ]` 좌측에 LED 점 + `GEMINI` 라벨 배지(`components/GeminiStatusBadge.tsx`)를 로그인 상태에서 표시. **판정 근거 = 가장 최근 실제 LLM 쿼리**(`gemini.generateContent`)의 성공/실패. 신규 세션-한정 store `stores/geminiStatusStore.ts`(`'unknown'|'connected'|'disconnected'`, 비영속 — `aiModeStore`와 동일 철학)에 결과를 기록하고, 엔진이 쓰는 `generateContent`를 **얇은 추적 래퍼 `engine/geminiStatus.ts`** 로 감싸 1차 답변·@AI 답변·재시도·요약 **전 경로를 단일 chokepoint**에서 커버(`contextEngine.ts`·`retryAiBubble.ts`의 import만 교체). `gemini.ts`는 키-blind/스토어-free 유지(래퍼는 app 계층). `countTokens`는 자체 폴백이 있어 신호에서 제외. 상태별 표시: 연결=`●` 초록 인광(`glow`), 끊김=`●` `text-term-danger`+`animate-pulse`, 미확인=`○` `text-term-faint`; hover 한국어 툴팁. 하드 리로드 시 `미확인` 초기화. 검증: tsc 클린 + 프론트 테스트 30 green. (WIREFRAME §0/§9)
   - **로그인 시 1회 연결 테스트(2026-06-19 추가)**: 첫 `@AI` 호출까지 기다리지 않고 즉시 상태를 보여주기 위해, 키가 생기거나 바뀔 때(신규 로그인 · 프로필 키 변경 · 지속 세션 로드) **키당 한 번** `pingGemini(apiKey)`를 실행. 핑은 **`countTokens`** 를 사용 — 키·네트워크를 검증하되 **생성 비용 0**(가장 싼 인증 round-trip). 성공→`markSuccess`, `GeminiError`→`markFailure(kind)`, never-throw. `AppLayout`의 effect가 `googleApiKey` 변화를 감지하고 `useRef`로 마지막 핑한 키를 기억해 동일 키 중복 호출을 막음. (수동 추적 래퍼는 여전히 `countTokens`를 무시하지만, **명시적 핑**은 그 자체가 연결 테스트이므로 유효 신호로 사용.)
 - **[feat]** **헤더 UX 소소 개선**: ① Thread 헤더의 **`✎ 편집` 버튼을 커뮤니티 편집 버튼(`Community.tsx`)과 완전히 동일한 모양으로 통일**(`border border-term-border px-2 py-1 text-xs text-term-dim hover:border-term-bright hover:text-term-bright` + 라벨 `✎ 편집` + `title`; 기존 `text-term-amber` 아이콘-only에서 교체) — §4.9. ② **상단바 우측 `[ {username} ]`을 `/me`(나) 이동 링크로** 변경(`AppLayout.tsx`, `Link to="/me"` + `hover:text-term-bright`; 비로그인 시 `[ Login ]` 동작은 그대로). 순수 표현/내비게이션 변경, 동작·라우팅 회귀 없음.
@@ -45,15 +45,15 @@
 - **[feat]** Composer "🤖 AI에게 묻기" 토글(스레드별, 기본 OFF): ON이면 보내는 모든 메시지가 기존 `@AI` 흐름으로 AI에 전달되며 입력창 앞에 편집 불가 "@AI" 칩이 표시(텍스트 주입이 아닌 UI 요소)되고 전송 버튼이 AI 강조색으로 전환. 전송 판단은 `wantsAI = 토글 ON || 수동 @AI 감지`로 단일화해 중복 호출 없이 `runAtAiReply`를 정확히 1회 발화. 수동 `@AI` 타이핑은 일회성 단축키로 유지. BYOK 비용 힌트("메시지마다 내 키로 호출") 노출. 세션 한정·postId별·미영속(새로고침 시 OFF로 초기화)인 신규 `aiModeStore` 도입. (§3, §5)
 - **[feat]** 네비게이션/검색/프로필: 도달 가능한 검색 페이지(`/search`), 프로필 페이지(`/me`: 로그아웃·API 키 변경·내 커뮤니티·내 글), PostCard→커뮤니티 링크, `authStore.updateKey`, `GET /users/:id/posts`·`/users/:id/communities`. (commit `f281c45`, §4.2, §5)
 - **[fix]** 피드 응답 형태 불일치: `toFeedCard`가 중첩 `community{}`/`author{}`를 반환했으나 `PostListItem`은 평탄(`communitySlug` 등) → 홈 피드 커뮤니티 라벨 공백. 서버를 평탄 동결 계약에 맞춤. (commit `f281c45`, §4.2-7)
-- **[fix]** `POST /posts` 201 응답에 최상위 `authorId` 누락 (Post DTO 계약 드리프트): `GET /posts/:id`는 이미 `authorId`를 포함하도록 고쳤으나 형제 `POST /posts` 직렬화기는 `communityId`만 보내 `authorId` 없는 Post 반환. `rest.ts`가 런타임 검증 없이 캐스팅해 tsc가 못 잡는 재발 드리프트 클래스. 직렬화기를 동결 Post DTO에 맞춤. (§4.2-8, `server/src/routes/posts.ts`)
+- **[fix]** `POST /posts` 201 응답에 최상위 `authorId` 누락 (Post DTO 계약 드리프트): `GET /posts/:id`는 이미 `authorId`를 포함하도록 고쳤으나 형제 `POST /posts` 직렬화기는 `communityId`만 보내 `authorId` 없는 Post 반환. `rest.ts`가 런타임 검증 없이 캐스팅해 tsc가 못 잡는 재발 드리프트 클래스. 직렬화기를 동결 Post DTO에 맞춤. (§4.2-8, `backend/src/routes/posts.ts`)
 - **[docs]** 본 구현 노트에 변경 이력(Changelog) 절 추가 — 날짜·역순 정리.
 
 ### 2026-06-17
 
 **라이브 검증 (실제 Gemini 키, claude-in-chrome MCP + Playwright)** — commit `6a19d3a`
 - **[fix]** 페이지네이션 envelope 미해제: `getPosts`/`getCommunityPosts`/`getComments`가 `{items}`를 배열로 반환 안 함 → 커뮤니티 페이지 크래시·홈 빈 화면·스레드 로딩 실패. (§4.1-3, `frontend/src/api/rest.ts`)
-- **[fix]** PENDING AI 버블 빈 본문 거부 → `@AI`/1차 답변 400으로 미생성. PENDING이면 빈 본문 허용. (§4.1-4, `server/src/routes/comments.ts`)
-- **[fix]** `GET /posts/:id`에 `authorId`/`communityId` 누락 → 1차 AI 답변(FR-4.3/수용 #3) 미발화. 스칼라 FK 포함. (§4.1-5, `server/src/routes/posts.ts`)
+- **[fix]** PENDING AI 버블 빈 본문 거부 → `@AI`/1차 답변 400으로 미생성. PENDING이면 빈 본문 허용. (§4.1-4, `backend/src/routes/comments.ts`)
+- **[fix]** `GET /posts/:id`에 `authorId`/`communityId` 누락 → 1차 AI 답변(FR-4.3/수용 #3) 미발화. 스칼라 FK 포함. (§4.1-5, `backend/src/routes/posts.ts`)
 - **[fix]** 모바일 하단 탭바가 Composer 전송 버튼 가림 → 폰에서 클릭 불가. 탭바 위로 올림. (§4.1-6, `frontend/src/components/Composer.tsx`)
 - **[test]** E2E J1/J2/J3를 실제 UI 흐름(`createCommunityAndPost`/`seedOverThreshold`)으로 재작성 + 실키 `real-key-byok.spec.ts` 추가 → **E2E 4/4 green**. (§6)
 
@@ -99,9 +99,9 @@
 
 TRD §2는 스택을 "권장"으로만 명시했다. 실제 설치·검증된 버전:
 
-**Backend (`server/`)** — Node 20 ESM
+**Backend (`backend/`)** — Node 20 ESM
 - `fastify` ^5.2, `@fastify/cors` ^10, `fastify-plugin` ^5 (전역 훅 de-encapsulation용 — §4 버그 참조)
-- `prisma` / `@prisma/client` ^6.2, datasource = SQLite (PoC, `server/prisma/dev.db`)
+- `prisma` / `@prisma/client` ^6.2, datasource = SQLite (PoC, `backend/prisma/dev.db`)
 - dev: `tsx` ^4, `typescript` ^5.7, test: `vitest` ^2.1
 
 **Frontend (`frontend/`)** — Vite SPA
@@ -154,9 +154,9 @@ TRD §4 표는 인증 칼럼을 "username"으로 적었으나, **실제 구현�
 
 ## 3. 주요 구현 결정 (스펙 보강)
 
-- **요약 세그먼트 멱등(BE-7/BE-5s)**: AI_SUMMARY는 **새 세그먼트 N+1의 첫(최저 seq) 버블**로 들어가고, 헬퍼 `openSummarySegment(db, input, segmentExpected)`(`server/src/domain/segment.ts`)가 한 트랜잭션에서 (a) 활성 N 비활성화, (b) N+1 활성 생성(요약 토큰으로 `tokenSum` 시드), (c) `N+1.summaryCommentId` 연결을 수행. `segmentExpected !== active.index`면 **409 `{ segmentIndex, summaryCommentId }`** 반환(이중 개시 방지). 성공 시 `comment.created` → `segment.opened`를 **seq 순서대로** 발행(RT-8).
-- **컨텍스트 조립(BE-12)**: `server/src/domain/contextAssembler.ts`가 활성 세그먼트만 조립. seg0 = 원본 글 user turn + seg0 버블; seg≥1 = "지금까지 요약: …" user turn + 그 이후 버블(이전 히스토리 제외, FR-7.2). PENDING/FAILED AI 버블은 컨텍스트에서 제외(COMPLETE만).
-- **CSP 적용 방식(XC-3, L2)**: 서버는 `onSend` 훅(`server/src/plugins/security.ts`)으로 **모든 응답**에 CSP 헤더 부여. SPA는 빌드 시 `vite.config.ts`의 주입 플러그인이 `dist/index.html`에 `<meta http-equiv>`로 동일 CSP 주입(`apply: 'build'`이므로 **dev HMR은 영향 없음**). 확정 CSP:
+- **요약 세그먼트 멱등(BE-7/BE-5s)**: AI_SUMMARY는 **새 세그먼트 N+1의 첫(최저 seq) 버블**로 들어가고, 헬퍼 `openSummarySegment(db, input, segmentExpected)`(`backend/src/domain/segment.ts`)가 한 트랜잭션에서 (a) 활성 N 비활성화, (b) N+1 활성 생성(요약 토큰으로 `tokenSum` 시드), (c) `N+1.summaryCommentId` 연결을 수행. `segmentExpected !== active.index`면 **409 `{ segmentIndex, summaryCommentId }`** 반환(이중 개시 방지). 성공 시 `comment.created` → `segment.opened`를 **seq 순서대로** 발행(RT-8).
+- **컨텍스트 조립(BE-12)**: `backend/src/domain/contextAssembler.ts`가 활성 세그먼트만 조립. seg0 = 원본 글 user turn + seg0 버블; seg≥1 = "지금까지 요약: …" user turn + 그 이후 버블(이전 히스토리 제외, FR-7.2). PENDING/FAILED AI 버블은 컨텍스트에서 제외(COMPLETE만).
+- **CSP 적용 방식(XC-3, L2)**: 서버는 `onSend` 훅(`backend/src/plugins/security.ts`)으로 **모든 응답**에 CSP 헤더 부여. SPA는 빌드 시 `vite.config.ts`의 주입 플러그인이 `dist/index.html`에 `<meta http-equiv>`로 동일 CSP 주입(`apply: 'build'`이므로 **dev HMR은 영향 없음**). 확정 CSP:
   ```
   default-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com;
   script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
@@ -173,8 +173,8 @@ TRD §4 표는 인증 칼럼을 "username"으로 적었으나, **실제 구현�
 
 1. **CSP·레이트리밋 플러그인 캡슐화로 전역 훅 미적용 (M5, L2 위반)**
    - 증상: `app.register(security)` / `app.register(rateLimit)`로 등록 시 Fastify가 플러그인 컨텍스트를 **캡슐화**해, `onSend`(CSP)·`onRequest`(레이트리밋) 훅이 **형제 라우트와 `/health`에 적용되지 않았다.** 결과적으로 응답에 CSP 헤더가 없고(키 유출 1차 완화책 무력화), `POST /posts`가 429를 내지 않았다(연속 게시 모두 201).
-   - 수정: 두 플러그인 export를 `fastify-plugin`(`fp`)로 감싸 훅을 **de-encapsulate** → 앱 전역 적용. `fastify-plugin` ^5를 `server` 의존성에 추가. `app.ts` 변경 없음(등록 순서는 이미 올바름).
-   - 파일: `server/src/plugins/security.ts`, `server/src/plugins/rateLimit.ts`, `server/package.json`.
+   - 수정: 두 플러그인 export를 `fastify-plugin`(`fp`)로 감싸 훅을 **de-encapsulate** → 앱 전역 적용. `fastify-plugin` ^5를 `backend` 의존성에 추가. `app.ts` 변경 없음(등록 순서는 이미 올바름).
+   - 파일: `backend/src/plugins/security.ts`, `backend/src/plugins/rateLimit.ts`, `backend/package.json`.
    - 발견 경로: M5 검증(verify) 패스의 부팅 스모크(실제 리스닝 서버에서 CSP 헤더·429 부재 확인).
 
 2. **`CreateCommentRequest.segmentExpected` 타입 오류 (M4)**
@@ -191,10 +191,10 @@ TRD §4 표는 인증 칼럼을 "username"으로 적었으나, **실제 구현�
    - 수정: 세 함수가 `Array.isArray(r) ? r : r.items ?? []`로 정규화(다음 커서는 마지막 항목 id로 클라가 도출하므로 안전). 파일: `frontend/src/api/rest.ts`.
 4. **PENDING AI 버블 빈 본문 거부 → `@AI`/1차 답변 400 (FR-6.2 위반)**
    - 증상: 엔진이 로딩 버블을 `body:''`(PENDING)로 먼저 게시한 뒤 COMPLETE 시 PATCH로 본문을 채우는데, `POST /comments`가 본문을 **무조건 비어있지 않게** 요구해 `{"error":"body is required"}` 400 → AI 답변이 전혀 생성되지 않음.
-   - 수정: `status === 'PENDING'`일 때 빈 본문 허용(텍스트는 PATCH로 도착). 파일: `server/src/routes/comments.ts`.
+   - 수정: `status === 'PENDING'`일 때 빈 본문 허용(텍스트는 PATCH로 도착). 파일: `backend/src/routes/comments.ts`.
 5. **`GET /posts/:id`에 `authorId` 누락 → 1차 AI 답변 미발화 (FR-4.3 / 수용 #3 위반)**
    - 증상: 글 상세 응답이 `author:{id,username}`만 주고 최상위 `authorId`(및 `communityId`) 스칼라를 누락. Thread의 1차 답변 가드 `post.authorId === me`가 `undefined === me`로 항상 거짓 → **작성자 키 1차 AI 답변이 전혀 발화되지 않음**.
-   - 수정: 상세 응답에 `authorId`/`communityId` 포함(Post DTO와 일치). 파일: `server/src/routes/posts.ts`.
+   - 수정: 상세 응답에 `authorId`/`communityId` 포함(Post DTO와 일치). 파일: `backend/src/routes/posts.ts`.
 6. **모바일에서 하단 탭바가 Composer 전송 버튼을 가림 (NFR-1)**
    - 증상: Thread의 Composer가 `sticky bottom-0`인데 모바일 고정 하단 탭바(`fixed bottom-0 z-20`)와 겹쳐 **전송 버튼이 탭바에 가려 클릭 불가**(Playwright Pixel 7에서 pointer-intercept로 발견; 데스크톱은 탭바 `tablet:hidden`이라 비노출).
    - 수정: Composer를 모바일에서 탭바 위로 올림(`sticky bottom-16 z-30 tablet:bottom-0`). 파일: `frontend/src/components/Composer.tsx`.
@@ -208,14 +208,14 @@ TRD §4 표는 인증 칼럼을 "username"으로 적었으나, **실제 구현�
    - 수정: 서버 `toFeedCard` 직렬화기를 평탄 동결 계약에 맞춰 평탄 필드를 직접 내보냄. (commit `f281c45`)
 8. **`POST /posts` 201 응답에 최상위 `authorId` 누락 — Post DTO 계약 드리프트**
    - 증상: 동결 `Post` DTO는 `authorId: string`을 **필수**로 선언하고 `GET /posts/:id`는 이미 이를 포함하도록 고쳐졌으나(Thread의 1차 답변 가드 `post.authorId === me` 때문), 형제 `POST /posts` 201 직렬화기는 `communityId`만 보내고 `authorId`를 누락 → `authorId` 없는 Post 반환. `rest.ts`가 런타임 검증 없이 캐스팅해 tsc 미검출. 오늘 시점에는 잠복(CreatePost는 `post.id`만 읽고 이동, 이후 Thread가 `GET /posts/:id`로 재조회해 `authorId` 확보)이나, POST 응답 Post를 그대로 렌더하는 경로가 생기면 조용히 깨지는 정확히 그 재발 드리프트 클래스.
-   - 수정: `POST /posts`의 `reply.code(201).send({...})`에 `authorId: post.authorId` 추가(`GET /posts/:id`와 동일하게 직렬화기를 동결 Post DTO에 정렬). 라이브 검증: `POST /posts`가 이제 최상위 `authorId` 반환. 양측 typecheck clean. 파일: `server/src/routes/posts.ts`.
+   - 수정: `POST /posts`의 `reply.code(201).send({...})`에 `authorId: post.authorId` 추가(`GET /posts/:id`와 동일하게 직렬화기를 동결 Post DTO에 정렬). 라이브 검증: `POST /posts`가 이제 최상위 `authorId` 반환. 양측 typecheck clean. 파일: `backend/src/routes/posts.ts`.
 9. **Composer "AI에게 묻기" 토글 행 추가 후 마지막/PENDING AI 로딩 버블이 가려짐**
    - 근본 원인: Thread는 고정 높이 flex 컬럼(`h-[calc(100dvh-3rem)] flex flex-col`)에 전용 `flex-1 overflow-y-auto` 스크롤 영역과 형제 `<Composer/>`로 구성되는데, Composer 래퍼가 `sticky bottom-16 z-30`이라 flex 흐름에서 벗어나 스크롤 영역 하단을 **오버레이**했다(스크롤 영역은 컬럼 전체 높이를 점유, Composer는 그 위를 덮음). 여기에 새로 추가된 토글/칩 행이 Composer를 더 높게 만들면서 `scrollIntoView({block:'end'})`로 스크롤포트 바닥에 정렬된 마지막/PENDING("입력 중…") 버블이 더 넓어진 Composer 뒤에 숨었다. 기존 `bottom-16`은 모바일 고정 `BottomTabBar`(`tablet:hidden`, ~56px+safe-area)를 비키려던 본래 핵.
    - 수정(2파일, 백엔드/계약/테스트 무변경): (1) `frontend/src/components/Composer.tsx` 래퍼를 `sticky bottom-16 z-30 … tablet:bottom-0` → `shrink-0 border-t border-slate-200 bg-white`로 변경 — 오버레이·z-lift·sticky 오프셋 제거, Composer를 자연 높이의 일반 bottom flex 자식으로 환원하니 형제 `flex-1` 스크롤 영역이 그 위로 줄어들어 최신 버블이 입력창 위에 항상 노출. (2) `frontend/src/pages/Thread.tsx` 루트 컬럼에 `pb-[calc(3.5rem+var(--safe-bottom,0px))] tablet:pb-0` 추가 — 모바일 탭바 클리어런스를 컬럼 레벨에서 확보(3.5rem=56px+iOS safe-area). `tablet:pb-0`은 `BottomTabBar`의 `tablet:hidden` 분기와 정확히 일치해 탭바가 없는 tablet+에서는 패딩이 사라지고 Composer가 컬럼 바닥에 flush. 데스크톱 `h-[calc(100dvh-3rem)]`·`-mb-20`은 불변. (양측 typecheck clean, E2E J2가 사람/AI 버블 가시성·순서 가드)
 10. **커뮤니티 이름 중복 허용 + 부분일치 상세 해소 버그 (2026-06-18)**
     - **이름 유니크(라우트 레벨)**: Prisma 스키마는 `Community.slug`만 `@unique`이고 `name`은 유니크가 아니라 동일 이름 커뮤니티가 무제한 생성되어 검색에 같은 이름이 난립했다. 마이그레이션 없이(운영자 미실행) **라우트 레벨**에서 막는다. `POST /communities`는 생성 전 `findFirst({ where:{ name:{ contains: trimmedName } } })`로 선필터한 뒤 JS에서 **trim + 소문자 정규화 정확 일치**(`sameName.name.trim().toLowerCase() === trimmedName.toLowerCase()`)로 판정 — 한국어(무대소문자) 정확 일치와 ASCII 대소문자 변형을 모두 차단하되 `"test"`가 기존 `"testing"`에 걸리지 않도록 부분일치는 배제. 중복 시 **409 `{ error:"이미 있는 커뮤니티 이름이에요", code:"DUPLICATE_NAME" }`**.
     - **두 개의 구분된 409**: slug 중복은 P2002 백스톱에서 `err.meta?.target`에 `"name"` 포함 시 `DUPLICATE_NAME`, 아니면 **409 `{ error:"이미 있는 주소(slug)예요", code:"DUPLICATE_SLUG" }`**로 분기(현 스키마에선 항상 slug 메시지; 향후 name 인덱스/레이스 대비). 클라(`rest.ts::request`)는 기존에 `body.message`만 읽어 서버의 `{ error }` 메시지가 표면화되지 않았으므로 `message → error → 폴백` 순으로 읽도록 정정 → `CreateCommunity` 폼 상단 `role="alert"` 배너에 한국어 409가 노출되고 에러 시 미이동.
-    - **상세 해소 버그(근본 원인)**: `CommunityDetail`이 정확 단건 조회 대신 부분검색 `getCommunities(slug)`를 호출하고 `found = matches.find(c=>c.slug===slug) ?? matches[0] ?? null`로 폴백해, 동일 이름 커뮤니티가 많을 때 `matches[0]`가 **엉뚱한 같은 이름 커뮤니티**를 열 수 있었다. 정확 단건 **`GET /communities/:slug`**(`findUnique` + `_count.posts`, 목록과 동일한 `postCount` 포함 형상; 부재 시 `404 { error:"커뮤니티를 찾을 수 없어요" }`)를 추가하고 프론트를 `getCommunity(slug)`로 교체해 `matches[0]` 폴백을 제거. 404 시 not-found `EmptyState`(검색으로 이동 링크) 렌더. `CommunitySearch`는 결과를 `c.id` 키·`c.slug` 링크로 다루므로 중복 무관(수정 불필요). E2E 헬퍼 `createCommunityAndPost`는 고정명 → 고유명으로 변경. 파일: `server/src/routes/communities.ts`, `frontend/src/api/rest.ts`, `frontend/src/pages/Community.tsx`, `frontend/src/pages/CreateCommunity.tsx`, `frontend/e2e/helpers.ts`. (양측 typecheck clean)
+    - **상세 해소 버그(근본 원인)**: `CommunityDetail`이 정확 단건 조회 대신 부분검색 `getCommunities(slug)`를 호출하고 `found = matches.find(c=>c.slug===slug) ?? matches[0] ?? null`로 폴백해, 동일 이름 커뮤니티가 많을 때 `matches[0]`가 **엉뚱한 같은 이름 커뮤니티**를 열 수 있었다. 정확 단건 **`GET /communities/:slug`**(`findUnique` + `_count.posts`, 목록과 동일한 `postCount` 포함 형상; 부재 시 `404 { error:"커뮤니티를 찾을 수 없어요" }`)를 추가하고 프론트를 `getCommunity(slug)`로 교체해 `matches[0]` 폴백을 제거. 404 시 not-found `EmptyState`(검색으로 이동 링크) 렌더. `CommunitySearch`는 결과를 `c.id` 키·`c.slug` 링크로 다루므로 중복 무관(수정 불필요). E2E 헬퍼 `createCommunityAndPost`는 고정명 → 고유명으로 변경. 파일: `backend/src/routes/communities.ts`, `frontend/src/api/rest.ts`, `frontend/src/pages/Community.tsx`, `frontend/src/pages/CreateCommunity.tsx`, `frontend/e2e/helpers.ts`. (양측 typecheck clean)
     - 생성 유니크 판정 흐름:
       ```mermaid
       flowchart TD
@@ -283,7 +283,7 @@ WIREFRAME §12("디자인 시스템 v0.3 — 전 화면 적용, 구현 단일 �
 - 기존 submit/canSubmit/route-slug 로직, AI 1차 답변 체크박스, 제목/내용 입력은 보존.
 
 **④ 글 이미지 첨부 (풀스택) — `Post.imageUrl` 컨트랙트**
-- 백엔드 `server/`:
+- 백엔드 `backend/`:
   - `prisma/schema.prisma` `model Post`에 **`imageUrl String?`**(body 아래, `Comment.imageUrl`과 동일한 nullable 패턴) 추가. 마이그레이션 `add_post_image_url`(sqlite, nullable이라 비파괴 — `20260619022438_comment_image_url` 선례와 동일, **DB reset 금지**).
   - `src/routes/posts.ts`: `POST /posts` Body 타입에 `imageUrl?: string` 추가 → `tx.post.create({ data:{ …, imageUrl: imageUrl ?? null } })`, 201 응답에 `imageUrl: post.imageUrl` 포함. `toFeedCard` 입력/반환 타입에 `imageUrl: string|null` 추가(findMany는 include만 지정 → Post 스칼라 전체 선택되어 자동 포함). `GET /posts/:id` 응답에 `imageUrl: post.imageUrl` 추가.
 - 프론트 컨트랙트:
@@ -298,7 +298,7 @@ WIREFRAME §12("디자인 시스템 v0.3 — 전 화면 적용, 구현 단일 �
 - 신규 **`frontend/src/components/LoginModal.tsx`**: `uiStore.loginOpen`일 때 오버레이(`fixed inset-0 z-[60]` 딤 `bg-[rgba(2,8,5,0.82)]` 중앙 정렬). 카드 = dc.html LOGIN MODAL(`border border-term-cta bg-[#06160c] rounded-[3px] shadow-[0_0_32px_rgba(43,212,111,0.28)]`), 우상단 `[x]`(closeLogin), A-mark + AIDIT(glow-lg) + 부제, `<LoginForm onSuccess={closeLogin} />`. 배경/[x] 클릭으로 닫힘(카드 클릭은 stopPropagation).
 - `pages/Login.tsx`는 페이지 셸에서 `<LoginForm onSuccess={() => navigate('/')} />`를 렌더(라우트 유지 — 직접 URL/딥링크 호환). `AppLayout.tsx` 헤더 `[ Login ]`을 Link → `<button onClick={openLogin}>`(text-term-amber 유지)로 바꾸고 레이아웃에 `<LoginModal />`를 렌더. `CreatePost.tsx` 비로그인 게이트는 `navigate('/login')` 하드 리다이렉트 제거 → `openLogin()` + "로그인이 필요해요" 안내 + `[ 로그인 ]` 버튼.
 
-**변경 파일 요약**: `frontend/src/layout/{BottomTabBar,AppLayout}.tsx`, `frontend/src/App.tsx`, `frontend/src/pages/{CreatePost,Login,Thread}.tsx`, `frontend/src/components/{PostCard,LoginForm,LoginModal}.tsx`, `frontend/src/stores/uiStore.ts`, `frontend/src/api/{types,rest}.ts`, `server/prisma/schema.prisma`(+마이그레이션 `add_post_image_url`), `server/src/routes/posts.ts`.
+**변경 파일 요약**: `frontend/src/layout/{BottomTabBar,AppLayout}.tsx`, `frontend/src/App.tsx`, `frontend/src/pages/{CreatePost,Login,Thread}.tsx`, `frontend/src/components/{PostCard,LoginForm,LoginModal}.tsx`, `frontend/src/stores/uiStore.ts`, `frontend/src/api/{types,rest}.ts`, `backend/prisma/schema.prisma`(+마이그레이션 `add_post_image_url`), `backend/src/routes/posts.ts`.
 
 **불변(회귀 금지)**: 기존 라우팅(`/create-post`·`/create-community`·`/login` 전부 유지)·스토어·검색 화면(상시 만들기 버튼 + 무결과 인라인 CTA)·SSE·BYOK·테스트 동작. 이미지 nullable이라 기존 글/응답은 `imageUrl=null`로 무영향.
 
@@ -346,8 +346,8 @@ OA-6 커뮤니티 편집 패턴을 글에 적용. 작성자는 `Thread` 헤더�
 
 사용자가 글을 북마크하고, 북마크한 글 목록을 프로필에서 모아본다.
 
-- **DB(`server/prisma/schema.prisma`)**: 신규 `model Bookmark { id, userId, postId, createdAt, @@unique([userId, postId]), @@index([userId, createdAt]) }`. 마이그레이션 `add_bookmark_model`로 테이블 생성. `resetDb()`에서 bookmark 테이블도 정리.
-- **백엔드 3개 엔드포인트**(`server/src/routes/posts.ts`):
+- **DB(`backend/prisma/schema.prisma`)**: 신규 `model Bookmark { id, userId, postId, createdAt, @@unique([userId, postId]), @@index([userId, createdAt]) }`. 마이그레이션 `add_bookmark_model`로 테이블 생성. `resetDb()`에서 bookmark 테이블도 정리.
+- **백엔드 3개 엔드포인트**(`backend/src/routes/posts.ts`):
   - **`POST /posts/:id/bookmark`** (인증: `x-user-id` 필수) — idempotent upsert. 이미 북마크되어 있으면 기존 row 반환(upd timestamp 갱신 안 함), 없으면 신규 생성. 201(신규) 또는 200(기존). 응답: `{ bookmarked: true }`.
   - **`DELETE /posts/:id/bookmark`** (인증: `x-user-id` 필수) — idempotent delete. 북마크 없으면 성공(204 또는 200). 응답: `{ bookmarked: false }`.
   - **`GET /users/:id/bookmarks`** (인증 선택) — 해당 사용자의 북마크 목록을 피드 카드로 반환. 쿼리: `prisma.bookmark.findMany({ where: { userId }, include: { post }, orderBy: { createdAt: 'desc' }, take: 50 })` → `toFeedCard`로 변환. 응답: `{ items: PostListItem[], nextCursor?: string }`.
@@ -380,7 +380,7 @@ OA-6 커뮤니티 편집 패턴을 글에 적용. 작성자는 `Thread` 헤더�
 - `frontend/src/engine/retryAiBubble.ts` — FAILED AI 버블 재시도(같은 버블 재호출 → PATCH) 보조. (FE-12 retry 보조)
 - `frontend/src/lib/SafeMarkdown.tsx` — `renderMarkdownSafe` 래퍼 컴포넌트(XC-3 렌더 편의).
 - `frontend/src/components/states/` — `EmptyState` / `ErrorState` / `LoadingState` / `OfflineBanner` (FE-14 재사용 컴포넌트 집합).
-- `server/src/domain/segment.ts::openSummarySegment` — 요약 전환 트랜잭션 헬퍼(BE-5s/BE-7 응집).
+- `backend/src/domain/segment.ts::openSummarySegment` — 요약 전환 트랜잭션 헬퍼(BE-5s/BE-7 응집).
 - `frontend/src/pages/Search.tsx` — 도달 가능한 검색 페이지(`/search`). (2026-06-18)
 - `frontend/src/pages/Profile.tsx` — 프로필 페이지(`/me`: 로그아웃·API 키 변경·내 커뮤니티·내 글). (2026-06-18)
 - `frontend/src/pages/Community.tsx` — 이제 `CommunitySearch`도 export하고 slug 없는 진입 시 리다이렉트 처리. (2026-06-18)
@@ -392,7 +392,7 @@ OA-6 커뮤니티 편집 패턴을 글에 적용. 작성자는 `Thread` 헤더�
 
 ## 6. 테스트 현황 (XC-T)
 
-- **백엔드 (`server/`, vitest, app.inject + 격리 SQLite): 22/22 green**
+- **백엔드 (`backend/`, vitest, app.inject + 격리 SQLite): 22/22 green**
   - `contract.test.ts` (10): clientId 멱등, `/context` seg0(#5) vs seg≥1 제외(#7), PATCH 인가(사람/AI/오인가 403), 요약 409 가드, `/auth/session {id,username}`, key-blind.
   - `sse.test.ts` (4): `comment.created/updated/segment.opened` seq 순서 수신, afterSeq/Last-Event-ID 재생.
   - `hotScore.test.ts` (8): 정렬/decay 단조성.
@@ -412,7 +412,7 @@ OA-6 커뮤니티 편집 패턴을 글에 적용. 작성자는 `Thread` 헤더�
 
 ```bash
 # Backend (http://localhost:3001)
-cd server
+cd backend
 npm install
 npx prisma generate && npx prisma migrate dev   # SQLite dev.db
 npm run dev        # tsx watch

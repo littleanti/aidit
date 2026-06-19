@@ -53,7 +53,7 @@ Aidit은 모바일 우선 Reddit형 커뮤니티 PWA로, 각 게시글이 채팅
 
 ## 4. 마일스톤 로드맵 (M1 → M5)
 
-PRD §12에 매핑. 각 마일스톤은 순서 있는 작업 패키지, 목표, 종료 기준을 나열한다. 디렉터리 정규화(구속력): 백엔드는 `server/` 아래, 프론트엔드/AI/엔진은 `frontend/src/` 아래. RT 영역의 `server/src/realtime/*`와 BE-10 `server/src/sse/*`는 **하나의 서브시스템**이다(§6 참조). 중복되는 테스트 WP는 **통합**되며(§6 참조) 중복 생성하지 않는다.
+PRD §12에 매핑. 각 마일스톤은 순서 있는 작업 패키지, 목표, 종료 기준을 나열한다. 디렉터리 정규화(구속력): 백엔드는 `backend/` 아래, 프론트엔드/AI/엔진은 `frontend/src/` 아래. RT 영역의 `backend/src/realtime/*`와 BE-10 `backend/src/sse/*`는 **하나의 서브시스템**이다(§6 참조). 중복되는 테스트 WP는 **통합**되며(§6 참조) 중복 생성하지 않는다.
 
 ### M1 — 골격 (로컬 인증, 커뮤니티 생성, 글 작성, 홈 피드)
 PRD §12.1 · PRD 수용기준 #1, #2 매핑.
@@ -153,37 +153,37 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 
 > 5개 영역 57개 WP. 누락 없음. 본 개정에서 도입한 분리: **BE-9 → BE-9a(순수 함수) + BE-9b(인증 라우트)**; **BE-5 → BE-5(seg#0) + BE-5s(요약 전환)**. 테스트 WP는 **XC-T로 통합**(중복된 BE-13test/AI-10/XC-5/XC-6/XC-7/RT-8test 범위 대체 — 아래 RT-8은 런타임 `segment.opened` 연결이며 테스트가 아님).
 
-### Backend (`server/`)
+### Backend (`backend/`)
 
 | id | 제목 | 설명 | deps | files | est |
 |----|------|------|------|-------|-----|
-| BE-1 | 스캐폴드 | Fastify+TS, Prisma 초기화, datasource 추상화(SQLite PoC→Postgres), config, health | — | `server/src/app.ts`, `server/src/config.ts`, `server/prisma/schema.prisma`(init) | S |
-| BE-2 | 스키마+마이그레이션(개정) | TRD §3 스키마 **+ L12 변경** 구현: `Comment.clientId String?` + `@@unique([postId, clientId])`; `Community.personaIcon String?`(기본 컨벤션은 FE에서 적용); `VisitEvent{id,userId,date,@@unique([userId,date])}`. **어떤 모델에도 `apiKey` 필드 없음.** 마이그레이션 생성. | BE-1 | `server/prisma/schema.prisma`, `server/prisma/migrations/*` | M |
-| BE-3 | Auth 세션 | `POST /auth/session`: username으로 User upsert, **`{ id, username }` 반환**. 키 절대 미수령. 계약상 `id`를 `me` 식별자로 문서화. | BE-2 | `server/src/routes/auth.ts` | S |
-| BE-4 | 커뮤니티 | `GET /communities?q=`(부분 일치), `POST /communities`(name/slug/personaPrompt/personaIcon), `PATCH /communities/:id`(userId 통한 생성자 전용). | BE-2, BE-3 | `server/src/routes/communities.ts` | M |
-| BE-5 | 게시글 + seg#0 | `POST /posts`(먼저 등록, `ContextSegment` index 0 활성 자동 생성), `GET /posts/:id`, `GET /communities/:slug/posts`, `GET /posts?sort=hot&cursor=`. | BE-2, BE-9a | `server/src/routes/posts.ts`, `server/src/domain/segment.ts` | M |
-| BE-5s | 세그먼트 개시 전환 | AI_SUMMARY 댓글 수락 시 현재 세그먼트 비활성화, 세그먼트 N+1 개시(활성), `summaryCommentId` 연결. | BE-5, BE-6, BE-7 | `server/src/domain/segment.ts` | M |
-| BE-6 | 댓글 게시(HUMAN) | `POST /posts/:id/comments`: `seq` 부여, 활성 `segmentId` 해석, `tokenCount` 영속화, **`clientId` 멱등 강제(재요청 시 기존 반환)**, `tokenSum` 갱신, RT-3 seam 통한 publish. | BE-2, BE-3, RT-1, RT-3 | `server/src/routes/comments.ts` | M |
-| BE-7 | 요약 가드 | 활성 세그먼트에 요약이 없을 때만 AI_SUMMARY 수락; 동시 패자 → **409 + 현재/신규 활성 세그먼트 payload**. 승자에서 BE-5s 트리거. | BE-5, BE-6 | `server/src/routes/comments.ts`, `server/src/domain/segment.ts` | M |
-| BE-8 | 댓글 PATCH | `PATCH /comments/:id` PENDING→COMPLETE/FAILED, 본문 갱신. **인가: 사람 버블은 `authorId===userId`; AI 버블(authorId null)은 발신 `clientId` 매칭**(L12로 영속화). | BE-2, BE-6 | `server/src/routes/comments.ts` | S |
-| BE-9a | hotScore 함수 | TRD §9 기준 순수 재계산 `hotScore(score, commentCount, createdAt)`. | BE-2 | `server/src/domain/hotScore.ts` | S |
-| BE-9b | Upvote 라우트 | `POST /posts/:id/upvote`(userId 통한 인증), BE-9a로 재계산, 영속화. | BE-3, BE-9a, BE-5 | `server/src/routes/posts.ts` | S |
-| BE-11 | 댓글 페이지네이션 | `GET /posts/:id/comments?afterSeq=` `seq` 기준 keyset, 페이지 크기 50. | BE-2, BE-6 | `server/src/routes/comments.ts` | S |
-| BE-12 | 컨텍스트 조립 엔드포인트 | `GET /posts/:id/context` → 활성 세그먼트 기준 `{ segmentIndex, contents[], tokenSum, summaryNeeded }`(TRD §6.2). | BE-2, BE-5, BE-6 | `server/src/routes/context.ts`, `server/src/domain/contextAssembler.ts` | M |
-| BE-13 | 지표 + VisitEvent | 인증 앱 오픈 시 `VisitEvent(userId, date)` 기록(일별 멱등); §8 KPI용 읽기 엔드포인트(글당 평균 @AI, 스레드당 고유 댓글자, 요약 성공률, 작성자 **D1 재방문율** = 첫 글 이후 익일 VisitEvent). | BE-2, BE-3 | `server/src/routes/metrics.ts` | M |
+| BE-1 | 스캐폴드 | Fastify+TS, Prisma 초기화, datasource 추상화(SQLite PoC→Postgres), config, health | — | `backend/src/app.ts`, `backend/src/config.ts`, `backend/prisma/schema.prisma`(init) | S |
+| BE-2 | 스키마+마이그레이션(개정) | TRD §3 스키마 **+ L12 변경** 구현: `Comment.clientId String?` + `@@unique([postId, clientId])`; `Community.personaIcon String?`(기본 컨벤션은 FE에서 적용); `VisitEvent{id,userId,date,@@unique([userId,date])}`. **어떤 모델에도 `apiKey` 필드 없음.** 마이그레이션 생성. | BE-1 | `backend/prisma/schema.prisma`, `backend/prisma/migrations/*` | M |
+| BE-3 | Auth 세션 | `POST /auth/session`: username으로 User upsert, **`{ id, username }` 반환**. 키 절대 미수령. 계약상 `id`를 `me` 식별자로 문서화. | BE-2 | `backend/src/routes/auth.ts` | S |
+| BE-4 | 커뮤니티 | `GET /communities?q=`(부분 일치), `POST /communities`(name/slug/personaPrompt/personaIcon), `PATCH /communities/:id`(userId 통한 생성자 전용). | BE-2, BE-3 | `backend/src/routes/communities.ts` | M |
+| BE-5 | 게시글 + seg#0 | `POST /posts`(먼저 등록, `ContextSegment` index 0 활성 자동 생성), `GET /posts/:id`, `GET /communities/:slug/posts`, `GET /posts?sort=hot&cursor=`. | BE-2, BE-9a | `backend/src/routes/posts.ts`, `backend/src/domain/segment.ts` | M |
+| BE-5s | 세그먼트 개시 전환 | AI_SUMMARY 댓글 수락 시 현재 세그먼트 비활성화, 세그먼트 N+1 개시(활성), `summaryCommentId` 연결. | BE-5, BE-6, BE-7 | `backend/src/domain/segment.ts` | M |
+| BE-6 | 댓글 게시(HUMAN) | `POST /posts/:id/comments`: `seq` 부여, 활성 `segmentId` 해석, `tokenCount` 영속화, **`clientId` 멱등 강제(재요청 시 기존 반환)**, `tokenSum` 갱신, RT-3 seam 통한 publish. | BE-2, BE-3, RT-1, RT-3 | `backend/src/routes/comments.ts` | M |
+| BE-7 | 요약 가드 | 활성 세그먼트에 요약이 없을 때만 AI_SUMMARY 수락; 동시 패자 → **409 + 현재/신규 활성 세그먼트 payload**. 승자에서 BE-5s 트리거. | BE-5, BE-6 | `backend/src/routes/comments.ts`, `backend/src/domain/segment.ts` | M |
+| BE-8 | 댓글 PATCH | `PATCH /comments/:id` PENDING→COMPLETE/FAILED, 본문 갱신. **인가: 사람 버블은 `authorId===userId`; AI 버블(authorId null)은 발신 `clientId` 매칭**(L12로 영속화). | BE-2, BE-6 | `backend/src/routes/comments.ts` | S |
+| BE-9a | hotScore 함수 | TRD §9 기준 순수 재계산 `hotScore(score, commentCount, createdAt)`. | BE-2 | `backend/src/domain/hotScore.ts` | S |
+| BE-9b | Upvote 라우트 | `POST /posts/:id/upvote`(userId 통한 인증), BE-9a로 재계산, 영속화. | BE-3, BE-9a, BE-5 | `backend/src/routes/posts.ts` | S |
+| BE-11 | 댓글 페이지네이션 | `GET /posts/:id/comments?afterSeq=` `seq` 기준 keyset, 페이지 크기 50. | BE-2, BE-6 | `backend/src/routes/comments.ts` | S |
+| BE-12 | 컨텍스트 조립 엔드포인트 | `GET /posts/:id/context` → 활성 세그먼트 기준 `{ segmentIndex, contents[], tokenSum, summaryNeeded }`(TRD §6.2). | BE-2, BE-5, BE-6 | `backend/src/routes/context.ts`, `backend/src/domain/contextAssembler.ts` | M |
+| BE-13 | 지표 + VisitEvent | 인증 앱 오픈 시 `VisitEvent(userId, date)` 기록(일별 멱등); §8 KPI용 읽기 엔드포인트(글당 평균 @AI, 스레드당 고유 댓글자, 요약 성공률, 작성자 **D1 재방문율** = 첫 글 이후 익일 VisitEvent). | BE-2, BE-3 | `backend/src/routes/metrics.ts` | M |
 
-### Realtime (`server/src/realtime/*`, BE-10 SSE와 통합)
+### Realtime (`backend/src/realtime/*`, BE-10 SSE와 통합)
 
 | id | 제목 | 설명 | deps | files | est |
 |----|------|------|------|-------|-----|
-| RT-1 | SSE 전송 스캐폴드 | EventSource 호환 `text/event-stream` 배관, 연결 레지스트리, heartbeat. | BE-1 | `server/src/realtime/transport.ts` | M |
-| RT-2 | Pub/sub 구현 | `PubSub` 인터페이스 뒤의 인메모리 pub/sub(Redis 교체 가능). | RT-1 | `server/src/realtime/pubsub.ts` | S |
-| RT-3 | Publish seam | BE 쓰기에서 사용하는 `publish(postId, event)` API(BE-6를 stream 엔드포인트에서 디커플). | RT-2 | `server/src/realtime/publish.ts` | S |
-| BE-10/RT-4 | Stream 엔드포인트 | `GET /posts/:id/stream`: `afterSeq`로 스냅샷 재생 후 라이브 구독. **BE-6에 의존**(BE-6 이벤트를 소비), 역방향 아님. | RT-1, RT-2, RT-3, BE-6 | `server/src/realtime/stream.ts` (== `server/src/sse/*`) | M |
-| RT-5 | 이벤트 스키마 | 타입 지정된 `comment.created` / `comment.updated` / `segment.opened`. | RT-2 | `server/src/realtime/events.ts` | S |
-| RT-6 | 재접속 재생 | `Last-Event-ID`(=seq) 갭 재생. | RT-4, RT-5, BE-11 | `server/src/realtime/stream.ts` | S |
+| RT-1 | SSE 전송 스캐폴드 | EventSource 호환 `text/event-stream` 배관, 연결 레지스트리, heartbeat. | BE-1 | `backend/src/realtime/transport.ts` | M |
+| RT-2 | Pub/sub 구현 | `PubSub` 인터페이스 뒤의 인메모리 pub/sub(Redis 교체 가능). | RT-1 | `backend/src/realtime/pubsub.ts` | S |
+| RT-3 | Publish seam | BE 쓰기에서 사용하는 `publish(postId, event)` API(BE-6를 stream 엔드포인트에서 디커플). | RT-2 | `backend/src/realtime/publish.ts` | S |
+| BE-10/RT-4 | Stream 엔드포인트 | `GET /posts/:id/stream`: `afterSeq`로 스냅샷 재생 후 라이브 구독. **BE-6에 의존**(BE-6 이벤트를 소비), 역방향 아님. | RT-1, RT-2, RT-3, BE-6 | `backend/src/realtime/stream.ts` (== `backend/src/sse/*`) | M |
+| RT-5 | 이벤트 스키마 | 타입 지정된 `comment.created` / `comment.updated` / `segment.opened`. | RT-2 | `backend/src/realtime/events.ts` | S |
+| RT-6 | 재접속 재생 | `Last-Event-ID`(=seq) 갭 재생. | RT-4, RT-5, BE-11 | `backend/src/realtime/stream.ts` | S |
 | RT-7/FE-10 | 클라이언트 stream 훅 | `useThreadStream` EventSource 구독 + 재생 + seq 기반 dedupe. | RT-4, RT-5, FE-8 | `frontend/src/stream/useThreadStream.ts` | M |
-| RT-8 | segment.opened 연결 | BE-5s에서 pub/sub를 거쳐 클라이언트까지 `segment.opened` 종단 간 전파. | BE-5s, RT-5, RT-4 | `server/src/realtime/publish.ts`, `frontend/src/stream/useThreadStream.ts` | S |
+| RT-8 | segment.opened 연결 | BE-5s에서 pub/sub를 거쳐 클라이언트까지 `segment.opened` 종단 간 전파. | BE-5s, RT-5, RT-4 | `backend/src/realtime/publish.ts`, `frontend/src/stream/useThreadStream.ts` | S |
 
 ### Frontend (`frontend/src/`)
 
@@ -218,19 +218,19 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 | AI-8 | 지연 요약 감지 | `@AI` 경로에서 답변 전 `summaryNeeded`/`tokenSum>128K` 게이트. | BE-12 | `frontend/src/engine/contextEngine.ts` | S |
 | AI-9 | 요약 후 재조립 | 활성 세그먼트 N≥1에 대해 (세그먼트 개시 요약 + 요약 이후 버블만)으로 contents 구성. | AI-4, AI-6 | `frontend/src/engine/contextEngine.ts` | M |
 
-### Cross-cutting (`server/` + `frontend/`)
+### Cross-cutting (`backend/` + `frontend/`)
 
 | id | 제목 | 설명 | deps | files | est |
 |----|------|------|------|-------|-----|
 | XC-1 | Key-blind 리뷰 체크리스트 | 코드화된 체크리스트 + lint 규칙: 서버 바디/헤더/로그에 apiKey 금지; CI grep 게이트. | BE-1 | `docs/checklists/key-blind.md`, CI config | S |
-| XC-2 | 로그 redaction 테스트 | 서버 로그/응답에 키 형태 payload가 절대 없음을 단언. | XC-1, BE-3..BE-13 | `server/test/security/redaction.test.ts` | S |
-| XC-3 | CSP + sanitize | CSP 헤더(`connect-src` Google만, `script-src 'self'` 등) + 사용자 콘텐츠/마크다운에 DOMPurify. | FE-1, BE-1 | `server/src/plugins/security.ts`, `frontend/src/lib/sanitize.ts` | M |
+| XC-2 | 로그 redaction 테스트 | 서버 로그/응답에 키 형태 payload가 절대 없음을 단언. | XC-1, BE-3..BE-13 | `backend/test/security/redaction.test.ts` | S |
+| XC-3 | CSP + sanitize | CSP 헤더(`connect-src` Google만, `script-src 'self'` 등) + 사용자 콘텐츠/마크다운에 DOMPurify. | FE-1, BE-1 | `backend/src/plugins/security.ts`, `frontend/src/lib/sanitize.ts` | M |
 | XC-4 | 프롬프트 인젝션 가드 | AI-4 chokepoint에서: 페르소나는 systemInstruction 유지, 사용자 입력은 데이터 유지; 덮어쓰기 시도 테스트. | AI-4 | `frontend/src/engine/contextEngine.ts` | S |
-| XC-8 | hot decay 다듬기 | 시간 경과에 따른 hotScore 리프레시/decay 처리. | BE-9a, BE-5 | `server/src/domain/hotScore.ts` | S |
-| XC-9 | 레이트 리미팅 | username별 글 레이트 리밋; 커뮤니티 생성 쿨다운. | BE-3, BE-4, BE-6 | `server/src/plugins/rateLimit.ts` | S |
+| XC-8 | hot decay 다듬기 | 시간 경과에 따른 hotScore 리프레시/decay 처리. | BE-9a, BE-5 | `backend/src/domain/hotScore.ts` | S |
+| XC-9 | 레이트 리미팅 | username별 글 레이트 리밋; 커뮤니티 생성 쿨다운. | BE-3, BE-4, BE-6 | `backend/src/plugins/rateLimit.ts` | S |
 | XC-10 | 지표 계측 | 클라이언트가 §8 KPI에 공급할 이벤트 발행; BE-13(작성자 D1 포함)과 연결. | BE-13, FE-3 | `frontend/src/lib/metrics.ts` | S |
 | XC-11 | 라이선스 | MIT LICENSE + 소스 헤더. | — | `LICENSE`, headers | XS |
-| XC-T | 통합 테스트 | 단일 스위트: contextEngine 토큰/128K/세그먼트 전환 + hotScore(unit); clientId 멱등 + `/context` #5-vs-#7 조립(contract); 다중 클라 SSE fan-out + 동시 @AI/요약(integration); J1/J2/J3(E2E, Gemini 모킹+실키). 겹치는 BE/AI/RT/XC 테스트 범위 대체. | 모든 구현 WP | `server/test/**`, `frontend/src/**/*.test.ts`, `e2e/**` | L |
+| XC-T | 통합 테스트 | 단일 스위트: contextEngine 토큰/128K/세그먼트 전환 + hotScore(unit); clientId 멱등 + `/context` #5-vs-#7 조립(contract); 다중 클라 SSE fan-out + 동시 @AI/요약(integration); J1/J2/J3(E2E, Gemini 모킹+실키). 겹치는 BE/AI/RT/XC 테스트 범위 대체. | 모든 구현 WP | `backend/test/**`, `frontend/src/**/*.test.ts`, `e2e/**` | L |
 
 ---
 
@@ -251,7 +251,7 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 **영역 간 의존성**:
 - FE↔AI 인터페이스: AI-5/AI-7 전에 `api/types.ts`(`SessionResponse.id`, 댓글 게시의 `clientId` 포함) 동결(early-freeze).
 - AI↔BE: AI-5/AI-6/AI-7 전에 `/context`(BE-12)와 댓글 엔드포인트(BE-6/BE-8) 동결.
-- RT==BE-10은 `server/src/realtime/*` 아래 단일 서브시스템으로 통합.
+- RT==BE-10은 `backend/src/realtime/*` 아래 단일 서브시스템으로 통합.
 
 **병렬 레인**: M1 FE(FE-1..FE-7)는 FE-2 계약 동결 후 BE(BE-1..BE-9b)와 병렬. M3 AI 레인은 AI-1 도착 후 FE-12와 병렬.
 
@@ -504,8 +504,8 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 - [x] **DEP-2 · vite.config CSP 자동화**: `buildCsp(apiOrigin)` 함수 — build 시 `VITE_API_ORIGIN`을 읽어 CSP `connect-src`/`img-src` 에 자동 주입. `cspInjectionPlugin` 적용, dev HMR 영향 없음(apply='build'). manifest scope `start_url` 기본 `/` 또는 `VITE_BASE` 지원.
 - [x] **DEP-3 · SPA 404.html 트릭**: `public/404.html` — 딥 링크(`/posts/123`) → 302 `/index.html?path=/posts/123` → JS 복원(`history.replaceState`). GitHub Pages 자동 폴백 활용.
 - [x] **DEP-4 · .nojekyll**: `public/.nojekyll` — Jekyll 처리 비활성화(빌드 속도·캐시 간섭 회피).
-- [x] **DEP-5 · CORS 백엔드 allowlist**: `server/.env.example` 문서화 — `WEB_ORIGIN` env(comma-sep, e.g. `https://littleanti.github.io,https://staging.example.com`) + 기본 `https://littleanti.github.io` 자동 허용. `@fastify/cors` plugin 수정.
-- [x] **DEP-6 · 환경 변수 문서화**: `frontend/.env.example` — `VITE_API_ORIGIN` 예시·설명 추가. `server/.env.example` — `WEB_ORIGIN` + `HOST=127.0.0.1`(프로덕션 프라이빗 바인드) 예시.
+- [x] **DEP-5 · CORS 백엔드 allowlist**: `backend/.env.example` 문서화 — `WEB_ORIGIN` env(comma-sep, e.g. `https://littleanti.github.io,https://staging.example.com`) + 기본 `https://littleanti.github.io` 자동 허용. `@fastify/cors` plugin 수정.
+- [x] **DEP-6 · 환경 변수 문서화**: `frontend/.env.example` — `VITE_API_ORIGIN` 예시·설명 추가. `backend/.env.example` — `WEB_ORIGIN` + `HOST=127.0.0.1`(프로덕션 프라이빗 바인드) 예시.
 - [x] **DEP-7 · 보안 게이트 명시**: README "GitHub Pages 배포(옵션 A)" 섹션 — **`x-user-id` 실인증 교체 필수**(현재 username 입력만 기반 → JWT/OAuth 권고) 단일 행 경고.
 - [x] **DEP-8 · 검증**: 빌드 clean(`npm run build`), 정적 output 확인(`.nojekyll`·404.html·manifest), 로컬 dev 여전히 `/api` 프록시 동작.
 
@@ -583,7 +583,7 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 - [x] **FE-19 · Profile 북마크한 글 섹션**: 프로필 조회 시 `getUserBookmarks(userId)`로 로드.
   "북마크한 글" 섹션(홈 피드와 동일한 PostCard 리스트, 최신 북마크순).
   빈상태: "북마크한 글이 없어요"
-- [x] **FE-20 · resetDb() 정리**: `server/src/test/helpers.ts` `resetDb()` 함수에서 `bookmark` 테이블도
+- [x] **FE-20 · resetDb() 정리**: `backend/src/test/helpers.ts` `resetDb()` 함수에서 `bookmark` 테이블도
   정리하도록 추가.
 - [x] **FE-21 · 검증**: 서버 build + 테스트 green. 브라우저 — Thread에서 북마크 토글 · Profile에서
   북마크한 글 목록 · 빈상태 확인.
@@ -627,7 +627,7 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 - [ ] **FE-28 · PostCard ▲ 버튼 (toggle)**: 초기값 `post.voted`(서버 계산), 낙관적 UI. 로그인 필수(`openLogin()`). 클릭 시 POST/DELETE `/posts/:id/upvote`. voted=true일 때 `text-term-amber` 강조색. 실패 시 롤백 + 토스트.
 - [ ] **FE-29 · Thread 원본 카드 ▲ 버튼**: PostCard와 동일 패턴, 피드 카드에서 상세로 진입 시에도 voted 상태 유지.
 - [ ] **FE-30 · Feed fetcher x-user-id forward**: 홈/커뮤니티/프로필/북마크 피드의 `getPosts`/`getCommunityPosts`/`getUserPosts`/`getUserBookmarks`가 모두 `x-user-id` 헤더로 voted 상태를 요청.
-- [ ] **XC-13 · resetDb() 정리**: `server/src/test/helpers.ts`에서 `vote` 테이블 삭제 추가.
+- [ ] **XC-13 · resetDb() 정리**: `backend/src/test/helpers.ts`에서 `vote` 테이블 삭제 추가.
 - [ ] **XC-14 · 검증**: 서버 build + 테스트 green. 프론트 build + 테스트 green. 브라우저 — PostCard/Thread에서 ▲ 토글 · voted 강조색 · 재로드 후 상태 유지(x-user-id forward) 확인.
 
 **M13 종료 기준**: POST/DELETE `/posts/:id/upvote`가 멱등 토글; GET `/posts/:id` + 모든 피드가 `voted` boolean 반환(x-user-id 있을 때); PostCard/Thread의 ▲ 버튼이 로그인 필요하며 낙관적 토글, voted=true일 때 강조색; Post.score는 실시간 vote count를 반영.
