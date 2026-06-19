@@ -43,6 +43,7 @@ vi.mock('../api/rest', async () => {
 
 import {
   buildGeminiRequest,
+  runPrimaryReply,
   runAtAiReply,
   ensureSummary,
   estimateTokens,
@@ -272,6 +273,63 @@ describe('runAtAiReply — order + outcome (AI-7)', () => {
     expect(partText(last.parts[0])).toContain('@AI please explain');
     // and persona stayed in systemInstruction only.
     expect(mockGenerate.mock.calls[0][0].systemInstruction).toBe('persona');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AI-5 — runPrimaryReply: an attached post image rides the 1차 reply (multimodal)
+// ---------------------------------------------------------------------------
+describe('runPrimaryReply — post image rides the 1차 reply (AI-5)', () => {
+  const baseArgs = {
+    postId: 'p1',
+    communityPersonaPrompt: 'persona',
+    apiKey: 'AUTHOR_KEY',
+  };
+
+  function arrange() {
+    // The post body is already segment-0 turn 0 (text).
+    mockGetContext.mockResolvedValue(
+      ctx({ contents: [{ role: 'user', text: '「caller」: original post body' }] }),
+    );
+    mockPostComment.mockResolvedValue(makeComment({ id: 'ai-1', status: 'PENDING' }));
+    mockGenerate.mockResolvedValue('the answer');
+    mockPatchComment.mockResolvedValue(makeComment({ id: 'ai-1', status: 'COMPLETE', body: 'the answer' }));
+  }
+
+  it('appends an author user-turn carrying the image inlineData when image is given', async () => {
+    arrange();
+    await runPrimaryReply({
+      ...baseArgs,
+      image: { mimeType: 'image/png', data: 'BASE64IMG' },
+    });
+
+    const sentContents = mockGenerate.mock.calls[0][0].contents;
+    const last = sentContents[sentContents.length - 1];
+    // Forced role:user (XC-4) with the author speaker prefix...
+    expect(last.role).toBe('user');
+    // ...and the image bytes as an inlineData part on this turn.
+    const inline = last.parts.find((p: GeminiPart) => 'inlineData' in p);
+    expect(inline).toBeDefined();
+    expect((inline as { inlineData: { mimeType: string; data: string } }).inlineData).toEqual({
+      mimeType: 'image/png',
+      data: 'BASE64IMG',
+    });
+    // persona stays isolated to systemInstruction; the author's key is used.
+    expect(mockGenerate.mock.calls[0][0].systemInstruction).toBe('persona');
+    expect(mockGenerate.mock.calls[0][0].apiKey).toBe('AUTHOR_KEY');
+  });
+
+  it('sends NO inlineData (text-only) when the post has no image', async () => {
+    arrange();
+    await runPrimaryReply(baseArgs);
+
+    const sentContents = mockGenerate.mock.calls[0][0].contents;
+    const hasInline = sentContents.some((c) =>
+      c.parts.some((p: GeminiPart) => 'inlineData' in p),
+    );
+    expect(hasInline).toBe(false);
+    // No extra appended turn: only the single post context turn is sent.
+    expect(sentContents).toHaveLength(1);
   });
 });
 

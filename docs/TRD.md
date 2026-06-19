@@ -209,6 +209,7 @@ model ContextSegment {
 - 글 원본/타인 댓글/AI 버블 → 역할 매핑: 사람 발화는 `role:"user"`, AI 버블은 `role:"model"`.
 - 다자 대화이므로 각 user turn 앞에 `「{username}」: ` 접두로 화자 구분(Gemini는 멀티 user 화자 개념이 약해 텍스트로 표기).
 - 요약 버블은 새 세그먼트의 첫 `user` turn으로 "지금까지 요약: ..." 형태 주입(§6.3).
+- **멀티모달 이미지**: 컨텍스트 턴은 텍스트(`parts:[{text}]`)로만 매핑한다. 이미지는 **"그 호출에서 신규로 실리는" 한 장**만 user turn에 `inlineData`(base64) 파트로 덧붙는다 — ① `@AI` 댓글에 방금 업로드한 이미지(Composer), ② **글 작성 시 첨부한 이미지의 1차 AI 답변**(`runPrimaryReply`: 글 본문 텍스트 턴 뒤에 작성자 user turn으로 `Post.imageUrl`을 `inlineData`로 첨부). 과거 글/댓글의 이미지는 후속 호출에서 재전송하지 않는다(컨텍스트는 텍스트). 인코딩 실패 시 텍스트 only로 진행(답변을 막지 않음).
 
 ---
 

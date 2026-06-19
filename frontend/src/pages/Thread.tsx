@@ -25,6 +25,7 @@ import { useThreadStore } from '../stores/threadStore';
 import { useThreadStream } from '../stream/useThreadStream';
 import { runPrimaryReply } from '../engine/contextEngine';
 import { retryAiBubble } from '../engine/retryAiBubble';
+import { urlToInlineData } from '../lib/imageInline';
 import Avatar from '../components/Avatar';
 import ChatBubble from '../components/ChatBubble';
 import Composer from '../components/Composer';
@@ -208,13 +209,22 @@ export default function Thread() {
       return;
     }
 
-    void runPrimaryReply({
-      postId,
-      communityPersonaPrompt: community?.personaPrompt ?? '',
-      apiKey,
-    }).then((res) => {
+    // When the post carries an attached image, fetch it and ride it along the
+    // 1차 reply as inline bytes (multimodal). Best-effort: on any fetch/encode
+    // failure we fall back to a text-only reply rather than blocking it.
+    const postImageUrl = post.imageUrl;
+    void (async () => {
+      const image = postImageUrl
+        ? (await urlToInlineData(postImageUrl)) ?? undefined
+        : undefined;
+      const res = await runPrimaryReply({
+        postId,
+        communityPersonaPrompt: community?.personaPrompt ?? '',
+        apiKey,
+        image,
+      });
       if (!res.ok && res.errorMessage) showAiToast(res.errorMessage);
-    });
+    })();
   }, [postId, post, loading, myUserId, community, consumeFirstAiReply]);
 
   // ----- FE-12: retry a FAILED AI bubble in place -----

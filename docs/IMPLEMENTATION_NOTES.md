@@ -282,6 +282,18 @@ WIREFRAME §12("디자인 시스템 v0.3 — 전 화면 적용, 구현 단일 �
 
 ---
 
+### 4.7 글 첨부 이미지를 1차 AI 답변(LLM 쿼리)에 포함 (2026-06-19)
+
+§4.6 ④에서 글의 `imageUrl`은 **저장·표시(Thread/PostCard)만** 됐고 AI 컨텍스트에는 들어가지 않았다 — 컨텍스트 조립(`buildGeminiRequest`)은 컨텍스트 턴을 **텍스트 파트로만** 매핑하고(`parts:[{text}]`), `runPrimaryReply`는 appended 턴 없이 호출했기 때문(서버 `contextAssembler`도 `imageUrl` 미취급). 즉 글 작성 시 첨부한 사진은 LLM에 전달되지 않았다. 본 작업으로 **1차 AI 답변이 멀티모달**이 되도록 연결한다(댓글 `@AI` 이미지가 그 턴에 `inlineData`로 실리던 경로와 동일한 방식).
+
+- **`engine/contextEngine.ts`** — `RunPrimaryReplyArgs`에 `image?: { mimeType; data }`(base64, data: 프리픽스 없음) 추가. `runPrimaryReply`는 image가 있으면 **작성자 user-턴(빈 body) + image의 `inlineData` 파트**를 `buildGeminiRequest({ appended })`로 덧붙인다(글 본문은 이미 segment-0 turn 0 텍스트이므로 사진만 추가). XC-4 불변: appended는 항상 `role:'user'`, 페르소나는 systemInstruction 전용. image 없으면 기존과 동일(텍스트 only, appended 없음).
+- **신규 `lib/imageInline.ts`** — `urlToInlineData(url)`: 동일 출처 이미지 URL(`/uploads/<name>`, CSP `connect-src 'self'` 허용)을 `fetch` → blob → base64(`FileReader`)로 변환. 실패 시 `null`(best-effort: 사진 인코딩 실패가 답변 자체를 막지 않도록 — 기존 `ensureSummary`/컨텍스트 실패 폴백과 동일한 그레이스풀 철학).
+- **`pages/Thread.tsx`** — 1차 답변 트리거에서 `post.imageUrl`이 있으면 `urlToInlineData`로 변환해 `runPrimaryReply({ …, image })`로 전달(없거나 실패 시 `undefined` → 텍스트 only).
+- **검증(`engine/contextEngine.test.ts`)**: ① image 제공 시 `generateContent` contents의 마지막 user 턴에 해당 `inlineData`(mimeType/data) 존재, ② image 없으면 `inlineData` 0개 + 컨텍스트 턴 1개(텍스트 only). 프론트 빌드 + 30 테스트(신규 2) 통과.
+- **불변**: 댓글 `@AI` 이미지 경로(Composer)·BYOK·서버 라우트·`Post.imageUrl` 컨트랙트 무변경. 후속 호출들은 여전히 과거 글/댓글 이미지를 재전송하지 않음(컨텍스트는 텍스트; 사진은 "그 턴 신규 업로드"에만 실린다는 기존 설계 유지).
+
+---
+
 ## 5. 스펙에 없던 추가 보조 자산
 
 구현 응집을 위해 PLAN의 WP 파일 목록 외에 도입한 소규모 자산:

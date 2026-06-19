@@ -243,6 +243,11 @@ export interface RunPrimaryReplyArgs {
   communityPersonaPrompt: string;
   /** the post AUTHOR'S Gemini key (call-time only; never stored/logged). */
   apiKey: string;
+  /** Optional inline image bytes (base64, no data: prefix) for a post that was
+   *  created with an attached image. The post's title/body is already the first
+   *  context turn (text); this rides the picture along as an extra author
+   *  user-turn so the 1차 AI reply is multimodal. Omit for text-only posts. */
+  image?: { mimeType: string; data: string };
 }
 
 /**
@@ -255,7 +260,7 @@ export interface RunPrimaryReplyArgs {
 export async function runPrimaryReply(
   args: RunPrimaryReplyArgs,
 ): Promise<ReplyResult> {
-  const { postId, communityPersonaPrompt, apiKey } = args;
+  const { postId, communityPersonaPrompt, apiKey, image } = args;
 
   let context: ContextResponse;
   try {
@@ -269,10 +274,22 @@ export async function runPrimaryReply(
     };
   }
 
+  // The post's title/body is already segment-0 turn 0 (text). When the post was
+  // created with an image, append an author user-turn carrying ONLY the inline
+  // image bytes (XC-4: forced role:'user', never system) so the 1차 reply is
+  // multimodal. No image -> no appended turn (text-only, as before).
+  const appended = image
+    ? {
+        username: useAuthStore.getState().username ?? '작성자',
+        body: '',
+        image,
+      }
+    : undefined;
+
   const request = buildGeminiRequest({
     personaPrompt: communityPersonaPrompt,
     context,
-    // NO appended turn: the post is already segment-0 turn 0.
+    appended,
   });
 
   const clientId = makeClientId();
