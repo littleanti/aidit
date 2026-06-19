@@ -27,7 +27,7 @@ export default function ErrorState({
     return (
       <div
         role="alert"
-        className={`flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ${className}`}
+        className={`flex items-center gap-2 rounded-[2px] border border-term-border bg-term-info px-4 py-3 text-sm text-term-danger ${className}`}
       >
         <span className="min-w-0 flex-1">{message}</span>
         {onRetry && (
@@ -51,12 +51,12 @@ export default function ErrorState({
       <span aria-hidden className="text-3xl">
         ⚠️
       </span>
-      <p className="text-sm text-red-600">{message}</p>
+      <p className="text-sm text-term-danger">{message}</p>
       {onRetry && (
         <button
           type="button"
           onClick={onRetry}
-          className="inline-flex min-h-[44px] items-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:border-brand hover:text-brand"
+          className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-border px-4 text-sm font-semibold text-term-dim transition hover:border-term-bright hover:text-term-bright"
         >
           다시 시도
         </button>

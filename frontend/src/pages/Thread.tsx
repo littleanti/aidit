@@ -314,7 +314,7 @@ export default function Thread() {
     <div className="-mx-4 -mt-4 -mb-20 flex h-[calc(100dvh-3rem)] flex-col pb-[calc(3.5rem+var(--safe-bottom,0px))] tablet:pb-0 desktop:mx-0 desktop:mt-0 desktop:mb-0 desktop:h-[calc(100dvh-6rem)]">
       {/* VR-3: post-detail header. The persona is no longer shown here; it
           lives in the original-post card / menu instead. */}
-      <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2">
+      <header className="flex items-center gap-2 border-b border-term-border bg-term-screen px-2 py-2">
         {/* left group (flex-1 mirrors the right group so the title stays centered) */}
         <div className="flex flex-1 items-center justify-start">
           {/* back: returns to the previous route */}
@@ -322,7 +322,7 @@ export default function Thread() {
             type="button"
             onClick={() => navigate(-1)}
             aria-label="뒤로"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[2px] text-term-dim hover:bg-term-hover"
           >
             <svg
               viewBox="0 0 24 24"
@@ -338,7 +338,7 @@ export default function Thread() {
             </svg>
           </button>
         </div>
-        <h1 className="min-w-0 truncate px-1 text-center text-base font-semibold text-slate-900">
+        <h1 className="min-w-0 truncate px-1 text-center text-base font-semibold text-term-title glow">
           {post.title}
         </h1>
         {/* right group */}
@@ -349,7 +349,7 @@ export default function Thread() {
             onClick={() => setBookmarked((b) => !b)}
             aria-pressed={bookmarked}
             aria-label={bookmarked ? '북마크 해제' : '북마크'}
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg hover:bg-slate-100 ${
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[2px] text-lg text-term-dim hover:bg-term-hover ${
               bookmarked ? 'opacity-100' : 'opacity-40'
             }`}
           >
@@ -359,7 +359,7 @@ export default function Thread() {
           <button
             type="button"
             aria-label="메뉴"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg text-slate-600 hover:bg-slate-100"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[2px] text-lg text-term-dim hover:bg-term-hover"
           >
             ⋯
           </button>
@@ -371,19 +371,23 @@ export default function Thread() {
       {/* scrolling region: pinned original post + chat list */}
       <div className="flex-1 overflow-y-auto">
         {/* PINNED original post (FR-5.1) */}
-        <article className="mx-3 my-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-          <span className="inline-flex items-center text-xs font-semibold text-brand">
-            📌 원본 게시글
+        <article className="relative mx-3 my-3 rounded-[2px] border border-term-border bg-term-card px-4 py-3">
+          {/* corner tag */}
+          <span
+            aria-hidden
+            className="absolute -top-1 left-[13px] bg-term-tag px-1 text-[9px] tracking-wider text-term-amber"
+          >
+            ★ 원본 게시글
           </span>
-          <h2 className="mt-1 text-base font-bold leading-snug text-slate-900">
+          <h2 className="mt-1 text-base font-bold leading-snug text-term-title glow">
             {post.title}
           </h2>
           {post.body && (
-            <div className="mt-2 break-words text-sm leading-relaxed text-slate-700">
+            <div className="mt-2 break-words text-sm leading-relaxed text-term-dim">
               <SafeMarkdown text={post.body} />
             </div>
           )}
-          <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+          <div className="mt-3 flex items-center gap-2 text-xs text-term-faint">
             <Avatar kind="user" seed={authorName} size="sm" />
             <span>
               u/{authorName} · {relativeTime(post.createdAt)}
@@ -396,10 +400,10 @@ export default function Thread() {
         </article>
 
         {/* divider */}
-        <div className="flex items-center gap-2 px-4 py-3 text-xs text-slate-400">
-          <span className="h-px flex-1 bg-slate-200" />
+        <div className="flex items-center gap-2 px-4 py-3 text-xs text-term-faint tracking-wider">
+          <span className="h-px flex-1 bg-term-border" />
           <span>대화</span>
-          <span className="h-px flex-1 bg-slate-200" />
+          <span className="h-px flex-1 bg-term-border" />
         </div>
 
         {/* chat list */}
@@ -429,7 +433,7 @@ export default function Thread() {
       {aiToast && (
         <div
           role="alert"
-          className="mx-3 mb-1 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="mx-3 mb-1 rounded-[2px] border border-term-danger bg-term-bg px-3 py-2 text-sm text-term-danger"
         >
           {aiToast}
         </div>
@@ -440,14 +444,14 @@ export default function Thread() {
       {showSummaryBadge && (
         <div className="px-3 pb-1">
           <div
-            className="group relative inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700"
+            className="group relative inline-flex items-center gap-1.5 rounded-[2px] border border-term-border bg-term-info px-3 py-1 text-xs font-medium text-term-title"
             title="다음 @AI 호출 시 먼저 요약이 실행됩니다. 요약은 호출한 분의 Gemini 키로 생성됩니다(비용 발생)."
           >
             <span aria-hidden>🟣</span>
             <span>{summaryNeeded ? '다음 @AI 호출 시 요약됩니다' : '곧 대화가 요약됩니다'}</span>
             <span
               aria-hidden
-              className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-brand-200 text-[10px] text-brand-700"
+              className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-[2px] bg-term-hover text-[10px] text-term-title"
             >
               ?
             </span>

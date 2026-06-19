@@ -1,9 +1,9 @@
 // FE-9: ChatBubble — renders a single comment as a chat-room bubble.
 //
-// Side rule (FR-5.3): own human -> right (brand-filled). Everyone else,
+// Side rule (FR-5.3): own human -> right (gradient CTA fill). Everyone else,
 // including ALL AI comments (authorId === null), render on the left.
 // Variants: own human / other human / AI reply / AI summary (full-width band).
-// Status: PENDING -> typing/loading; FAILED -> red border + 재시도 affordance.
+// Status: PENDING -> typing/loading; FAILED -> danger border + 재시도 affordance.
 //
 // L1: nothing here touches an API key. AI authorship is signalled purely by
 // authorId === null + type, never by any key material.
@@ -49,16 +49,30 @@ interface ChatBubbleProps {
 function BouncingDots() {
   return (
     <span className="inline-flex gap-0.5" aria-hidden>
-      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
-      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
-      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-[1px] bg-current [animation-delay:-0.3s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-[1px] bg-current [animation-delay:-0.15s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-[1px] bg-current" />
     </span>
+  );
+}
+
+/** Sparkle glyph (replaces the ✨ emoji) for the AI typing indicator. */
+function SparkleIcon() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      className="h-3.5 w-3.5"
+      fill="currentColor"
+    >
+      <path d="M8 1l1.3 4.2L13.5 6.5 9.3 7.8 8 12 6.7 7.8 2.5 6.5l4.2-1.3z" />
+    </svg>
   );
 }
 
 /**
  * PENDING typing indicator. AI uses a sparkle + "답변을 작성하고 있어요…" label
- * (§6.3 E.3); human keeps the existing "⟳ 입력 중…" label. Both share the dots.
+ * (§6.3 E.3); human keeps the existing "입력 중…" label. Both share the dots.
  */
 function TypingDots({ isAi }: { isAi: boolean }) {
   if (isAi) {
@@ -67,7 +81,9 @@ function TypingDots({ isAi }: { isAi: boolean }) {
         className="inline-flex items-center gap-1.5"
         aria-label="AI가 답변을 작성하고 있어요"
       >
-        <span className="text-xs opacity-70">✨ AI가 답변을 작성하고 있어요…</span>
+        <span className="inline-flex items-center gap-1 text-xs opacity-70">
+          <SparkleIcon /> AI가 답변을 작성하고 있어요…
+        </span>
         <BouncingDots />
       </span>
     );
@@ -75,7 +91,7 @@ function TypingDots({ isAi }: { isAi: boolean }) {
   return (
     <span className="inline-flex items-center gap-1.5" aria-label="입력 중">
       <BouncingDots />
-      <span className="text-xs opacity-70">⟳ 입력 중…</span>
+      <span className="text-xs opacity-70">입력 중…</span>
     </span>
   );
 }
@@ -120,21 +136,23 @@ export default function ChatBubble({
       ? 'me'
       : 'user';
 
-  // Bubble surface classes per variant.
+  // Bubble surface classes per variant (green-phosphor CRT terminal).
   let bubbleClass: string;
   if (side === 'right') {
-    // own human — brand filled.
-    bubbleClass = 'bg-brand text-white rounded-2xl rounded-br-md';
-  } else if (isAi) {
-    // AI reply — light purple border.
+    // own human — gradient CTA fill, signature accent.
     bubbleClass =
-      'bg-brand-50 text-slate-800 border border-brand-200 rounded-2xl rounded-bl-md';
+      'bg-gradient-to-b from-[#155230] to-[#0c3a20] text-term-me border border-term-cta rounded-[2px]';
+  } else if (isAi) {
+    // AI reply — warm amber tint surface.
+    bubbleClass =
+      'bg-[rgba(60,48,10,0.22)] text-term-title border border-term-amber-border rounded-[2px]';
   } else {
-    // other human — gray.
-    bubbleClass = 'bg-slate-100 text-slate-800 rounded-2xl rounded-bl-md';
+    // other human (peer) — phosphor card surface.
+    bubbleClass =
+      'bg-term-card text-term-green border border-term-border rounded-[2px]';
   }
   if (isFailed) {
-    bubbleClass += ' !border !border-red-400 !bg-red-50 !text-red-900';
+    bubbleClass += ' !border !border-term-danger !bg-term-card !text-term-danger';
   }
 
   // Read-receipt ✓ shows only for OWN COMPLETE human bubbles (§6.3 E.2).
@@ -159,19 +177,14 @@ export default function ChatBubble({
         {/* author / persona header (left bubbles only) — emoji now lives in
             the avatar, so it is no longer duplicated here. */}
         {side === 'left' && (
-          <div className="flex items-center gap-1 px-1 text-xs text-slate-500">
+          <div className="flex items-center gap-1 px-1 font-mono text-xs">
             {isAi ? (
-              <>
-                <span className="font-medium text-brand-700">
-                  {personaLabel}
-                </span>
-                <span className="rounded bg-brand-100 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
-                  AI
-                </span>
-              </>
+              <span className="font-medium text-term-amber">
+                {personaLabel} [AI] &gt;
+              </span>
             ) : (
-              <span className="font-medium text-slate-600">
-                {comment.authorUsername ?? '익명'}
+              <span className="font-medium text-term-dim">
+                {comment.authorUsername ?? '익명'} &gt;
               </span>
             )}
           </div>
@@ -188,7 +201,7 @@ export default function ChatBubble({
                 <img
                   src={comment.imageUrl}
                   alt="첨부 이미지"
-                  className="mb-1 max-h-60 rounded-lg object-contain"
+                  className="mb-1 max-h-60 rounded-[2px] object-contain"
                   loading="lazy"
                 />
               )}
@@ -207,13 +220,13 @@ export default function ChatBubble({
 
         {/* meta line: time + read-receipt (own complete) / retry on failure */}
         <div
-          className={`mt-0.5 flex items-center gap-2 px-1 text-[11px] text-slate-400 ${
+          className={`mt-0.5 flex items-center gap-2 px-1 font-mono text-[11px] text-term-faint ${
             side === 'right' ? 'flex-row-reverse' : 'flex-row'
           }`}
         >
           {time && <time dateTime={comment.createdAt}>{time}</time>}
           {showReadReceipt && (
-            <span aria-hidden className="text-brand opacity-70">
+            <span aria-hidden className="text-term-dim opacity-70">
               ✓
             </span>
           )}
@@ -221,7 +234,7 @@ export default function ChatBubble({
             <button
               type="button"
               onClick={() => onRetry?.(comment)}
-              className="inline-flex min-h-[44px] items-center gap-0.5 font-medium text-red-600 active:opacity-70"
+              className="inline-flex min-h-[44px] items-center gap-0.5 font-medium text-term-danger active:opacity-70"
             >
               <span aria-hidden>↻</span> 재시도
             </button>

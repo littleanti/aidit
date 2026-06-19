@@ -106,25 +106,25 @@ export default function CreatePost() {
   if (!userId) return null; // redirecting to /login
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold text-slate-900">글 작성</h1>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4 font-mono">
+      <h1 className="text-lg font-semibold text-term-title glow">글 작성</h1>
 
       {/* Community target */}
       {slug ? (
-        <div className="text-sm text-slate-600">
+        <div className="text-sm text-term-dim">
           커뮤니티:{' '}
-          <span className="font-medium text-slate-900">
+          <span className="font-medium text-term-title">
             {slugCommunity ? slugCommunity.name : slug}
           </span>
         </div>
       ) : (
         <label className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-slate-700">커뮤니티</span>
+          <span className="text-sm font-medium text-term-dim">커뮤니티</span>
           <select
             value={selectedCommunityId}
             onChange={(e) => setSelectedCommunityId(e.target.value)}
             disabled={communitiesLoading || submitting}
-            className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+            className="bg-term-input border border-term-border rounded-[2px] px-3 py-2.5 text-sm text-term-bright outline-none focus:border-term-bright focus:ring-1 focus:ring-term-bright"
           >
             <option value="" disabled>
               {communitiesLoading ? '불러오는 중…' : '커뮤니티 선택'}
@@ -140,7 +140,7 @@ export default function CreatePost() {
 
       {/* Title */}
       <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-slate-700">제목</span>
+        <span className="text-sm font-medium text-term-dim">제목</span>
         <input
           type="text"
           value={title}
@@ -148,48 +148,48 @@ export default function CreatePost() {
           placeholder="제목을 입력하세요"
           maxLength={300}
           disabled={submitting}
-          className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+          className="bg-term-input border border-term-border rounded-[2px] px-3 py-2.5 text-sm text-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright"
         />
       </label>
 
       {/* Body */}
       <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-slate-700">내용</span>
+        <span className="text-sm font-medium text-term-dim">내용</span>
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="내용을 입력하세요"
           rows={8}
           disabled={submitting}
-          className="resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+          className="resize-y bg-term-input border border-term-border rounded-[2px] px-3 py-2.5 text-sm text-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright"
         />
       </label>
 
       {/* AI first-reply toggle (default ON) */}
-      <label className="flex items-center gap-2 text-sm text-slate-700">
+      <label className="flex items-center gap-2 text-sm text-term-dim">
         <input
           type="checkbox"
           checked={firstAi}
           onChange={(e) => setFirstAi(e.target.checked)}
           disabled={submitting}
-          className="h-4 w-4 rounded border-slate-300 accent-[#6848F8] focus:ring-brand"
+          className="h-4 w-4 rounded-[2px] accent-[#3fa564]"
         />
         <span>게시 후 AI 1차 답변 받기</span>
       </label>
 
       {slugNotFound && (
-        <p className="text-sm text-red-600">
+        <p className="text-sm text-term-danger">
           커뮤니티 "{slug}"를 찾을 수 없습니다.
         </p>
       )}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-term-danger">{error}</p>}
 
       <button
         type="submit"
         disabled={!canSubmit}
-        className="min-h-[44px] rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+        className="min-h-[44px] rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-4 py-2.5 text-sm font-bold text-term-title glow-lg shadow-glow-cta transition disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {submitting ? '게시 중…' : '게시하기'}
+        {submitting ? '[ 게시 중… ]' : '[ 게시하기 ]'}
       </button>
     </form>
   );

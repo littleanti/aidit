@@ -10,15 +10,110 @@
   }
 
   body {
-    @apply bg-canvas text-slate-900 antialiased;
+    /* GREEN-PHOSPHOR CRT RETRO TERMINAL base shell. */
+    @apply bg-term-screen font-mono text-term-dim antialiased;
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-      'Helvetica Neue', Arial, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+    background-color: #04130b;
     -webkit-tap-highlight-color: transparent;
   }
 
   /* respect iOS safe areas for the bottom tab bar */
   :root {
     --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* CRT scanlines: fixed overlay of fine horizontal phosphor lines. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0) 0px,
+      rgba(0, 0, 0, 0) 2px,
+      rgba(0, 0, 0, 0.18) 3px,
+      rgba(0, 0, 0, 0.18) 3px
+    );
+    mix-blend-mode: multiply;
+  }
+
+  /* CRT vignette: fixed overlay darkening the screen edges. */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    pointer-events: none;
+    background: radial-gradient(
+      120% 100% at 50% 50%,
+      rgba(0, 0, 0, 0) 55%,
+      rgba(0, 0, 0, 0.55) 100%
+    );
+  }
+
+  /* Phosphor placeholder text. */
+  ::placeholder {
+    color: #2f8a52;
+    opacity: 1;
+  }
+
+  /* Phosphor scrollbar. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #1d4a30 #04130b;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #04130b;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1d4a30;
+    border-radius: 0;
+    border: 2px solid #04130b;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3fa564;
+  }
+}
+
+@layer utilities {
+  /* Phosphor text glow helpers. */
+  .glow {
+    text-shadow: 0 0 4px rgba(125, 255, 160, 0.45);
+  }
+  .glow-lg {
+    text-shadow:
+      0 0 6px rgba(125, 255, 160, 0.55),
+      0 0 12px rgba(125, 255, 160, 0.3);
+  }
+
+  /* Blinking terminal cursor block. */
+  .term-cursor::after {
+    content: '_';
+    margin-left: 0.1em;
+    color: #aaffc0;
+    animation: termBlink 1s step-end infinite;
+  }
+
+  @keyframes termBlink {
+    0%,
+    50% {
+      opacity: 1;
+    }
+    50.01%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .term-cursor::after {
+      animation: none;
+    }
   }
 }

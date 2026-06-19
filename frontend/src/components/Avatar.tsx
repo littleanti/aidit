@@ -1,6 +1,7 @@
-// VR-2: reusable circular avatar.
-// Renders a deterministic colored avatar for users / self, or a gradient AI glyph.
-// Tailwind purge safe: colors are picked from a static class array (no dynamic strings).
+// VR-2: reusable square avatar tile.
+// Renders a deterministic phosphor-tinted avatar for users / self, or a robot
+// glyph for AI. Tailwind purge safe: colors are picked from a static class
+// array (no dynamic strings).
 
 interface AvatarProps {
   /** which kind of avatar to render. */
@@ -13,13 +14,15 @@ interface AvatarProps {
 }
 
 // Static palette — full class strings only (Tailwind purge safety).
+// Green-phosphor CRT tiles: shared term-card surface + term-border, varied by
+// glyph tint so seeded users still read as distinct on the monochrome console.
 const PALETTE = [
-  'bg-violet-500',
-  'bg-emerald-500',
-  'bg-sky-500',
-  'bg-rose-500',
-  'bg-amber-500',
-  'bg-indigo-500',
+  'bg-term-card border border-term-border text-term-title',
+  'bg-term-card border border-term-border text-term-bright',
+  'bg-term-card border border-term-border text-term-dim',
+  'bg-term-hover border border-term-bright text-term-title',
+  'bg-term-hover border border-term-border text-term-bright',
+  'bg-term-card border border-term-bright text-term-dim',
 ];
 
 const SIZE: Record<NonNullable<AvatarProps['size']>, string> = {
@@ -27,25 +30,50 @@ const SIZE: Record<NonNullable<AvatarProps['size']>, string> = {
   md: 'h-8 w-8 text-sm',
 };
 
-/** Hash seed -> palette index (sum of char codes % 6). No seed -> neutral slate. */
+// Neutral phosphor tile for seedless avatars.
+const NEUTRAL = 'bg-term-card border border-term-border text-term-faint';
+
+/** Hash seed -> palette index (sum of char codes % 6). No seed -> neutral. */
 function colorFor(seed?: string | null): string {
-  if (!seed || !seed.trim()) return 'bg-slate-400';
+  if (!seed || !seed.trim()) return NEUTRAL;
   let sum = 0;
   for (let i = 0; i < seed.length; i += 1) sum += seed.charCodeAt(i);
   return PALETTE[sum % PALETTE.length];
 }
 
-// White person silhouette glyph for user/me avatars.
+// Person silhouette glyph for user/me avatars (phosphor stroke line-art).
 const PersonGlyph = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="h-1/2 w-1/2" aria-hidden>
-    <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.42 0-8 2.69-8 6v1a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1c0-3.31-3.58-6-8-6Z" />
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="h-1/2 w-1/2"
+    aria-hidden
+  >
+    <circle cx="12" cy="8" r="3.5" />
+    <path d="M5 20v-1c0-3.31 3.13-5.5 7-5.5s7 2.19 7 5.5v1" />
   </svg>
 );
 
-// White robot glyph for AI avatars.
+// Robot glyph for AI avatars (phosphor stroke line-art, matches Composer).
 const RobotGlyph = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="h-1/2 w-1/2" aria-hidden>
-    <path d="M12 2a1 1 0 0 1 1 1v1h3a3 3 0 0 1 3 3v2a2 2 0 0 1 0 4v2a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-2a2 2 0 0 1 0-4V7a3 3 0 0 1 3-3h3V3a1 1 0 0 1 1-1ZM9 11a1.25 1.25 0 1 0 0 2.5A1.25 1.25 0 0 0 9 11Zm6 0a1.25 1.25 0 1 0 0 2.5A1.25 1.25 0 0 0 15 11Z" />
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="h-1/2 w-1/2"
+    aria-hidden
+  >
+    <rect x="5" y="8" width="14" height="11" rx="1" />
+    <path d="M12 8V4M9 4h6" />
+    <circle cx="9" cy="13" r="1" fill="currentColor" stroke="none" />
+    <circle cx="15" cy="13" r="1" fill="currentColor" stroke="none" />
   </svg>
 );
 
@@ -57,11 +85,11 @@ export default function Avatar({
 }: AvatarProps) {
   const isAi = kind === 'ai';
   const colorClass = isAi
-    ? 'bg-brand-gradient'
+    ? 'bg-term-card border border-term-bright text-term-title'
     : colorFor(seed);
   return (
     <span
-      className={`flex shrink-0 items-center justify-center rounded-full text-white ${colorClass} ${SIZE[size]} ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-[3px] font-mono ${colorClass} ${SIZE[size]} ${className}`}
       aria-hidden
     >
       {isAi ? <RobotGlyph /> : <PersonGlyph />}

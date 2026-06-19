@@ -4,7 +4,7 @@
 // An AI_SUMMARY is the OPENING bubble of a NEW context segment (TRD §3/§6):
 // everything ABOVE it has been folded into this summary, and all conversation
 // BELOW it is assembled against this summary as the new baseline. We therefore
-// render it as a distinct color band (amber → purple) with a clear label and a
+// render it as a distinct warm amber tint band with a clear label and a
 // boundary microcopy divider underneath.
 //
 // L1: nothing here touches an API key. AI authorship is authorId === null +
@@ -28,11 +28,11 @@ function SummaryTyping() {
   return (
     <span className="inline-flex items-center gap-1.5" aria-label="요약 정리 중">
       <span className="inline-flex gap-0.5" aria-hidden>
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-500 [animation-delay:-0.3s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-500 [animation-delay:-0.15s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-500" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-[1px] bg-term-amber [animation-delay:-0.3s]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-[1px] bg-term-amber [animation-delay:-0.15s]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-[1px] bg-term-amber" />
       </span>
-      <span className="text-xs font-medium text-brand-700">⟳ 요약 정리 중…</span>
+      <span className="font-mono text-xs font-medium text-term-amber">요약 정리 중…</span>
     </span>
   );
 }
@@ -56,20 +56,20 @@ export default function SummaryBubble({
       role="separator"
       aria-label="대화 요약 경계"
     >
-      {/* full-width band: distinct amber→purple gradient marks the boundary */}
+      {/* full-width band: warm amber tint marks the segment boundary */}
       <div
-        className={`rounded-xl border bg-gradient-to-r from-amber-50 via-brand-50 to-brand-100 px-3 py-3 ${
-          isFailed ? 'border-red-300' : 'border-brand-200'
+        className={`rounded-[2px] border bg-[rgba(60,48,10,0.22)] px-3 py-3 ${
+          isFailed ? 'border-term-danger' : 'border-term-amber-border'
         }`}
       >
         {/* label row */}
-        <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-brand-700">
+        <div className="mb-1.5 flex items-center gap-1.5 font-mono text-xs font-semibold text-term-amber">
           <span aria-hidden>≈</span>
           <span>AI 요약 (여기까지)</span>
           <span aria-hidden className="text-sm leading-none">
             {personaEmoji}
           </span>
-          <span className="ml-auto rounded bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
+          <span className="ml-auto rounded-[2px] bg-term-tag px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-term-faint">
             {personaLabel}
           </span>
         </div>
@@ -84,27 +84,27 @@ export default function SummaryBubble({
             // XC-3: summary body is untrusted — sanitize before render.
             <SafeMarkdown
               text={comment.body}
-              className="prose-chat whitespace-pre-wrap break-words text-sm leading-relaxed text-red-700"
+              className="prose-chat whitespace-pre-wrap break-words text-sm leading-relaxed text-term-danger"
             />
           ) : (
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-red-700">
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-term-danger">
               요약 생성에 실패했습니다.
             </p>
           )
         ) : (
           <SafeMarkdown
             text={comment.body}
-            className="prose-chat whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700"
+            className="prose-chat whitespace-pre-wrap break-words text-sm leading-relaxed text-term-title"
           />
         )}
       </div>
 
       {/* boundary microcopy (FR-7.4): everything below is assembled against
           the summary above. Rendered as a centered divider line. */}
-      <div className="mt-1.5 flex items-center gap-2 px-2 text-[11px] font-medium text-brand-400">
-        <span className="h-px flex-1 bg-brand-200" />
+      <div className="mt-1.5 flex items-center gap-2 px-2 font-mono text-[11px] font-medium text-term-faint">
+        <span className="h-px flex-1 bg-term-border" />
         <span>이후 대화는 위 요약 기준</span>
-        <span className="h-px flex-1 bg-brand-200" />
+        <span className="h-px flex-1 bg-term-border" />
       </div>
     </div>
   );
