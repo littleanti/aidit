@@ -631,3 +631,33 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 - [ ] **XC-14 · 검증**: 서버 build + 테스트 green. 프론트 build + 테스트 green. 브라우저 — PostCard/Thread에서 ▲ 토글 · voted 강조색 · 재로드 후 상태 유지(x-user-id forward) 확인.
 
 **M13 종료 기준**: POST/DELETE `/posts/:id/upvote`가 멱등 토글; GET `/posts/:id` + 모든 피드가 `voted` boolean 반환(x-user-id 있을 때); PostCard/Thread의 ▲ 버튼이 로그인 필요하며 낙관적 토글, voted=true일 때 강조색; Post.score는 실시간 vote count를 반영.
+
+---
+
+## 18. (보류/예정) M16 — Fly.io 배포 + Postgres 전환 (deferred, 2026-06-20)
+
+> **현재 결정**: **로컬 PC에서 SQLite로 데모 유지**(필요 시 `vite --host`로 LAN 공유). 아래 배포 작업은 **나중에** 진행하기 위한 보류 기록이다. 실인증(JWT, M15)은 이미 완료되어 로컬/공개 모두 적용됨 — 로컬은 `JWT_SECRET` 미설정 시 dev 폴백+경고로 동작(추가 설정 불필요), **공개 배포 시에만 실 `JWT_SECRET` 필수**.
+
+**확정 설계 결정 (재논의 불필요)**
+- 호스트: **Fly.io 단일 머신**(`min_machines_running=1`, 슬립 금지). SSE가 in-memory pub/sub라 **인스턴스 1개 고정**(스케일아웃하려면 Redis pub/sub 선행).
+- 프론트: **단일 Fly 앱** — Fastify가 빌드된 `dist`까지 서빙(`/`=프론트, `/api`·`/uploads`·SSE=동일 오리진). → CORS/`VITE_API_ORIGIN`/mixed-content 불필요. (대안: 이미 준비된 GitHub Pages 분리 구성(M14)도 가능)
+- DB: **Neon Postgres**(무료, 리전 AWS Tokyo `ap-northeast-1`). Prisma `provider="postgresql"`, 런타임=pooled URL, 마이그레이션=direct URL(`DIRECT_URL`).
+- 업로드: **휘발 감수**(서버 FS, 재배포 시 소실). 영구화 필요 시 Fly Volume(단일 머신) 또는 Cloudflare R2/S3.
+- 리전: Fly `nrt`(Tokyo) + Neon Tokyo로 맞춤.
+- BYOK라 서버 LLM 비용 0 → 최소 머신(`shared-cpu-1x`, 256–512MB) 충분.
+
+**사전 준비 (사용자 직접)**
+- [ ] **PRE-1** Fly 가입(https://fly.io/app/sign-up) + 카드 등록 + `flyctl` 설치 + `fly auth login`.
+- [ ] **PRE-2** Neon 가입(https://neon.tech) → 프로젝트 생성(Tokyo) → **pooled `DATABASE_URL`** + **direct `DIRECT_URL`** 확보.
+- [ ] **PRE-3** `JWT_SECRET` 랜덤 생성(`openssl rand -base64 48`).
+
+**작업 패키지 (자산 준비)**
+- [ ] **DEP-1 · Prisma → Postgres**: `provider="postgresql"`, `DATABASE_URL`/`DIRECT_URL`(directUrl) 설정, **PG용 마이그레이션 재생성**(기존 SQLite 마이그레이션은 PG 적용 불가 → 새 baseline). ⚠️ **로컬 dev도 SQLite 사용 불가**가 되므로 로컬용은 **Neon `dev` 브랜치**를 별도 DATABASE_URL로 권장.
+- [ ] **DEP-2 · Fastify 정적 서빙**: `@fastify/static`으로 `dist` 서빙 + SPA fallback(딥링크). `/api`·`/uploads`·SSE 라우트와 공존.
+- [ ] **DEP-3 · Dockerfile**(멀티스테이지: 프론트 빌드 → 서버 빌드 → `prisma generate` → 실행). **Prisma 엔진 바이너리 타깃 주의**(Alpine면 `linux-musl` 필요 → debian-slim 베이스 권장).
+- [ ] **DEP-4 · fly.toml**: `internal_port=3001`, `[http_service] force_https`, `min_machines_running=1`, 단일 인스턴스.
+- [ ] **DEP-5 · release_command**: `npx prisma migrate deploy`(배포 시 마이그레이션 자동 적용, DIRECT_URL 사용).
+- [ ] **DEP-6 · 시크릿/배포 절차**: `fly secrets set JWT_SECRET / DATABASE_URL / DIRECT_URL` (HOST는 0.0.0.0 유지 — 127.0.0.1 금지). `.dockerignore`, `docs/DEPLOY-FLY.md` 절차서.
+- [ ] **DEP-7 · 검증**: `fly deploy` 후 register/login·글/댓글·SSE 실시간·추천/북마크·이미지(휘발) 동작 확인. 단일 오리진이므로 CORS 불필요 확인.
+
+**재개 방법**: PRE-1~3 완료를 알려주면 DEP-1~7을 workflow로 진행(자산 생성→푸시→`fly launch`/`secrets`/`deploy` 명령 안내).
