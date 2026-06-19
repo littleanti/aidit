@@ -11,6 +11,7 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-19
+- **[feat]** **헤더 UX 소소 개선**: ① Thread 헤더의 **`✎ 편집` 버튼을 커뮤니티 편집 버튼(`Community.tsx`)과 완전히 동일한 모양으로 통일**(`border border-term-border px-2 py-1 text-xs text-term-dim hover:border-term-bright hover:text-term-bright` + 라벨 `✎ 편집` + `title`; 기존 `text-term-amber` 아이콘-only에서 교체) — §4.9. ② **상단바 우측 `[ {username} ]`을 `/me`(나) 이동 링크로** 변경(`AppLayout.tsx`, `Link to="/me"` + `hover:text-term-bright`; 비로그인 시 `[ Login ]` 동작은 그대로). 순수 표현/내비게이션 변경, 동작·라우팅 회귀 없음.
 - **[feat]** **Option A 동선 개편 + 글 이미지 첨부 + 로그인 모달**: ① IA — 하단/사이드바 '작성' 탭을 글 작성(`/create-post`)으로 직결하고 커뮤니티 만들기는 검색 화면 진입으로 일원화(라우트는 둘 다 유지), ② 글 작성에 **펼침형 커뮤니티 피커**(`<select>` 대체) + **빈상태 보조 링크**(커뮤니티 0개 → `/search`) + **이미지 첨부**(Composer 패턴 재사용) 추가, ③ `Post.imageUrl`(nullable) 풀스택 반영(스키마/`POST /posts`·`GET /posts/:id`·`toFeedCard` + 프론트 타입/표시), ④ **로그인을 별도 페이지 → 모달 오버레이**로 전환(신규 `uiStore`·`LoginModal`·추출된 `LoginForm`, 헤더 `[ Login ]`이 `openLogin()` 호출, 쓰기 게이트 하드 리다이렉트 제거). (§4.6)
 - **[fix]** 홈 피드 "Invalid cursor" 무한 루프: `rest.ts::getPosts`가 페이지네이션 envelope를 풀어 `items` 배열만 반환하고 `nextCursor`를 버리자, Home이 마지막 항목의 **원본 id**를 다음 커서로 넘겨 서버가 이를 불투명 커서로 디코드하지 못해 매 페이지 "Invalid cursor"로 실패→재요청을 반복했다. `getPosts`가 서버 envelope **`{ items, nextCursor }`** 를 그대로 반환하도록 되돌리고, Home은 서버가 준 **불투명 `nextCursor`로 페이지네이션**하며 **`null`이면 정지**하도록 수정(원본 id 도출 제거). (§4.5)
 
@@ -315,7 +316,8 @@ OA-6 커뮤니티 편집 패턴을 글에 적용. 작성자는 `Thread` 헤더�
 - **백엔드 `PATCH /posts/:id` 엔드포인트**: 요청 본문 `{ title?, body?, imageUrl? }`(각 필드 선택). 인증: `x-user-id`로 현재 사용자와 `post.authorId` 매치 검증 → 비작성자는 **403 Forbidden**("글 작성자만 수정 가능"), 글 부재는 **404**. 응답: 수정된 `Post` DTO(최상위 `authorId`, `communityId`, `title`, `body`, `imageUrl` 포함). (TRD §4 테이블 추가 필요)
 - **프론트 `patchPost` 클라이언트**: `frontend/src/api/rest.ts`에 `patchPost(id, { title?, body?, imageUrl? }, userId)`추가. `PATCH /posts/:id` + `x-user-id` 헤더. 응답 타입 = `Post` DTO. 에러: 403 → "이 글을 수정할 권한이 없어요", 404 → "글을 찾을 수 없어요".
 - **`CreatePost.tsx` 편집 모드**: `useLocation().state`에서 `editPostId`를 읽음. `editPostId` 있으면 `getPost(editPostId)`로 로드 → `title/body/imageUrl` 프리필. 제출 분기: 편집이면 `patchPost(editPostId, {...}, userId)` → `navigate('/posts/'+id)`(Thread로 재진입); 아니면 기존 `postPost(생성)`. 제목/CTA가 편집 모드면 "글 수정"·"[ 수정하기 ]/[ 수정 중… ]". 이미지 재업로드·제거도 폼에서 처리. (Community 편집과 동일 메커니즘)
-- **`Thread.tsx` 헤더 [편집] 버튼**: 글 상세 헤더의 **⋯ 메뉴 슬롯**(기존 placeholder)에 작성자만 보이는 **`[편집](✎)`** 버튼 추가(`text-term-amber`). 비작성자에게는 버튼 미표시(slot 비움). 클릭 시 `Link to="/create-post" state={{editPostId: post.id}}`로 편집 모드 진입. 북마크 🔖(기존 표시용 placeholder)는 유지.
+- **`Thread.tsx` 헤더 [편집] 버튼**: 글 상세 헤더의 **⋯ 메뉴 슬롯**(기존 placeholder)에 작성자만 보이는 **`✎ 편집`** 버튼 추가. 비작성자에게는 버튼 미표시(slot 비움). 클릭 시 `Link to="/create-post" state={{editPostId: post.id}}`로 편집 모드 진입. 북마크 🔖는 유지.
+  - **스타일(2026-06-19 변경)**: 커뮤니티 상세의 `✎ 편집` 버튼(`Community.tsx`)과 **완전히 동일한 모양**으로 통일 — `shrink-0 rounded-[2px] border border-term-border px-2 py-1 text-xs text-term-dim transition hover:border-term-bright hover:text-term-bright`, 라벨 `✎ 편집`, `title="글 편집"`. (이전 `text-term-amber` 아이콘-only 스타일에서 교체.)
 - **검증**: 프론트 빌드(tsc+vite) 클린 + 테스트 green. 브라우저 — 글 작성 후 Thread 헤더에 [편집] 표시 → 클릭 → CreatePost 폼이 제목/본문/이미지로 프리필되고 "글 수정" 제목 표시 → 수정 저장 → Thread 재진입하면 변경사항 반영. 다른 사용자 Thread에는 [편집] 미표시 확인.
 - **불변(회귀 금지)**: 글 생성 흐름·1차 AI 답변·라우팅·SSE·BYOK·요약·컨텍스트 조립. 편집은 작성자만(서버 403 가드). 이미지 필드는 이미 POST 응답·`toFeedCard`에 포함되어 있어 무영향.
 

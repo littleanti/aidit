@@ -30,7 +30,9 @@ Login(모달) ─▶ Home ──┬──▶ Search ──┬──▶ Community
                       └──▶ CreatePost  ──▶ Thread (게시 후)
 
 하단 탭바(모바일):  [🏠 홈]  [🔍 검색]  [＋ 작성]  [👤 나]
+상단바 우측:  [ {username} ] ─▶ /me (나)   ·   비로그인 시 [ Login ] ─▶ 로그인 모달
 ```
+> **상단바 username 진입점(2026-06-19)** — 로그인 상태에서 상단바 우측의 `[ {username} ]`은 **`/me`(나) 페이지로 이동하는 링크**다(`hover:text-term-bright`). 비로그인 시에는 같은 자리에 `[ Login ]`(`openLogin()`)이 표시된다.
 > **Option A 동선(2026-06-19)** — **'작성' 탭(＋)은 글 작성(`/create-post`)으로 직결**한다(예전 `/create-community` 진입 폐기). **커뮤니티 만들기는 검색 화면에서만** 진입한다(상시 `[+ 커뮤니티 만들기]` 버튼 + 무결과 인라인 CTA). 데스크톱 사이드바도 "커뮤니티 만들기" 대신 **"작성"(`/create-post`, IconWrite)** 을 두며 순서는 **홈 / 검색 / 작성 / 나**. `/create-post`·`/create-community` 라우트는 **둘 다 유지**(만들기는 검색·커뮤니티 편집에서 계속 사용). **로그인은 별도 페이지가 아니라 모달 오버레이**(§1)로 어디서든 열린다(`/login` 직접 접근/딥링크는 호환 유지).
 
 ---
@@ -317,7 +319,7 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 - 뒤로: `navigate(-1)` 동작, `h-9 w-9` 터치 타깃, ‹ chevron(SVG/문자).
 - 제목: `flex-1 truncate text-center text-base font-semibold text-slate-900` = `post.title`.
 - **북마크 🔖** (VR-3, 2026-06-19 구현됨): **백엔드 연동 완료** — POST/DELETE `/posts/:id/bookmark` 호출. 초기값 `post.bookmarked`(서버 계산). 낙관적 토글, 로그인 필요(`openLogin()`). 실패 시 상태 롤백 + 토스트 "북마크 처리에 실패했습니다."
-- **메뉴 슬롯 (⋯ 또는 [편집])**: **작성자만 표시** `[편집](✎)` 버튼(`text-term-amber`), 클릭 시 `/create-post` + state `{editPostId: post.id}`로 편집 모드 진입. 비작성자에게는 슬롯이 비어있음(버튼 미표시). 기존 placeholder 주석 유지.
+- **메뉴 슬롯 (⋯ 또는 [편집])**: **작성자만 표시** `✎ 편집` 버튼, 클릭 시 `/create-post` + state `{editPostId: post.id}`로 편집 모드 진입. 비작성자에게는 슬롯이 비어있음(버튼 미표시). **스타일은 커뮤니티 상세의 `✎ 편집` 버튼과 완전 동일**(2026-06-19): `border border-term-border px-2 py-1 text-xs text-term-dim hover:border-term-bright hover:text-term-bright`, 라벨 `✎ 편집`.
 
 ### D. 원본 게시글 카드 (Thread.tsx `<article>` 재스타일)
 ```

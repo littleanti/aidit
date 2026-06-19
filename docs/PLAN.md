@@ -510,9 +510,9 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 - [x] **FE-15 · CreatePost 편집 모드 (링크 state)**: 라우트 `/create-post?editPostId=<id>` 또는 Link state `{editPostId}`.
   컴포넌트가 `getPost(editPostId)`로 기존 글 로드 → 폼 프리필(제목/본문/이미지) + 제목/버튼 "수정"으로 변경.
   제출 분기: `editPostId` 있으면 `patchPost(id, {...})` 호출 → 수정 후 Thread로 이동.
-- [x] **FE-16 · Thread 헤더 [편집] 버튼**: Thread의 ⋯ 메뉴 슬롯에 작성자만 보이는 **[편집](✎)** 버튼 추가.
+- [x] **FE-16 · Thread 헤더 [편집] 버튼**: Thread의 ⋯ 메뉴 슬롯에 작성자만 보이는 **`✎ 편집`** 버튼 추가.
   비작성자에게는 버튼 미표시(⋯ 슬롯 비움). 클릭 시 `/create-post` + state `{editPostId: post.id}`로 링크.
-  북마크 🔖는 유지(기존 표시용 placeholder).
+  북마크 🔖는 유지. **스타일은 커뮤니티 편집 버튼(`Community.tsx`)과 완전 동일**(2026-06-19 통일).
 - [x] **FE-17 · 검증**: 서버 build + 테스트 green. 브라우저 — 작성자 편집 진입 · 폼 프리필 · 저장 · 비작성자 [편집] 미표시 확인.
 
 ---

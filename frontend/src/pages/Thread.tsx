@@ -381,15 +381,17 @@ export default function Thread() {
           >
             🔖
           </button>
-          {/* edit: shown only to the post's author. */}
+          {/* edit: shown only to the post's author. Mirrors the community
+              edit button (Community.tsx) exactly. */}
           {myUserId && post.authorId === myUserId && (
             <Link
               to="/create-post"
               state={{ editPostId: post.id }}
+              className="shrink-0 rounded-[2px] border border-term-border px-2 py-1 text-xs text-term-dim transition hover:border-term-bright hover:text-term-bright"
               aria-label="글 편집"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[2px] text-lg text-term-dim hover:bg-term-hover"
+              title="글 편집"
             >
-              ✎
+              ✎ 편집
             </Link>
           )}
         </div>

@@ -67,7 +67,13 @@ export default function AppLayout() {
           </Link>
           <div className="text-sm">
             {username ? (
-              <span className="text-term-dim">[ {username} ]</span>
+              <Link
+                to="/me"
+                className="text-term-dim transition hover:text-term-bright"
+                aria-label="내 프로필로 이동"
+              >
+                [ {username} ]
+              </Link>
             ) : (
               <button
                 type="button"
