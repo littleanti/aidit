@@ -175,7 +175,7 @@ model Bookmark {
 | `GET /communities/:slug/posts` | 커뮤니티별 글 | - | |
 | `POST /posts` | 글 작성(먼저 등록, seg#0 자동) | `x-user-id` | FR-4.2 · 레이트리밋(XC-9) · 본문에 선택 `imageUrl?` |
 | `POST /uploads` | 단일 이미지 업로드(multipart) → `{ imageUrl }`(서버 상대 `/uploads/<name>`) | `x-user-id` | 글/댓글 이미지 첨부. 형식 PNG/JPEG/WebP/GIF · 최대 5MB · 정적 서빙 `GET /uploads/*` |
-| `GET /posts/:id` | 글 + 메타 | - | 응답에 `imageUrl: string \| null` 포함 |
+| `GET /posts/:id` | 글 + 메타 | 선택 `x-user-id` | 응답에 `imageUrl`, `bookmarked`, `community.personaPrompt`(L6: 클라 AI systemInstruction 소스) 포함 |
 | `PATCH /posts/:id` | **글 수정**(제목/본문/이미지, 작성자만) | `x-user-id` | 작성자 검증: `post.authorId === x-user-id` → 비작성자 403 |
 | `GET /posts/:id/comments?afterSeq=` | 버블 페이지네이션 | - | FR-5 |
 | `POST /posts/:id/comments` | **버블 게시**(사람/AI/요약 텍스트) | `x-user-id`(사람) | §4.1 · clientId 멱등 |

@@ -314,6 +314,21 @@ describe("PATCH authz (L12 / §6)", () => {
   });
 });
 
+describe("GET /posts/:id — community.personaPrompt (L6 systemInstruction source)", () => {
+  it("returns community.personaPrompt so the client AI engine can apply the persona", async () => {
+    const author = await createUser();
+    const community = await createCommunity(author.id); // persona: "You are a helpful persona."
+    const post = await createPostViaApi(app, author.id, community.id);
+
+    const res = await app.inject({ method: "GET", url: `/posts/${post.id}` });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    // Regression guard: omitting this left the Thread persona empty so every
+    // @AI / 1차 reply ran with NO systemInstruction.
+    expect(body.community.personaPrompt).toBe("You are a helpful persona.");
+  });
+});
+
 describe("PATCH /posts/:id", () => {
   it("author edits title+body -> 200 and response reflects new values", async () => {
     const author = await createUser();

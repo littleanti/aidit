@@ -277,6 +277,10 @@ const plugin: FastifyPluginAsync = async (app) => {
             name: true,
             description: true,
             personaIcon: true,
+            // L6/XC-4: the AI engine reads community.personaPrompt as the ONLY
+            // systemInstruction source. Omitting it left the Thread persona
+            // empty so @AI / 1차 replies ran with no persona at all.
+            personaPrompt: true,
           },
         },
         author: { select: { id: true, username: true } },
@@ -321,6 +325,8 @@ const plugin: FastifyPluginAsync = async (app) => {
         name: post.community.name,
         description: post.community.description,
         personaIcon: post.community.personaIcon,
+        // L6: required by the client AI engine (systemInstruction source).
+        personaPrompt: post.community.personaPrompt,
       },
       author: { id: post.author.id, username: post.author.username },
     });
@@ -438,6 +444,10 @@ const plugin: FastifyPluginAsync = async (app) => {
             name: true,
             description: true,
             personaIcon: true,
+            // L6/XC-4: the AI engine reads community.personaPrompt as the ONLY
+            // systemInstruction source. Omitting it left the Thread persona
+            // empty so @AI / 1차 replies ran with no persona at all.
+            personaPrompt: true,
           },
         },
         author: { select: { id: true, username: true } },
@@ -461,6 +471,8 @@ const plugin: FastifyPluginAsync = async (app) => {
         name: post.community.name,
         description: post.community.description,
         personaIcon: post.community.personaIcon,
+        // L6: required by the client AI engine (systemInstruction source).
+        personaPrompt: post.community.personaPrompt,
       },
       author: { id: post.author.id, username: post.author.username },
     });
