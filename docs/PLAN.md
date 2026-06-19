@@ -436,3 +436,62 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 - [x] **DS-7 · 검증**: typecheck + vitest + build green, 브라우저에서 전 화면 시각 확인
   (실 키로 로그인 → Home/Search/Community/Create*/Profile/Thread 순회).
 - [x] **DS-8 · 문서 재동기화 + 푸시**: IMPLEMENTATION_NOTES 기록, WIREFRAME 정합 확인, 커밋·푸시.
+
+---
+
+## 12. M8 — 그린 인광 CRT 레트로 터미널 리디자인 (v0.5, 2026-06-19)
+
+> 로고 기반 인디고-바이올렛(v1)을 **그린 인광 CRT 터미널** 미감으로 **대체**. 출처: `레트로 스타일 UI
+> 리디자인/AiditScreen.dc.html`. SoT: [DESIGN-SYSTEM.md](./DESIGN-SYSTEM.md)(v2). **표현 계층 한정** —
+> 라우팅/스토어/엔진/SSE/BYOK 로직 불변. 완료 게이트: `typecheck` · `test` · `build` green + 브라우저 시각 검증.
+> PR [#4](https://github.com/littleanti/aidit/pull/4)로 main 머지.
+
+### 작업 패키지 (WP)
+- [x] **RT-1 · 토큰**: `tailwind.config.js` `brand/ink/canvas` 제거 → `term-*` 팔레트(인광 그린·앰버·레드·
+  표면·보더), `bg-term-screen`/`bg-term-cta` 그라디언트, `font-mono`, `shadow-glow-*`. `index.html`
+  theme-color + PWA manifest `theme_color`/`background_color` → `#04130b`.
+- [x] **RT-2 · 전역 CSS**: `index.css` body 그라디언트 배경 + CRT 스캔라인(`::before`)·비네트(`::after`)
+  오버레이, 인광 placeholder/스크롤바, `.glow`/`.glow-lg`/`.term-cursor`(blink + `prefers-reduced-motion`).
+- [x] **RT-3 · 헤더·내비**: AppLayout 헤더(A-마크 + AIDIT, `[ user ]`/`[ Login ]`), 하단탭·데스크톱
+  사이드바 이모지 → 스트로크 SVG 아이콘, 활성색 앰버.
+- [x] **RT-4 · 홈/피드**: 인기·최신 세그먼트 탭(앰버 활성), `aidit@yoon:~$ feed --sort=` 프롬프트 + 커서,
+  `— EOF · 마지막 글이에요 —` 푸터, PostCard `POST` 코너태그 + 글로우 제목.
+- [x] **RT-5 · 화면 전환**: Login/Search/Community/CreatePost/CreateCommunity/Profile/Thread +
+  Composer/ChatBubble/SummaryBubble/Avatar/PersonaBadge/PersonaEditor/상태 컴포넌트 `term-*` 전환.
+  레거시 slate/brand/purple/white 잔재 grep 0건.
+- [x] **RT-6 · 폰트**: 웹폰트 CDN 미사용(CSP/PWA 오프라인) — 시스템 모노스페이스 스택. dc.html의
+  JetBrains Mono CDN과 **의도적 분기**(문서화).
+- [x] **RT-7 · 회귀 수정**: `@apply bg-term-screen` → 순수 CSS `background-image`(구버전 config를
+  require-cache에 든 dev 서버의 PostCSS "class does not exist" 에러 회피, 프로덕션/신규 서버는 영향 없음).
+- [x] **RT-8 · 검증**: tsc + vitest(28) + build green, 브라우저(dev) 로그인·홈 피드 시각 확인.
+- [x] **RT-9 · 문서**: DESIGN-SYSTEM v2 교체, WIREFRAME v0.5 비주얼 식별자 갱신.
+
+---
+
+## 13. M9 — Option A 동선 + 글 이미지(멀티모달) + 로그인 모달 + 커뮤니티 편집 (v0.6, 2026-06-19)
+
+> 레트로 적용(v0.5) 후, 재설계 갤러리에 합의됐으나 코드에 미반영됐던 **기능/동작**을 Option A 합의대로
+> 정렬. 표현이 아니라 **IA · 작성 흐름 · 인증 표면 · 데이터 모델 · AI 컨텍스트**. 상세:
+> [IMPLEMENTATION_NOTES §4.6–4.8](./IMPLEMENTATION_NOTES.md) · [TRD §5.1](./TRD.md). 완료 게이트:
+> 서버/프론트 `build`·`test` green + 브라우저. PR [#4](https://github.com/littleanti/aidit/pull/4)로 머지.
+
+### 작업 패키지 (WP)
+- [x] **OA-1 · IA 재배선**: `작성` 탭·사이드바 → `/create-post`(글 작성) 직결(기존 `/create-community`).
+  커뮤니티 만들기는 검색 화면 진입 유지(상시 `[+]` + 무결과 인라인 CTA — 기존).
+- [x] **OA-2 · 글 작성 커뮤니티 피커**: `<select>` → `▾ 변경` 펼침 피커(검색 필터 + `[*]`/`[ ]` 마크).
+  가입 커뮤니티 0개일 때만 "검색에서 만들기 →" 보조 링크(사각지대 보완).
+- [x] **OA-3 · 글 이미지 첨부(풀스택)**: `Post.imageUrl String?` + 마이그레이션 `add_post_image_url`
+  (nullable·비파괴), `POST/GET /posts`·`toFeedCard` 응답 포함, types/`CreatePostBody.imageUrl`,
+  작성 점선 드롭존(`uploadImage`) + 썸네일 칩, Thread 원본 카드·PostCard 표시.
+- [x] **OA-4 · 글 이미지 → 1차 AI 답변(멀티모달)**: `runPrimaryReply`에 `image` 추가 → 작성자 user 턴
+  `inlineData`로 첨부, 신규 `lib/imageInline.urlToInlineData`(`/uploads` fetch→base64, 실패 시 텍스트
+  only). 컨텍스트 텍스트 매핑·XC-4·BYOK 불변. 단위 테스트 2(image 유 inlineData / 무 텍스트).
+- [x] **OA-5 · 로그인 모달**: `stores/uiStore`(loginOpen/openLogin/closeLogin), `LoginForm` 추출 +
+  `LoginModal` 오버레이, 헤더 `[ Login ]` → 모달, `/login` 라우트 호환 유지, CreatePost 비로그인 게이트=모달.
+- [x] **OA-6 · 커뮤니티 편집 모드**: 상세 ✎ 편집 state `{editSlug}`, CreateCommunity가 `getCommunity`로
+  기존 값 프리필(이름/주소(readOnly)/설명/페르소나/아이콘) + 제출 `patchCommunity` 분기 + "수정" 제목/CTA.
+  검색 `state.name`(이름) 프리필도 함께 반영.
+- [x] **OA-7 · 검증**: 서버 build + 22테스트, 프론트 build + 30테스트 green. 브라우저 — 작성 직결 ·
+  피커 펼침 · 이미지 드롭존 · 로그인 모달(열기→제출) · 편집 프리필 실동작 확인.
+- [x] **OA-8 · 문서 + 머지**: IMPLEMENTATION_NOTES §4.6–4.8 · TRD §5.1 · DESIGN-SYSTEM/WIREFRAME 갱신,
+  PR #4 main 머지.
