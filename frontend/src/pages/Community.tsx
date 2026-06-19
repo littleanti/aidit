@@ -275,10 +275,10 @@ function CommunityDetail({ slug }: { slug: string }) {
           {isCreator && (
             <Link
               to={`/create-community`}
-              state={{ editId: community.id }}
+              state={{ editSlug: community.slug }}
               className="shrink-0 rounded-[2px] border border-term-border px-2 py-1 text-xs text-term-dim transition hover:border-term-bright hover:text-term-bright"
-              aria-label="페르소나 편집"
-              title="페르소나 편집"
+              aria-label="커뮤니티 편집"
+              title="커뮤니티 편집"
             >
               ✎ 편집
             </Link>

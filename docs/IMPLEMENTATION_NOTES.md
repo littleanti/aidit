@@ -294,6 +294,22 @@ WIREFRAME §12("디자인 시스템 v0.3 — 전 화면 적용, 구현 단일 �
 
 ---
 
+### 4.8 커뮤니티 편집 모드 — 기존 값 프리필 + PATCH (2026-06-19)
+
+커뮤니티 상세의 **✎ 편집**(생성자에게만 노출)은 `/create-community`로 식별자를 router state로 넘겼지만, `CreateCommunity`는 **생성 전용 폼**이라 그 state를 읽지 않았다 → 빈 폼이 떴고(프리필 안 됨), 제출하면 `postCommunity`(생성)만 호출돼 슬러그 중복 등으로 실패할 수 있었다. 서버 `PATCH /communities/:id`(생성자 검증 + `name`/`personaPrompt` 비어있으면 거부, `description`/`personaIcon`은 빈 문자열 허용)는 **이미 완비**돼 있었고 프론트의 편집 모드만 없었다. 본 작업으로 편집 흐름을 연결한다.
+
+- **`Community.tsx`** — 편집 링크의 router state를 `{ editId }` → **`{ editSlug: community.slug }`** 로 변경(REST에 id 단건 조회가 없고 `getCommunity(slug)`만 있으므로 slug로 넘긴다).
+- **`CreateCommunity.tsx`** — 편집 모드 추가:
+  - `useLocation().state`에서 `editSlug`(편집)·`name`(검색→만들기 핸드오프 프리필)을 읽음. `isEdit = Boolean(editSlug)`.
+  - `editSlug`면 `getCommunity(editSlug)`로 불러와 `name/slug/description/personaPrompt/personaIcon` 프리필 + `editId` 저장. slug는 생성 후 불변이라 `readOnly` + `slugEdited=true`로 자동추천 잠금(이름 수정이 slug를 덮지 않게). `name`만 있으면(검색 핸드오프) 이름·slug 추천만 채움.
+  - 제출 분기: 편집이면 `patchCommunity(editId, { name, personaPrompt, description, personaIcon }, userId)` → `navigate('/c/'+updated.slug)`; 아니면 기존 `postCommunity`. (slug는 PATCH 대상 아님 — 불변.)
+  - 제목/부제/CTA가 편집 모드면 "커뮤니티 수정"·"[ 수정하기 ]/[ 수정 중… ]", 프리필 로딩 중 제출 비활성.
+- **부수 수정**: 검색 화면 `[+] 만들기`가 넘기던 `state.name`(검색어로 이름 프리필)도 같은 메커니즘으로 이제 실제 반영됨.
+- **검증**: 프론트 빌드(tsc+vite) 클린 + 30 테스트 통과. 브라우저 — yoon으로 커뮤니티 생성 후 ✎ 편집 → 이름/주소(읽기전용)/설명/페르소나가 기존 값으로 채워지고 제목이 "커뮤니티 수정"으로 표시됨을 확인.
+- **불변(회귀 금지)**: 생성 흐름(빈 폼 + `postCommunity`)·라우팅·서버 라우트·BYOK·테스트. 편집은 생성자만(서버 403 가드).
+
+---
+
 ## 5. 스펙에 없던 추가 보조 자산
 
 구현 응집을 위해 PLAN의 WP 파일 목록 외에 도입한 소규모 자산:
