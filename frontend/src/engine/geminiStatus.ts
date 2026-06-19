@@ -9,6 +9,7 @@
 // L1: apiKey is still a call-time arg, never stored/logged here.
 
 import {
+  countTokens,
   generateContent as baseGenerateContent,
   GeminiError,
   type GenerateContentArgs,
@@ -27,5 +28,30 @@ export async function generateContent(
       .getState()
       .markFailure(err instanceof GeminiError ? err.kind : 'unknown');
     throw err;
+  }
+}
+
+/**
+ * One-shot connectivity probe — run once per key (on login / key change) so the
+ * header badge reflects real reachability immediately, instead of waiting for
+ * the first @AI call. Uses countTokens: it validates the key + network with NO
+ * generation cost (the cheapest authenticated Gemini round-trip). Never throws —
+ * it only records the outcome into geminiStatusStore.
+ *
+ * Note: passive tracking (the generateContent wrapper above) intentionally
+ * ignores countTokens, but this EXPLICIT probe is exactly a connectivity test,
+ * so a countTokens success/failure here is a valid connected/disconnected signal.
+ */
+export async function pingGemini(apiKey: string): Promise<void> {
+  try {
+    await countTokens({
+      apiKey,
+      contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
+    });
+    useGeminiStatusStore.getState().markSuccess();
+  } catch (err) {
+    useGeminiStatusStore
+      .getState()
+      .markFailure(err instanceof GeminiError ? err.kind : 'unknown');
   }
 }

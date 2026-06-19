@@ -563,3 +563,6 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 - [x] **FE-25 · AppLayout 배선**: 로그인 상태에서 `[ {username} ]` 바로 좌측에 배지 표시. (겸: 상단바 아이디
   → `/me` 링크화, Thread `✎ 편집` 버튼을 커뮤니티 편집 버튼과 동일 스타일로 통일.)
 - [x] **FE-26 · 검증**: tsc 클린 + 프론트 테스트 30 green(엔진 import 교체 무영향).
+- [x] **FE-27 · 로그인 시 1회 연결 테스트**: `pingGemini(apiKey)`(= `countTokens`, 생성 비용 0)를
+  키가 생기거나 바뀔 때(신규 로그인 · 키 변경 · 지속 세션 로드) **키당 한 번** 실행해 배지를 즉시 갱신.
+  `AppLayout` effect가 `googleApiKey` 변화를 감지, `useRef`로 동일 키 중복 핑 방지. tsc 클린 + 테스트 30 green.

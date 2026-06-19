@@ -1,6 +1,8 @@
+import { useEffect, useRef } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
+import { pingGemini } from '../engine/geminiStatus';
 import BottomTabBar from './BottomTabBar';
 import Logo from '../components/Logo';
 import LoginModal from '../components/LoginModal';
@@ -56,7 +58,19 @@ function sidebarLinkClass({ isActive }: { isActive: boolean }): string {
 
 export default function AppLayout() {
   const username = useAuthStore((s) => s.username);
+  const googleApiKey = useAuthStore((s) => s.googleApiKey);
   const openLogin = useUiStore((s) => s.openLogin);
+
+  // Gemini 연결 표식: 키가 생기거나 바뀔 때(신규 로그인 · 프로필 키 변경 · 지속
+  // 세션 로드) 키당 한 번 가벼운 연결 테스트(pingGemini)를 돌려 배지를 즉시
+  // 갱신한다. ref로 마지막 핑한 키를 기억해 같은 키로는 한 번만 호출.
+  const lastPingedKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (googleApiKey && googleApiKey !== lastPingedKey.current) {
+      lastPingedKey.current = googleApiKey;
+      void pingGemini(googleApiKey);
+    }
+  }, [googleApiKey]);
 
   return (
     <div className="min-h-full">
