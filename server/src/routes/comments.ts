@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 
 import { prisma } from "../db.js";
 import { hotScore } from "../domain/hotScore.js";
@@ -10,6 +10,7 @@ import {
   EVENT_SEGMENT_OPENED,
   type CommentDTO,
 } from "../realtime/events.js";
+import { requireAuth } from "../auth.js";
 
 // WP BE-6 + BE-11 — Comments route.
 //
@@ -20,13 +21,6 @@ import {
 // through the realtime publish seam.
 
 // --- helpers ---------------------------------------------------------------
-
-// Acting user is carried in the x-user-id header (L11: persisted User.id).
-function actingUserId(req: FastifyRequest): string | null {
-  const header = req.headers["x-user-id"];
-  const userId = Array.isArray(header) ? header[0] : header;
-  return userId ?? null;
-}
 
 type CommentType = "HUMAN" | "AI_REPLY" | "AI_SUMMARY";
 type CommentStatus = "PENDING" | "COMPLETE" | "FAILED";
@@ -152,10 +146,11 @@ const plugin: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: "clientId is required" });
       }
 
-      // HUMAN comments require an acting user; AI bubbles are author-less (L1).
-      const userId = actingUserId(req);
-      if (type === "HUMAN" && !userId) {
-        return reply.code(401).send({ error: "Missing x-user-id" });
+      // HUMAN comments require an acting user (JWT Bearer); AI bubbles are author-less (L1).
+      let userId: string | null = null;
+      if (type === "HUMAN") {
+        userId = await requireAuth(req, reply);
+        if (!userId) return;
       }
       const authorId = type === "HUMAN" ? userId : null;
 
@@ -435,7 +430,7 @@ const plugin: FastifyPluginAsync = async (app) => {
   // BE-8: Patch a comment's status and/or body. KEY-BLIND (L1): NO apiKey.
   //
   // AUTHZ (PLAN L12 / §6 resolved):
-  //  - HUMAN comment (authorId != null): require x-user-id === comment.authorId.
+  //  - HUMAN comment (authorId != null): require Bearer JWT userId === comment.authorId.
   //  - AI bubble  (authorId === null):   require body.clientId === comment.clientId
   //    (the browser that created the PENDING AI bubble owns it).
   //
@@ -472,11 +467,9 @@ const plugin: FastifyPluginAsync = async (app) => {
 
       // Ownership check.
       if (target.authorId !== null) {
-        // HUMAN comment — owner is the acting user.
-        const userId = actingUserId(req);
-        if (!userId) {
-          return reply.code(401).send({ error: "Missing x-user-id" });
-        }
+        // HUMAN comment — owner is the acting user (JWT Bearer).
+        const userId = await requireAuth(req, reply);
+        if (!userId) return;
         if (userId !== target.authorId) {
           return reply.code(403).send({ error: "Not the comment author" });
         }

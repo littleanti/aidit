@@ -1,22 +1,9 @@
-import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 
 import { prisma } from "../db.js";
 import { effectiveHotScore, hotScore } from "../domain/hotScore.js";
 import { createInitialSegment } from "../domain/segment.js";
-
-// --- helpers ---------------------------------------------------------------
-
-// Acting user is carried in the x-user-id header (L11: persisted User.id). Returns
-// the id, or null after sending a 401 (caller must return immediately).
-function requireUserId(req: FastifyRequest, reply: FastifyReply): string | null {
-  const header = req.headers["x-user-id"];
-  const userId = Array.isArray(header) ? header[0] : header;
-  if (!userId) {
-    void reply.code(401).send({ error: "Missing x-user-id" });
-    return null;
-  }
-  return userId;
-}
+import { requireAuth, optionalAuth } from "../auth.js";
 
 // Feed cursor: opaque base64 of "hotScore|id" (hot) or "createdAtMs|id" (new). The
 // numeric component is the keyset tie-break anchor; id breaks ties deterministically.
@@ -108,7 +95,7 @@ const plugin: FastifyPluginAsync = async (app) => {
   }>(
     "/posts",
     async (req, reply) => {
-      const userId = requireUserId(req, reply);
+      const userId = await requireAuth(req, reply);
       if (!userId) return;
 
       const { communityId, title, body, imageUrl } = req.body ?? {};
@@ -241,11 +228,8 @@ const plugin: FastifyPluginAsync = async (app) => {
         nextCursor = encodeCursor(anchor, last.id);
       }
 
-      // Batch voted lookup for optional acting user.
-      const actingUserHeader = req.headers["x-user-id"];
-      const actingUserId = Array.isArray(actingUserHeader)
-        ? actingUserHeader[0]
-        : actingUserHeader;
+      // Batch voted lookup for optional acting user (JWT-derived, never x-user-id).
+      const actingUserId = await optionalAuth(req);
       const votedSet = new Set<string>();
       if (actingUserId && page.length > 0) {
         const pageIds = page.map((p) => p.id);
@@ -284,8 +268,8 @@ const plugin: FastifyPluginAsync = async (app) => {
   );
 
   // Single post + community + author summary.
-  // OPTIONAL x-user-id header: when present, `bookmarked` reflects whether that
-  // user has bookmarked this post. No 401 — this endpoint remains public.
+  // OPTIONAL auth: when a valid Bearer token is present, `bookmarked` and `voted`
+  // reflect the acting user's state. No 401 — this endpoint remains public.
   app.get<{ Params: { id: string } }>("/posts/:id", async (req, reply) => {
     const post = await prisma.post.findUnique({
       where: { id: req.params.id },
@@ -310,10 +294,8 @@ const plugin: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: "Post not found" });
     }
 
-    const actingUserHeader = req.headers["x-user-id"];
-    const actingUserId = Array.isArray(actingUserHeader)
-      ? actingUserHeader[0]
-      : actingUserHeader;
+    // JWT-derived optional identity (never x-user-id).
+    const actingUserId = await optionalAuth(req);
 
     let bookmarked = false;
     let voted = false;
@@ -383,10 +365,8 @@ const plugin: FastifyPluginAsync = async (app) => {
         include: feedInclude,
       });
 
-      const actingUserHeader = req.headers["x-user-id"];
-      const actingUserId = Array.isArray(actingUserHeader)
-        ? actingUserHeader[0]
-        : actingUserHeader;
+      // JWT-derived optional identity (never x-user-id).
+      const actingUserId = await optionalAuth(req);
       const votedSet = new Set<string>();
       if (actingUserId && rows.length > 0) {
         const pageIds = rows.map((p) => p.id);
@@ -413,10 +393,8 @@ const plugin: FastifyPluginAsync = async (app) => {
         include: feedInclude,
       });
 
-      const actingUserHeader = req.headers["x-user-id"];
-      const actingUserId = Array.isArray(actingUserHeader)
-        ? actingUserHeader[0]
-        : actingUserHeader;
+      // JWT-derived optional identity (never x-user-id).
+      const actingUserId = await optionalAuth(req);
       const votedSet = new Set<string>();
       if (actingUserId && rows.length > 0) {
         const pageIds = rows.map((p) => p.id);
@@ -438,7 +416,7 @@ const plugin: FastifyPluginAsync = async (app) => {
     Params: { id: string };
     Body: { title?: string; body?: string; imageUrl?: string | null };
   }>("/posts/:id", async (req, reply) => {
-    const userId = requireUserId(req, reply);
+    const userId = await requireAuth(req, reply);
     if (!userId) return;
 
     const existing = await prisma.post.findUnique({
@@ -541,7 +519,7 @@ const plugin: FastifyPluginAsync = async (app) => {
   app.post<{ Params: { id: string } }>(
     "/posts/:id/upvote",
     async (req, reply) => {
-      const userId = requireUserId(req, reply);
+      const userId = await requireAuth(req, reply);
       if (!userId) return;
 
       const post = await prisma.post.findUnique({
@@ -582,7 +560,7 @@ const plugin: FastifyPluginAsync = async (app) => {
   app.delete<{ Params: { id: string } }>(
     "/posts/:id/upvote",
     async (req, reply) => {
-      const userId = requireUserId(req, reply);
+      const userId = await requireAuth(req, reply);
       if (!userId) return;
 
       await prisma.vote.deleteMany({
@@ -617,11 +595,11 @@ const plugin: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // POST /posts/:id/bookmark — idempotent upsert; requires x-user-id.
+  // POST /posts/:id/bookmark — idempotent upsert; requires Bearer auth.
   app.post<{ Params: { id: string } }>(
     "/posts/:id/bookmark",
     async (req, reply) => {
-      const userId = requireUserId(req, reply);
+      const userId = await requireAuth(req, reply);
       if (!userId) return;
 
       const post = await prisma.post.findUnique({
@@ -642,11 +620,11 @@ const plugin: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // DELETE /posts/:id/bookmark — idempotent delete; requires x-user-id.
+  // DELETE /posts/:id/bookmark — idempotent delete; requires Bearer auth.
   app.delete<{ Params: { id: string } }>(
     "/posts/:id/bookmark",
     async (req, reply) => {
-      const userId = requireUserId(req, reply);
+      const userId = await requireAuth(req, reply);
       if (!userId) return;
 
       await prisma.bookmark.deleteMany({
@@ -668,10 +646,8 @@ const plugin: FastifyPluginAsync = async (app) => {
         include: { post: { include: feedInclude } },
       });
 
-      const actingUserHeader = req.headers["x-user-id"];
-      const actingUserId = Array.isArray(actingUserHeader)
-        ? actingUserHeader[0]
-        : actingUserHeader;
+      // JWT-derived optional identity (never x-user-id).
+      const actingUserId = await optionalAuth(req);
       const votedSet = new Set<string>();
       if (actingUserId && rows.length > 0) {
         const pageIds = rows.map((r) => r.post.id);

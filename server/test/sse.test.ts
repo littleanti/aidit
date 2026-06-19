@@ -155,10 +155,10 @@ function openSse(
 async function postComment(
   postId: string,
   payload: Record<string, unknown>,
-  userId?: string,
+  token?: string,
 ): Promise<unknown> {
   const headers: Record<string, string> = {};
-  if (userId) headers["x-user-id"] = userId;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await app.inject({
     method: "POST",
     url: `/posts/${postId}/comments`,
@@ -170,9 +170,9 @@ async function postComment(
 
 describe("SSE stream", () => {
   it("delivers comment.created / comment.updated / segment.opened in seq order with id lines", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     // Open a live subscription from the start (no prior history).
     const sse = await openSse(`/posts/${post.id}/stream`);
@@ -181,7 +181,7 @@ describe("SSE stream", () => {
     await postComment(
       post.id,
       { type: "HUMAN", body: "hi", clientId: "h1" },
-      user.id,
+      user.token,
     );
 
     // 2) AI bubble PENDING -> created (seq 2), then PATCH -> comment.updated.
@@ -236,25 +236,25 @@ describe("SSE stream", () => {
   });
 
   it("replays only missed bubbles via ?afterSeq", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     // Three comments persisted before any subscription (seq 1,2,3).
     await postComment(
       post.id,
       { type: "HUMAN", body: "m1", clientId: "c1" },
-      user.id,
+      user.token,
     );
     await postComment(
       post.id,
       { type: "HUMAN", body: "m2", clientId: "c2" },
-      user.id,
+      user.token,
     );
     await postComment(
       post.id,
       { type: "HUMAN", body: "m3", clientId: "c3" },
-      user.id,
+      user.token,
     );
 
     // Reconnect from seq 1 -> snapshot should replay ONLY seq 2 and 3.
@@ -272,19 +272,19 @@ describe("SSE stream", () => {
   });
 
   it("reconnect via Last-Event-ID header replays missed bubbles", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     await postComment(
       post.id,
       { type: "HUMAN", body: "a", clientId: "la" },
-      user.id,
+      user.token,
     );
     await postComment(
       post.id,
       { type: "HUMAN", body: "b", clientId: "lb" },
-      user.id,
+      user.token,
     );
 
     // EventSource auto-reconnect sends the last seq it saw as Last-Event-ID.
@@ -302,14 +302,14 @@ describe("SSE stream", () => {
   });
 
   it("snapshot + live: missed bubble replayed, then a new one streamed live", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     await postComment(
       post.id,
       { type: "HUMAN", body: "snap1", clientId: "s1" },
-      user.id,
+      user.token,
     );
 
     // Subscribe from scratch: snapshot replays seq 1, then we post seq 2 live.
@@ -320,7 +320,7 @@ describe("SSE stream", () => {
     await postComment(
       post.id,
       { type: "HUMAN", body: "live2", clientId: "s2" },
-      user.id,
+      user.token,
     );
     await sse.waitFor(2);
 

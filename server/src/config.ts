@@ -8,15 +8,29 @@ function requireEnv(name: string, fallback?: string): string {
   return value;
 }
 
+const DEV_JWT_SECRET = "dev-insecure-secret-change-me";
+
 export interface Config {
   port: number;
   databaseUrl: string;
+  jwtSecret: string;
+  jwtExpires: string;
 }
 
 export const config: Config = {
   port: Number(process.env.PORT ?? 3001),
   databaseUrl: requireEnv("DATABASE_URL", "file:./dev.db"),
+  jwtSecret: process.env.JWT_SECRET ?? DEV_JWT_SECRET,
+  jwtExpires: process.env.JWT_EXPIRES ?? "7d",
 };
+
+// Warn once at startup when using the insecure dev fallback secret.
+if (config.jwtSecret === DEV_JWT_SECRET) {
+  console.warn(
+    "[auth] WARNING: JWT_SECRET is not set — using insecure dev fallback. " +
+      "Set JWT_SECRET in production.",
+  );
+}
 
 // Gemini model id — single source of truth (PLAN L7). Used later in M3 (BYOK calls
 // happen in the browser; the server stays key-blind and only references the model id).

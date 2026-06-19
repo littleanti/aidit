@@ -35,16 +35,28 @@ function uniq(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${counter}`;
 }
 
-export async function createUser(username?: string): Promise<{
-  id: string;
-  username: string;
-}> {
+// Register a real user via POST /auth/register and return { id, username, token }.
+// The password is fixed to "password123" (satisfies min-length 8).
+export async function createUser(
+  app: FastifyInstance,
+  username?: string,
+): Promise<{ id: string; username: string; token: string }> {
   const name = username ?? uniq("user");
-  const user = await prisma.user.create({
-    data: { username: name },
-    select: { id: true, username: true },
+  const res = await app.inject({
+    method: "POST",
+    url: "/auth/register",
+    payload: { username: name, password: "password123" },
   });
-  return user;
+  if (res.statusCode !== 201) {
+    throw new Error(`createUser failed: ${res.statusCode} ${res.body}`);
+  }
+  const body = JSON.parse(res.body) as { id: string; username: string; token: string };
+  return body;
+}
+
+// Return an Authorization header object for the given token.
+export function authHeader(token: string): { Authorization: string } {
+  return { Authorization: `Bearer ${token}` };
 }
 
 export async function createCommunity(creatorId: string): Promise<{
@@ -66,14 +78,14 @@ export async function createCommunity(creatorId: string): Promise<{
 // Create a post + its seg#0 directly via the route so the real BE-5 path runs.
 export async function createPostViaApi(
   app: FastifyInstance,
-  userId: string,
+  token: string,
   communityId: string,
   overrides?: { title?: string; body?: string },
 ): Promise<{ id: string }> {
   const res = await app.inject({
     method: "POST",
     url: "/posts",
-    headers: { "x-user-id": userId },
+    headers: authHeader(token),
     payload: {
       communityId,
       title: overrides?.title ?? "Test Post",

@@ -10,6 +10,7 @@ import type {
 } from './types';
 
 import { API_BASE } from '../config/api';
+import { getAuthToken } from '../lib/authToken';
 
 // REST client base. In dev (VITE_API_ORIGIN unset), API_BASE is "/api" and
 // Vite proxies /api -> http://localhost:3001 (stripping the prefix). In prod
@@ -31,7 +32,10 @@ export class ApiError extends Error {
 interface RequestOptions {
   method?: string;
   body?: unknown;
-  /** acting user id -> sent as 'x-user-id'. NEVER send any API key. */
+  /**
+   * Kept for call-site compatibility; no longer sets any header.
+   * Identity is now carried by the Authorization: Bearer JWT from authToken.ts.
+   */
   userId?: string;
   query?: Record<string, string | number | undefined | null>;
 }
@@ -50,7 +54,8 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {};
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
-  if (opts.userId) headers['x-user-id'] = opts.userId;
+  const tok = getAuthToken();
+  if (tok) headers['Authorization'] = `Bearer ${tok}`;
 
   const res = await fetch(buildUrl(path, opts.query), {
     method: opts.method ?? 'GET',
@@ -89,7 +94,33 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 
 // ---- Auth ----
 
-/** POST /auth/session — returns persisted { id, username } (L11). */
+/** Auth response shape (register + login both return this). */
+export interface AuthResponse {
+  token: string;
+  id: string;
+  username: string;
+}
+
+/** POST /auth/register { username, password } → 201 { token, id, username }. */
+export function register(username: string, password: string): Promise<AuthResponse> {
+  return request<AuthResponse>('/auth/register', {
+    method: 'POST',
+    body: { username, password },
+  });
+}
+
+/** POST /auth/session { username, password } → 200 { token, id, username }. */
+export function login(username: string, password: string): Promise<AuthResponse> {
+  return request<AuthResponse>('/auth/session', {
+    method: 'POST',
+    body: { username, password },
+  });
+}
+
+/**
+ * Thin compat alias — authStore previously called postAuthSession(username).
+ * @deprecated Use login(username, password) instead.
+ */
 export function postAuthSession(username: string): Promise<SessionResponse> {
   return request<SessionResponse>('/auth/session', {
     method: 'POST',
@@ -192,7 +223,7 @@ export async function getCommunityPosts(slug: string, userId?: string): Promise<
 /**
  * GET /users/:id/posts — posts authored by a user (public, read-only).
  * Normalizes the server's { items } envelope to an array like getPosts.
- * Pass actingUserId to have the server compute voted per card via x-user-id.
+ * Pass actingUserId for compat (unused; server reads identity from Authorization header).
  */
 export async function getUserPosts(userId: string, actingUserId?: string): Promise<PostListItem[]> {
   const r = await request<PostListResponse>(`/users/${userId}/posts`, { userId: actingUserId });
@@ -238,7 +269,7 @@ export function getPost(id: string, userId?: string): Promise<Post> {
 
 /**
  * POST /posts/:id/bookmark — bookmark a post for the acting user.
- * L1: NO apiKey. x-user-id carries the user (REQUIRED; server 401s without it).
+ * L1: NO apiKey. Identity carried via Authorization: Bearer JWT.
  * Idempotent upsert: returns { bookmarked: true } (201 or 200).
  */
 export function addBookmark(
@@ -250,7 +281,7 @@ export function addBookmark(
 
 /**
  * DELETE /posts/:id/bookmark — remove a bookmark for the acting user.
- * L1: NO apiKey. x-user-id carries the user (REQUIRED; server 401s without it).
+ * L1: NO apiKey. Identity carried via Authorization: Bearer JWT.
  * Idempotent: deleting a non-existent bookmark still returns { bookmarked: false }.
  */
 export function removeBookmark(
@@ -262,7 +293,7 @@ export function removeBookmark(
 
 /**
  * POST /posts/:id/upvote — upvote a post for the acting user.
- * L1: NO apiKey. x-user-id carries the user (REQUIRED; server 401s without it).
+ * L1: NO apiKey. Identity carried via Authorization: Bearer JWT.
  * Idempotent upsert of a Vote(userId, postId). Recomputes score + hotScore.
  */
 export function upvotePost(
@@ -274,7 +305,7 @@ export function upvotePost(
 
 /**
  * DELETE /posts/:id/upvote — remove an upvote for the acting user.
- * L1: NO apiKey. x-user-id carries the user (REQUIRED; server 401s without it).
+ * L1: NO apiKey. Identity carried via Authorization: Bearer JWT.
  * Idempotent deleteMany Vote(userId, postId). Recomputes score + hotScore.
  */
 export function removeUpvote(
@@ -292,7 +323,7 @@ export interface UpdatePostBody {
 
 /**
  * PATCH /posts/:id — update a post's title, body, or imageUrl (author-only).
- * L1: NO apiKey. x-user-id carries the author for server-side authz.
+ * L1: NO apiKey. Identity carried via Authorization: Bearer JWT.
  */
 export function patchPost(
   id: string,
@@ -306,7 +337,7 @@ export function patchPost(
 
 /**
  * POST /posts/:id/comments — create a comment (human or AI placeholder).
- * L1: NO key crosses the wire; acting user via x-user-id header.
+ * L1: NO key crosses the wire; identity via Authorization: Bearer JWT.
  * L12: body carries clientId for idempotency.
  */
 export function postComment(
@@ -323,21 +354,25 @@ export function postComment(
 
 /**
  * POST /uploads — upload a single image via multipart/form-data and return its
- * server-relative URL. L1: carries ONLY x-user-id (REQUIRED; server 401s
- * without it), NEVER any API key. We do NOT set Content-Type — the browser sets
- * the multipart boundary itself. Non-2xx is mapped to ApiError via the server's
- * { error } shape so the Composer can surface it as a toast.
+ * server-relative URL. L1: carries Authorization: Bearer JWT (REQUIRED; server
+ * 401s without it), NEVER any API key. We do NOT set Content-Type — the browser
+ * sets the multipart boundary itself. Non-2xx is mapped to ApiError via the
+ * server's { error } shape so the Composer can surface it as a toast.
  */
 export async function uploadImage(
   file: File,
-  userId: string,
+  _userId?: string,
 ): Promise<{ imageUrl: string }> {
   const fd = new FormData();
   fd.append('file', file);
 
+  const uploadHeaders: Record<string, string> = {};
+  const tok = getAuthToken();
+  if (tok) uploadHeaders['Authorization'] = `Bearer ${tok}`;
+
   const res = await fetch(`${BASE}/uploads`, {
     method: 'POST',
-    headers: { 'x-user-id': userId },
+    headers: uploadHeaders,
     body: fd,
   });
 
@@ -395,8 +430,8 @@ export function getContext(postId: string): Promise<ContextResponse> {
 
 /**
  * POST /metrics/visit — record an idempotent daily visit for the acting user
- * (author D1-retention basis). L1: carries ONLY x-user-id, NEVER any API key.
- * The server reads the header and upserts on @@unique([userId, date]); no body.
+ * (author D1-retention basis). L1: carries ONLY Authorization: Bearer JWT,
+ * NEVER any API key. Server upserts on @@unique([userId, date]); no body.
  */
 export function postMetricsVisit(
   userId: string,
@@ -416,7 +451,7 @@ export interface PatchCommentBody {
 
 /**
  * PATCH /comments/:id — update an AI/human comment's status or body once the
- * browser-side Gemini call resolves. L1: NO key. x-user-id sent when present.
+ * browser-side Gemini call resolves. L1: NO key. Identity via Bearer JWT when present.
  */
 export function patchComment(
   id: string,

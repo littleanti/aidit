@@ -1,6 +1,7 @@
-import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 
 import { prisma } from "../db.js";
+import { requireAuth } from "../auth.js";
 
 // WP BE-13 — Metrics + VisitEvent.
 //
@@ -12,13 +13,6 @@ import { prisma } from "../db.js";
 // KPIs that require client-only events (e.g. Gemini API success rate, P95 SSE
 // propagation latency) are NOT observable server-side in a key-blind PoC, so we
 // return them as `null` with a note in `unavailable`.
-
-// Acting user is carried in the x-user-id header (L11: persisted User.id).
-function actingUserId(req: FastifyRequest): string | null {
-  const header = req.headers["x-user-id"];
-  const userId = Array.isArray(header) ? header[0] : header;
-  return userId ?? null;
-}
 
 // "YYYY-MM-DD" for the given instant in UTC (stable, server-tz independent).
 function isoDate(d: Date): string {
@@ -35,20 +29,9 @@ function nextIsoDate(date: string): string {
 const plugin: FastifyPluginAsync = async (app) => {
   // POST /metrics/visit — record that the acting user visited today. Idempotent:
   // upsert on @@unique([userId, date]) so repeat calls in a day are no-ops.
-  app.post("/metrics/visit", async (req: FastifyRequest, reply: FastifyReply) => {
-    const userId = actingUserId(req);
-    if (!userId) {
-      return reply.code(401).send({ error: "Missing x-user-id" });
-    }
-
-    // Guard against unknown ids (FK would otherwise throw).
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true },
-    });
-    if (!user) {
-      return reply.code(401).send({ error: "Unknown user" });
-    }
+  app.post("/metrics/visit", async (req, reply) => {
+    const userId = await requireAuth(req, reply);
+    if (!userId) return;
 
     const date = isoDate(new Date());
     await prisma.visitEvent.upsert({

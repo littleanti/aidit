@@ -49,6 +49,7 @@
 | 실시간 | **SSE (EventSource)** | 단방향 서버→클라 충분, WS 대비 단순. 쓰기는 REST |
 | Backend | **Node 20 + Fastify + TypeScript** | 가볍고 SSE 친화적. (대안: NestJS) |
 | ORM/DB | **Prisma + SQLite(PoC) → Postgres(확장)** | 무상태 서버, 단일 SoT |
+| 인증 | **bcrypt(비밀번호) + @fastify/jwt(서명)** | 비밀번호 해시 저장, Bearer JWT 토큰 |
 | Pub/Sub | **인메모리(단일 인스턴스)** → **Redis pub/sub**(다중) | NFR-4 수평확장 |
 | LLM | **Google Gemini Flash Lite (BYOK, 클라이언트)** | §5 |
 | 배포 | 정적 프론트(CDN) + Node 서버(컨테이너) | |
@@ -61,12 +62,13 @@
 // Prisma schema (PoC)
 
 model User {
-  id        String   @id @default(cuid())
-  username  String   @unique          // 표시 + 본인 판별. 키는 저장 안 함.
-  createdAt DateTime @default(now())
-  communities Community[] @relation("CreatedCommunities")
-  posts     Post[]
-  comments  Comment[]
+  id           String   @id @default(cuid())
+  username     String   @unique          // 표시 + 본인 판별. 키는 저장 안 함.
+  passwordHash String                   // bcrypt 해시 (평문 비밀번호는 저장 안 함)
+  createdAt    DateTime @default(now())
+  communities  Community[] @relation("CreatedCommunities")
+  posts        Post[]
+  comments     Comment[]
 }
 
 model Community {
@@ -176,34 +178,35 @@ model Vote {
 
 ## 4. REST API (요약)
 
-> **구현 메모(확정)**: 아래 "인증" 칼럼의 `username`은 실제 구현에서 **`x-user-id` 헤더(영속화된 `User.id`)** 로 실현된다(L11 정합). `POST /auth/session`이 `{ id, username }`을 반환하고 클라이언트가 `userId`를 보관해 모든 쓰기에 `x-user-id`로 전달한다. **키는 어떤 헤더/바디/로그에도 절대 포함되지 않는다(L1).** 전체 구현 차이·추가 엔드포인트·KPI 형상은 [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md) 참조.
+> **인증 정책(확정)**: 모든 쓰기 요청은 **`Authorization: Bearer <jwt>` 헤더로 서명된 JWT 토큰**을 보낸다. 서버는 토큰을 **JWT_SECRET(환경변수)** 로 검증해 `userId`를 파생한다(x-user-id 신뢰 폐기). 토큰은 **JWT_EXPIRES(기본 7일)** 후 만료. **비밀번호는 bcrypt 해시로 저장**(평문 비전송). 전체 구현 차이·추가 엔드포인트·KPI 형상은 [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md) 참조.
 
 | Method · Path | 설명 | 인증 | 비고 |
 |---------------|------|------|------|
-| `POST /auth/session` | username 등록/확인(없으면 생성), **`{id,username}` 반환** | - | 키 미전송. username upsert |
+| `POST /auth/register` | 회원가입(username+password) → User 생성, **`{ id, token, username }` 반환** | - | username 중복 409. 키는 미전송. **JWT 서명·반환(Bearer 토큰).** |
+| `POST /auth/session` | 로그인(username+password) → **`{ id, token, username }` 반환, 토큰 검증** | - | 실패 시 401. 키 미전송. **JWT 서명·반환(Bearer 토큰).** |
 | `GET /communities?q=` | 커뮤니티 검색(부분일치) | - | FR-1.2 |
 | `GET /communities/:slug` | 단일 커뮤니티 조회(slug 정확 일치, 없으면 404) | - | 상세 뷰 |
-| `POST /communities` | 커뮤니티 생성(name, slug, personaPrompt, personaIcon) | `x-user-id` | FR-3.1 |
-| `PATCH /communities/:id` | 페르소나/설명 수정(생성자만) | `x-user-id` | FR-3.3 |
+| `POST /communities` | 커뮤니티 생성(name, slug, personaPrompt, personaIcon) | **`Authorization: Bearer <jwt>`** | FR-3.1 · 토큰 검증(서명/만료) |
+| `PATCH /communities/:id` | 페르소나/설명 수정(생성자만) | **`Authorization: Bearer <jwt>`** | FR-3.3 · 토큰 검증 |
 | `GET /posts?sort=hot&cursor=` | 홈 인기 피드 | - | FR-1.1, 커서 페이지네이션 |
 | `GET /communities/:slug/posts` | 커뮤니티별 글 | - | |
-| `POST /posts` | 글 작성(먼저 등록, seg#0 자동) | `x-user-id` | FR-4.2 · 레이트리밋(XC-9) · 본문에 선택 `imageUrl?` |
-| `POST /uploads` | 단일 이미지 업로드(multipart) → `{ imageUrl }`(서버 상대 `/uploads/<name>`) | `x-user-id` | 글/댓글 이미지 첨부. 형식 PNG/JPEG/WebP/GIF · 최대 5MB · 정적 서빙 `GET /uploads/*` |
-| `GET /posts/:id` | 글 + 메타 | 선택 `x-user-id` | 응답에 `imageUrl`, `bookmarked`, `voted`, `community.personaPrompt`(L6: 클라 AI systemInstruction 소스) 포함 |
-| `PATCH /posts/:id` | **글 수정**(제목/본문/이미지, 작성자만) | `x-user-id` | 작성자 검증: `post.authorId === x-user-id` → 비작성자 403 |
+| `POST /posts` | 글 작성(먼저 등록, seg#0 자동) | **`Authorization: Bearer <jwt>`** | FR-4.2 · 레이트리밋(XC-9) · 본문에 선택 `imageUrl?` · 토큰 검증 |
+| `POST /uploads` | 단일 이미지 업로드(multipart) → `{ imageUrl }`(서버 상대 `/uploads/<name>`) | **`Authorization: Bearer <jwt>`** | 글/댓글 이미지 첨부. 형식 PNG/JPEG/WebP/GIF · 최대 5MB · 정적 서빙 `GET /uploads/*` · 토큰 검증 |
+| `GET /posts/:id` | 글 + 메타 | 선택 **`Authorization: Bearer <jwt>`** | 응답에 `imageUrl`, `bookmarked`, `voted`, `community.personaPrompt`(L6: 클라 AI systemInstruction 소스) 포함 |
+| `PATCH /posts/:id` | **글 수정**(제목/본문/이미지, 작성자만) | **`Authorization: Bearer <jwt>`** | 토큰에서 파생된 `userId`로 작성자 검증 → 비작성자 403 |
 | `GET /posts/:id/comments?afterSeq=` | 버블 페이지네이션 | - | FR-5 |
-| `POST /posts/:id/comments` | **버블 게시**(사람/AI/요약 텍스트) | `x-user-id`(사람) | §4.1 · clientId 멱등 |
-| `PATCH /comments/:id` | AI 버블 상태/본문 갱신(PENDING→COMPLETE/FAILED) | `x-user-id`(사람)·clientId(AI) | FR-6.2 |
+| `POST /posts/:id/comments` | **버블 게시**(사람/AI/요약 텍스트) | **`Authorization: Bearer <jwt>`**(사람) | §4.1 · clientId 멱등 · 토큰 검증 |
+| `PATCH /comments/:id` | AI 버블 상태/본문 갱신(PENDING→COMPLETE/FAILED) | **`Authorization: Bearer <jwt>`**(사람)·clientId(AI) | FR-6.2 · 토큰 검증 |
 | `GET /posts/:id/context` | **AI 호출용 컨텍스트 조립 결과** 반환 | - | §6.2 핵심 |
 | `GET /posts/:id/stream` | **SSE 구독**(새 버블/상태변경 push) | - | §7 |
-| `POST /posts/:id/upvote` | **추천(토글-추가, 멱등 upsert)** | `x-user-id` | `score=vote count` + hotScore 재계산, `{id,score,hotScore,voted:true}` |
-| `DELETE /posts/:id/upvote` | **추천 취소(멱등)** | `x-user-id` | `score=vote count` + hotScore 재계산, `{id,score,hotScore,voted:false}` |
-| **`POST /posts/:id/bookmark`** | **북마크 추가**(idempotent upsert) | `x-user-id` | 201 `{bookmarked:true}` |
-| **`DELETE /posts/:id/bookmark`** | **북마크 제거**(idempotent delete) | `x-user-id` | 200 `{bookmarked:false}` |
+| `POST /posts/:id/upvote` | **추천(토글-추가, 멱등 upsert)** | **`Authorization: Bearer <jwt>`** | `score=vote count` + hotScore 재계산, `{id,score,hotScore,voted:true}` · 토큰 검증 |
+| `DELETE /posts/:id/upvote` | **추천 취소(멱등)** | **`Authorization: Bearer <jwt>`** | `score=vote count` + hotScore 재계산, `{id,score,hotScore,voted:false}` · 토큰 검증 |
+| **`POST /posts/:id/bookmark`** | **북마크 추가**(idempotent upsert) | **`Authorization: Bearer <jwt>`** | 201 `{bookmarked:true}` · 토큰 검증 |
+| **`DELETE /posts/:id/bookmark`** | **북마크 제거**(idempotent delete) | **`Authorization: Bearer <jwt>`** | 200 `{bookmarked:false}` · 토큰 검증 |
 | **`GET /users/:id/bookmarks`** | **북마크한 글 목록**(피드 카드, 최신순) | - | 사용자별 북마크 조회 |
 | `GET /users/:id/posts` | 사용자가 작성한 글 목록(피드 카드, 최신순) | - | 프로필(나) — 내 글 |
 | `GET /users/:id/communities` | 사용자가 생성한 커뮤니티 목록 | - | 프로필(나) — 내 커뮤니티 |
-| `POST /metrics/visit` | 인증 앱 오픈 시 `VisitEvent` 일별 멱등 기록 | `x-user-id` | BE-13 · 작성자 D1 |
+| `POST /metrics/visit` | 인증 앱 오픈 시 `VisitEvent` 일별 멱등 기록 | **`Authorization: Bearer <jwt>`** | BE-13 · 작성자 D1 · 토큰 검증 |
 | `GET /metrics` | §8 KPI 집계 반환 | - | BE-13 (형상: IMPLEMENTATION_NOTES §2.2) |
 
 ### 4.1 `POST /posts/:id/comments` — 버블 게시 계약

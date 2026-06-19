@@ -439,6 +439,31 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 
 ---
 
+## 12. M15 — 실인증(JWT) 보안 게이트 (v0.4, 2026-06-19)
+
+> 기존 x-user-id 헤더(username 기반, 위조 가능)를 **실인증(bcrypt+JWT)**로 교체. 공개 배포 시 필수. 완료 게이트:
+> `npm run typecheck` · `npm run test` · `npm run build` green + E2E(로그인/회원가입/쓰기 인증 흐름).
+
+### 작업 패키지 (WP) — 보안 게이트 (비기능 → 기능 등급 상향)
+
+| id | 제목 | 설명 | 종료 관련 |
+|---|------|------|----------|
+| **AUTH-1** | **User.passwordHash 추가 + 마이그레이션** | Prisma 스키마: `User.passwordHash String`(bcrypt 저장), 마이그레이션 생성. 기존 사용자는 데이터 마이그레이션 없음(새 가입만 가능). | DB 준비 |
+| **AUTH-2** | **`POST /auth/register`** | username+password 입력 → User 생성(username 중복 409), bcrypt 해시 저장, **JWT 서명 후 토큰 반환**. 응답: `{ id, token, username }`. | 회원가입 |
+| **AUTH-3** | **`POST /auth/session` 교체** | username+password 입력 → 기존 User 조회, bcrypt 검증(실패 시 401), **JWT 서명 후 토큰 반환**. 응답: `{ id, token, username }`. `x-user-id` 방식 완전 폐기. | 로그인 |
+| **AUTH-4** | **JWT 미들웨어 + requireAuth/optionalAuth** | Fastify 플러그인: `Authorization: Bearer <token>` 헤더 파싱 → JWT_SECRET으로 검증 → `request.user = { id, username }` 주입. 라우트 가드: `requireAuth`(실패 시 401), `optionalAuth`(선택, 없으면 `request.user = null`). | 모든 쓰기 경로 보호 |
+| **AUTH-5** | **환경 변수** | `JWT_SECRET`(토큰 서명용, 강 요구), `JWT_EXPIRES`(기본 `'7d'`, 선택). `.env.example` 문서화. | 프로덕션 설정 |
+| **AUTH-6** | **x-user-id 참조 제거** | 서버 전체 grep: `x-user-id` 헤더 제거, 모든 인가를 `request.user.id`로 전환. BE-3/4/5/6/8/9b/11/12/13 경로 갱신. | 완전 교체 |
+| **AUTH-7** | **프론트 authStore + 로그인폼** | 신규 `POST /auth/register`·`POST /auth/session` 호출 함수 + 응답 토큰 저장. `LoginForm`: password 필드 추가. 로그아웃: localStorage 토큰 삭제. 모든 쓰기 요청에 **`Authorization: Bearer <token>` 자동 헤더** 추가(fetch 인터셉터). | 인증 흐름 |
+| **AUTH-8** | **E2E 회원가입/로그인/쓰기 검증** | J1 개정: 새 사용자로 가입 → 로그인 → 글 작성 흐름. 로그인 실패(잘못된 비밀번호) 401 가드. 미인증 쓰기(토큰 없음/만료) 401 가드. | 인증 보안 |
+| **AUTH-9** | **문서 갱신** | TRD §4 API 표: `POST /auth/register` + `POST /auth/session` 추가, `x-user-id` → `Authorization: Bearer <jwt>` 변경, `JWT_SECRET`/`JWT_EXPIRES` 환경 변수 기록. PRD FR-2 갱신(비밀번호 도입). PLAN §0(L11 `x-user-id` 삭제). README 보안 섹션 갱신(공개 배포 게이트 **CLOSED**). | 문서 정합 |
+
+**M15 종료 기준**: 회원가입/로그인/비밀번호 검증 동작; 모든 쓰기가 JWT 토큰으로 인증됨; E2E 로그인 흐름 green; 서버 코드 x-user-id 0건; TRD/PRD/README 갱신; 기존 사용자는 재가입 필요(PoC 데이터 마이그레이션 미포함).
+
+**보안 게이트 해제 의미**: 공개 배포(GitHub Pages + 외부 호스트) 전에 **username/password 기반 실인증**으로 x-user-id 위조 불가능 상태로 전환 완료. 이제 배포 차단 게이트 제거 가능.
+
+---
+
 ## 12. M8 — 그린 인광 CRT 레트로 터미널 리디자인 (v0.5, 2026-06-19)
 
 > 로고 기반 인디고-바이올렛(v1)을 **그린 인광 CRT 터미널** 미감으로 **대체**. 출처: `레트로 스타일 UI

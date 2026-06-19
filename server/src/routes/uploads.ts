@@ -2,20 +2,14 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
-import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 
 import { UPLOAD_DIR } from "../uploads-dir.js";
+import { requireAuth } from "../auth.js";
 
 // WP — Image upload route. KEY-BLIND (L1): no Gemini key is ever accepted; only
-// the acting user (x-user-id) is required. Stores a single image on the local
+// a valid Bearer JWT is required. Stores a single image on the local
 // filesystem under <serverRoot>/uploads and returns a same-origin serving URL.
-
-// Acting user is carried in the x-user-id header (mirrors comments.ts).
-function actingUserId(req: FastifyRequest): string | null {
-  const header = req.headers["x-user-id"];
-  const userId = Array.isArray(header) ? header[0] : header;
-  return userId ?? null;
-}
 
 // Allowed MIME types → stored file extension. The extension is derived ONLY from
 // the validated MIME; the client-supplied filename is read nowhere (R-6:
@@ -29,11 +23,9 @@ const MIME_TO_EXT: Record<string, string> = {
 
 const plugin: FastifyPluginAsync = async (app) => {
   app.post("/uploads", async (req, reply) => {
-    // Login REQUIRED (no anonymous uploads).
-    const userId = actingUserId(req);
-    if (!userId) {
-      return reply.code(401).send({ error: "Missing x-user-id" });
-    }
+    // Login REQUIRED (no anonymous uploads). JWT Bearer required.
+    const userId = await requireAuth(req, reply);
+    if (!userId) return;
 
     let file: Awaited<ReturnType<typeof req.file>>;
     try {

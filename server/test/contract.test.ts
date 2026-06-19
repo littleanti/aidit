@@ -1,14 +1,15 @@
 // WP XC-T — CONTRACT tests (app.inject; no network, no LLM).
 //
-// Covers: auth/session shape, key-blindness (no apiKey accepted/echoed),
+// Covers: auth/register + auth/session shape, key-blindness (no apiKey),
 // clientId idempotency, /context assembly (FR-6.1 seg0 + FR-7.2 seg1 exclusion),
-// PATCH authz (HUMAN by x-user-id, AI bubble by clientId), and the AI_SUMMARY
-// 409 conflict guard (stale segmentExpected → no double-open).
+// PATCH authz (HUMAN by JWT, AI bubble by clientId), the AI_SUMMARY 409 conflict
+// guard (stale segmentExpected → no double-open), and JWT security gate tests.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 
 import {
+  authHeader,
   createCommunity,
   createPostViaApi,
   createUser,
@@ -32,38 +33,179 @@ beforeEach(async () => {
   await resetDb();
 });
 
-describe("auth/session", () => {
-  it("returns { id, username } and never an apiKey", async () => {
+// ---------------------------------------------------------------------------
+// Auth: register + session
+// ---------------------------------------------------------------------------
+
+describe("auth/register", () => {
+  it("returns 201 { token, id, username } with a valid Bearer token", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/auth/session",
-      payload: { username: "alice" },
+      url: "/auth/register",
+      payload: { username: "alice", password: "password123" },
     });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(201);
     const body = JSON.parse(res.body);
+    expect(body).toHaveProperty("token");
+    expect(typeof body.token).toBe("string");
+    expect(body.token.length).toBeGreaterThan(0);
     expect(body).toHaveProperty("id");
     expect(body.username).toBe("alice");
-    expect(Object.keys(body).sort()).toEqual(["id", "username"]);
+    expect(Object.keys(body).sort()).toEqual(["id", "token", "username"]);
   });
 
-  it("rejects a missing/invalid username (400)", async () => {
+  it("returns 409 when username already exists", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: { username: "bob", password: "password123" },
+    });
     const res = await app.inject({
       method: "POST",
-      url: "/auth/session",
-      payload: {},
+      url: "/auth/register",
+      payload: { username: "bob", password: "different123" },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("returns 400 when password is too short (< 8 chars)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: { username: "charlie", password: "short" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 400 when username is missing", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: { password: "password123" },
     });
     expect(res.statusCode).toBe(400);
   });
 });
 
-describe("key-blindness (L1)", () => {
-  it("ignores a posted apiKey on auth/session and never echoes it", async () => {
+describe("auth/session", () => {
+  it("returns 200 { token, id, username } with correct credentials", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: { username: "dave", password: "password123" },
+    });
     const res = await app.inject({
       method: "POST",
       url: "/auth/session",
-      payload: { username: "carol", apiKey: "SECRET-KEY-123" },
+      payload: { username: "dave", password: "password123" },
     });
     expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body).toHaveProperty("token");
+    expect(body.username).toBe("dave");
+    expect(Object.keys(body).sort()).toEqual(["id", "token", "username"]);
+  });
+
+  it("returns 401 on wrong password", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: { username: "eve", password: "password123" },
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/session",
+      payload: { username: "eve", password: "wrongpassword" },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 401 on unknown username", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/session",
+      payload: { username: "nobody", password: "password123" },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 401 for legacy user with no passwordHash", async () => {
+    // Create a user directly in DB without a passwordHash (legacy row).
+    await prisma.user.create({ data: { username: "legacy-user" } });
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/session",
+      payload: { username: "legacy-user", password: "password123" },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 400 when username is missing", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/session",
+      payload: { password: "password123" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// JWT security gate
+// ---------------------------------------------------------------------------
+
+describe("JWT security gate", () => {
+  it("a forged / garbage Bearer token → 401 on a protected write", async () => {
+    const user = await createUser(app);
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.token, community.id);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/upvote`,
+      headers: { Authorization: "Bearer this.is.garbage" },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("no token → 401 on a protected write", async () => {
+    const user = await createUser(app);
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.token, community.id);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/upvote`,
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("valid token → authed write succeeds", async () => {
+    const user = await createUser(app);
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.token, community.id);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/upvote`,
+      headers: authHeader(user.token),
+    });
+    expect(res.statusCode).toBe(201);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Key-blindness (L1)
+// ---------------------------------------------------------------------------
+
+describe("key-blindness (L1)", () => {
+  it("ignores a posted apiKey on auth/register and never echoes it", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: { username: "carol", password: "password123", apiKey: "SECRET-KEY-123" },
+    });
+    expect(res.statusCode).toBe(201);
     expect(res.body).not.toContain("SECRET-KEY-123");
     expect(res.body).not.toContain("apiKey");
     const body = JSON.parse(res.body);
@@ -71,14 +213,14 @@ describe("key-blindness (L1)", () => {
   });
 
   it("ignores an apiKey on comment create and never persists/echoes it", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     const res = await app.inject({
       method: "POST",
       url: `/posts/${post.id}/comments`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
       payload: {
         type: "HUMAN",
         body: "hello",
@@ -97,11 +239,15 @@ describe("key-blindness (L1)", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// clientId idempotency
+// ---------------------------------------------------------------------------
+
 describe("clientId idempotency", () => {
   it("returns the same comment for a repeated (postId, clientId), no dup", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     const payload = {
       type: "HUMAN" as const,
@@ -112,7 +258,7 @@ describe("clientId idempotency", () => {
     const first = await app.inject({
       method: "POST",
       url: `/posts/${post.id}/comments`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
       payload,
     });
     expect(first.statusCode).toBe(201);
@@ -121,7 +267,7 @@ describe("clientId idempotency", () => {
     const second = await app.inject({
       method: "POST",
       url: `/posts/${post.id}/comments`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
       payload,
     });
     // Idempotent replay returns the SAME comment with 200.
@@ -136,12 +282,16 @@ describe("clientId idempotency", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// /context assembly
+// ---------------------------------------------------------------------------
+
 describe("/context assembly", () => {
   it("segment 0 includes the original post + seg-0 bubbles (FR-6.1)", async () => {
-    const author = await createUser("postauthor");
-    const commenter = await createUser("human1");
+    const author = await createUser(app, "postauthor");
+    const commenter = await createUser(app, "human1");
     const community = await createCommunity(author.id);
-    const post = await createPostViaApi(app, author.id, community.id, {
+    const post = await createPostViaApi(app, author.token, community.id, {
       title: "First Post",
       body: "Post body text.",
     });
@@ -150,7 +300,7 @@ describe("/context assembly", () => {
     await app.inject({
       method: "POST",
       url: `/posts/${post.id}/comments`,
-      headers: { "x-user-id": commenter.id },
+      headers: authHeader(commenter.token),
       payload: { type: "HUMAN", body: "a question", clientId: "h1" },
     });
     await app.inject({
@@ -184,9 +334,9 @@ describe("/context assembly", () => {
   });
 
   it("after a summary, segment 1 returns (summary opening + after) EXCLUDING prior history (FR-7.2)", async () => {
-    const author = await createUser("auth2");
+    const author = await createUser(app, "auth2");
     const community = await createCommunity(author.id);
-    const post = await createPostViaApi(app, author.id, community.id, {
+    const post = await createPostViaApi(app, author.token, community.id, {
       title: "T",
       body: "B",
     });
@@ -195,7 +345,7 @@ describe("/context assembly", () => {
     await app.inject({
       method: "POST",
       url: `/posts/${post.id}/comments`,
-      headers: { "x-user-id": author.id },
+      headers: authHeader(author.token),
       payload: { type: "HUMAN", body: "old seg0 message", clientId: "old1" },
     });
 
@@ -216,7 +366,7 @@ describe("/context assembly", () => {
     await app.inject({
       method: "POST",
       url: `/posts/${post.id}/comments`,
-      headers: { "x-user-id": author.id },
+      headers: authHeader(author.token),
       payload: { type: "HUMAN", body: "new seg1 message", clientId: "new1" },
     });
 
@@ -242,17 +392,21 @@ describe("/context assembly", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// PATCH authz (L12 / §6)
+// ---------------------------------------------------------------------------
+
 describe("PATCH authz (L12 / §6)", () => {
   it("HUMAN comment: author can edit; wrong user -> 403", async () => {
-    const author = await createUser();
-    const other = await createUser();
+    const author = await createUser(app);
+    const other = await createUser(app);
     const community = await createCommunity(author.id);
-    const post = await createPostViaApi(app, author.id, community.id);
+    const post = await createPostViaApi(app, author.token, community.id);
 
     const created = await app.inject({
       method: "POST",
       url: `/posts/${post.id}/comments`,
-      headers: { "x-user-id": author.id },
+      headers: authHeader(author.token),
       payload: { type: "HUMAN", body: "mine", clientId: "h-auth" },
     });
     const dto = JSON.parse(created.body);
@@ -261,7 +415,7 @@ describe("PATCH authz (L12 / §6)", () => {
     const ok = await app.inject({
       method: "PATCH",
       url: `/comments/${dto.id}`,
-      headers: { "x-user-id": author.id },
+      headers: authHeader(author.token),
       payload: { body: "edited" },
     });
     expect(ok.statusCode).toBe(200);
@@ -271,16 +425,16 @@ describe("PATCH authz (L12 / §6)", () => {
     const forbidden = await app.inject({
       method: "PATCH",
       url: `/comments/${dto.id}`,
-      headers: { "x-user-id": other.id },
+      headers: authHeader(other.token),
       payload: { body: "hijack" },
     });
     expect(forbidden.statusCode).toBe(403);
   });
 
   it("AI bubble: correct clientId can edit; wrong clientId -> 403", async () => {
-    const author = await createUser();
+    const author = await createUser(app);
     const community = await createCommunity(author.id);
-    const post = await createPostViaApi(app, author.id, community.id);
+    const post = await createPostViaApi(app, author.token, community.id);
 
     // PENDING AI bubble owned by clientId "ai-owner".
     const created = await app.inject({
@@ -314,11 +468,15 @@ describe("PATCH authz (L12 / §6)", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// GET /posts/:id — community.personaPrompt (L6 systemInstruction source)
+// ---------------------------------------------------------------------------
+
 describe("GET /posts/:id — community.personaPrompt (L6 systemInstruction source)", () => {
   it("returns community.personaPrompt so the client AI engine can apply the persona", async () => {
-    const author = await createUser();
+    const author = await createUser(app);
     const community = await createCommunity(author.id); // persona: "You are a helpful persona."
-    const post = await createPostViaApi(app, author.id, community.id);
+    const post = await createPostViaApi(app, author.token, community.id);
 
     const res = await app.inject({ method: "GET", url: `/posts/${post.id}` });
     expect(res.statusCode).toBe(200);
@@ -329,11 +487,15 @@ describe("GET /posts/:id — community.personaPrompt (L6 systemInstruction sourc
   });
 });
 
+// ---------------------------------------------------------------------------
+// PATCH /posts/:id
+// ---------------------------------------------------------------------------
+
 describe("PATCH /posts/:id", () => {
   it("author edits title+body -> 200 and response reflects new values", async () => {
-    const author = await createUser();
+    const author = await createUser(app);
     const community = await createCommunity(author.id);
-    const post = await createPostViaApi(app, author.id, community.id, {
+    const post = await createPostViaApi(app, author.token, community.id, {
       title: "Original Title",
       body: "Original body.",
     });
@@ -341,7 +503,7 @@ describe("PATCH /posts/:id", () => {
     const res = await app.inject({
       method: "PATCH",
       url: `/posts/${post.id}`,
-      headers: { "x-user-id": author.id },
+      headers: authHeader(author.token),
       payload: { title: "Edited Title", body: "Edited body." },
     });
     expect(res.statusCode).toBe(200);
@@ -356,24 +518,24 @@ describe("PATCH /posts/:id", () => {
   });
 
   it("a different user editing -> 403", async () => {
-    const author = await createUser();
-    const other = await createUser();
+    const author = await createUser(app);
+    const other = await createUser(app);
     const community = await createCommunity(author.id);
-    const post = await createPostViaApi(app, author.id, community.id);
+    const post = await createPostViaApi(app, author.token, community.id);
 
     const res = await app.inject({
       method: "PATCH",
       url: `/posts/${post.id}`,
-      headers: { "x-user-id": other.id },
+      headers: authHeader(other.token),
       payload: { title: "Hijack" },
     });
     expect(res.statusCode).toBe(403);
   });
 
-  it("missing x-user-id -> 401", async () => {
-    const author = await createUser();
+  it("missing token -> 401", async () => {
+    const author = await createUser(app);
     const community = await createCommunity(author.id);
-    const post = await createPostViaApi(app, author.id, community.id);
+    const post = await createPostViaApi(app, author.token, community.id);
 
     const res = await app.inject({
       method: "PATCH",
@@ -384,47 +546,51 @@ describe("PATCH /posts/:id", () => {
   });
 
   it("non-existent post id -> 404", async () => {
-    const author = await createUser();
+    const author = await createUser(app);
 
     const res = await app.inject({
       method: "PATCH",
       url: "/posts/nonexistent-id-that-does-not-exist",
-      headers: { "x-user-id": author.id },
+      headers: authHeader(author.token),
       payload: { title: "Ghost" },
     });
     expect(res.statusCode).toBe(404);
   });
 });
 
+// ---------------------------------------------------------------------------
+// Bookmarks
+// ---------------------------------------------------------------------------
+
 describe("bookmarks", () => {
   it("POST bookmark -> 201 { bookmarked: true }", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     const res = await app.inject({
       method: "POST",
       url: `/posts/${post.id}/bookmark`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     expect(res.statusCode).toBe(201);
     expect(JSON.parse(res.body)).toEqual({ bookmarked: true });
   });
 
   it("POST bookmark is idempotent (second call still succeeds, one DB row)", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     await app.inject({
       method: "POST",
       url: `/posts/${post.id}/bookmark`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     const res = await app.inject({
       method: "POST",
       url: `/posts/${post.id}/bookmark`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     expect(res.statusCode).toBe(201);
     expect(JSON.parse(res.body)).toEqual({ bookmarked: true });
@@ -436,9 +602,9 @@ describe("bookmarks", () => {
   });
 
   it("GET /users/:id/bookmarks returns the post as a feed card", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id, {
+    const post = await createPostViaApi(app, user.token, community.id, {
       title: "Bookmarked Post",
       body: "body here",
     });
@@ -446,7 +612,7 @@ describe("bookmarks", () => {
     await app.inject({
       method: "POST",
       url: `/posts/${post.id}/bookmark`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
 
     const res = await app.inject({
@@ -464,21 +630,21 @@ describe("bookmarks", () => {
     expect(card).toHaveProperty("authorUsername");
   });
 
-  it("GET /posts/:id with x-user-id returns bookmarked:true; without returns bookmarked:false", async () => {
-    const user = await createUser();
+  it("GET /posts/:id with valid token returns bookmarked:true; without returns bookmarked:false", async () => {
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     await app.inject({
       method: "POST",
       url: `/posts/${post.id}/bookmark`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
 
     const withUser = await app.inject({
       method: "GET",
       url: `/posts/${post.id}`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     expect(JSON.parse(withUser.body).bookmarked).toBe(true);
 
@@ -490,43 +656,43 @@ describe("bookmarks", () => {
   });
 
   it("DELETE bookmark -> 200 { bookmarked: false }", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     await app.inject({
       method: "POST",
       url: `/posts/${post.id}/bookmark`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
 
     const res = await app.inject({
       method: "DELETE",
       url: `/posts/${post.id}/bookmark`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ bookmarked: false });
   });
 
   it("DELETE bookmark is idempotent when none exists", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     const res = await app.inject({
       method: "DELETE",
       url: `/posts/${post.id}/bookmark`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ bookmarked: false });
   });
 
-  it("POST bookmark without x-user-id -> 401", async () => {
-    const user = await createUser();
+  it("POST bookmark without token -> 401", async () => {
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     const res = await app.inject({
       method: "POST",
@@ -536,27 +702,31 @@ describe("bookmarks", () => {
   });
 
   it("POST bookmark on missing post -> 404", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
 
     const res = await app.inject({
       method: "POST",
       url: "/posts/nonexistent-post-id/bookmark",
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     expect(res.statusCode).toBe(404);
   });
 });
 
+// ---------------------------------------------------------------------------
+// Upvote toggle
+// ---------------------------------------------------------------------------
+
 describe("upvote toggle", () => {
   it("POST upvote -> 201 { voted: true, score: 1 }", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     const res = await app.inject({
       method: "POST",
       url: `/posts/${post.id}/upvote`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     expect(res.statusCode).toBe(201);
     const body = JSON.parse(res.body);
@@ -567,19 +737,19 @@ describe("upvote toggle", () => {
   });
 
   it("POST upvote is idempotent (second call: score stays 1, one DB row)", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     await app.inject({
       method: "POST",
       url: `/posts/${post.id}/upvote`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     const res = await app.inject({
       method: "POST",
       url: `/posts/${post.id}/upvote`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     expect(res.statusCode).toBe(201);
     const body = JSON.parse(res.body);
@@ -593,20 +763,20 @@ describe("upvote toggle", () => {
   });
 
   it("DELETE upvote -> 200 { voted: false, score: 0 }", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     await app.inject({
       method: "POST",
       url: `/posts/${post.id}/upvote`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
 
     const res = await app.inject({
       method: "DELETE",
       url: `/posts/${post.id}/upvote`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
@@ -615,14 +785,14 @@ describe("upvote toggle", () => {
   });
 
   it("DELETE upvote is idempotent when no vote exists", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     const res = await app.inject({
       method: "DELETE",
       url: `/posts/${post.id}/upvote`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
@@ -630,21 +800,21 @@ describe("upvote toggle", () => {
     expect(body.score).toBe(0);
   });
 
-  it("GET /posts/:id with x-user-id returns voted:true; without returns voted:false", async () => {
-    const user = await createUser();
+  it("GET /posts/:id with valid token returns voted:true; without returns voted:false", async () => {
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     await app.inject({
       method: "POST",
       url: `/posts/${post.id}/upvote`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
 
     const withUser = await app.inject({
       method: "GET",
       url: `/posts/${post.id}`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     expect(JSON.parse(withUser.body).voted).toBe(true);
 
@@ -655,21 +825,21 @@ describe("upvote toggle", () => {
     expect(JSON.parse(withoutUser.body).voted).toBe(false);
   });
 
-  it("GET /posts (feed) with x-user-id reflects voted per card", async () => {
-    const user = await createUser();
+  it("GET /posts (feed) with valid token reflects voted per card", async () => {
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     await app.inject({
       method: "POST",
       url: `/posts/${post.id}/upvote`,
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
 
     const res = await app.inject({
       method: "GET",
       url: "/posts",
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
@@ -678,10 +848,10 @@ describe("upvote toggle", () => {
     expect(card.voted).toBe(true);
   });
 
-  it("POST upvote without x-user-id -> 401", async () => {
-    const user = await createUser();
+  it("POST upvote without token -> 401", async () => {
+    const user = await createUser(app);
     const community = await createCommunity(user.id);
-    const post = await createPostViaApi(app, user.id, community.id);
+    const post = await createPostViaApi(app, user.token, community.id);
 
     const res = await app.inject({
       method: "POST",
@@ -691,22 +861,26 @@ describe("upvote toggle", () => {
   });
 
   it("POST upvote on missing post -> 404", async () => {
-    const user = await createUser();
+    const user = await createUser(app);
 
     const res = await app.inject({
       method: "POST",
       url: "/posts/nonexistent-post-id/upvote",
-      headers: { "x-user-id": user.id },
+      headers: authHeader(user.token),
     });
     expect(res.statusCode).toBe(404);
   });
 });
 
+// ---------------------------------------------------------------------------
+// AI_SUMMARY 409 guard (BE-7)
+// ---------------------------------------------------------------------------
+
 describe("AI_SUMMARY 409 guard (BE-7)", () => {
   it("stale segmentExpected -> 409 and no double-open", async () => {
-    const author = await createUser();
+    const author = await createUser(app);
     const community = await createCommunity(author.id);
-    const post = await createPostViaApi(app, author.id, community.id);
+    const post = await createPostViaApi(app, author.token, community.id);
 
     // First summary wins: active index 0 -> opens segment 1.
     const first = await app.inject({

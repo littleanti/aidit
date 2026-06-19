@@ -72,9 +72,11 @@ npm run dev
 | `frontend/` | `npm run build` | 타입체크 + 프로덕션 빌드 |
 | `frontend/` | `npm run e2e` | Playwright E2E |
 
-## 보안 메모 (key-blind / L1)
+## 보안 메모
 
-Google AI Studio API 키는 **브라우저 localStorage에만** 저장되고, 호출 직전 메모리에서만 사용되어 Google로 직접 전송됩니다. 어떤 요청 바디/헤더/로그에도 키가 포함되지 않으며 Aidit 서버 DB에 저장되지 않습니다. `server/.env`는 git 추적 대상이 아닙니다(`.env.example`만 커밋).
+**API 키 (key-blind / L1)**: Google AI Studio API 키는 **브라우저 localStorage에만** 저장되고, 호출 직전 메모리에서만 사용되어 Google로 직접 전송됩니다. 어떤 요청 바디/헤더/로그에도 키가 포함되지 않으며 Aidit 서버 DB에 저장되지 않습니다. `server/.env`는 git 추적 대상이 아닙니다(`.env.example`만 커밋).
+
+**인증 (JWT 기반 실인증)**: 사용자는 **username+password로 회원가입·로그인**하며, 서버가 **bcrypt 기반 비밀번호 검증 후 JWT 토큰**을 발급합니다. 모든 쓰기 요청은 `Authorization: Bearer <token>` 헤더로 인증되고, 서버는 **JWT_SECRET으로 토큰을 검증**해 사용자를 식별합니다. 이전의 `x-user-id` 헤더(위조 가능)는 완전히 제거되었습니다. **프로덕션 배포 시 JWT_SECRET 환경 변수는 필수이며 강력한 난수값으로 설정**해야 합니다.
 
 ## GitHub Pages 배포(옵션 A)
 
@@ -87,8 +89,9 @@ Google AI Studio API 키는 **브라우저 localStorage에만** 저장되고, �
 - **CSP 자동화**: `vite.config.ts`가 빌드 시 `VITE_API_ORIGIN`을 CSP `connect-src` + `img-src`에 주입
 - **CORS 허용**: 백엔드 `WEB_ORIGIN` env에 `https://username.github.io` 또는 `https://username.github.io/repo-name` 추가
 - **서버 바인드**: 프로덕션에선 `HOST=127.0.0.1`로 로컬 인터페이스만 (LB/프록시 뒤)
+- **인증**: `JWT_SECRET` env(토큰 서명, 강필수·난수값), `JWT_EXPIRES` env(선택, 기본 '7d')
 
-**공개 전 필수 보안 게이트**: 현재 `x-user-id` 헤더는 브라우저 username 입력만 기반이므로 **실제 배포 시 JWT·OAuth 같은 실인증으로 교체 필수.**
+**보안 게이트**: ✅ **CLOSED** — JWT 기반 실인증(bcrypt+비밀번호) 완료. 공개 배포 가능.
 
 ## 개발 문서
 

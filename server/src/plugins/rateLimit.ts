@@ -26,9 +26,22 @@ const uploadTimestamps = new Map<string, number[]>();
 const lastCommunityAt = new Map<string, number>();
 
 function identity(req: FastifyRequest): string {
-  const header = req.headers["x-user-id"];
-  const userId = Array.isArray(header) ? header[0] : header;
-  if (userId && userId.trim().length > 0) return `u:${userId}`;
+  // Prefer the JWT sub (Bearer token) for per-user rate-limiting; fall back to
+  // IP when unauthenticated. We extract sub without full verification here
+  // (rate-limit keying only, not an auth decision) — a forgery just hits the
+  // attacker's own bucket.
+  const auth = req.headers.authorization;
+  if (typeof auth === "string" && auth.startsWith("Bearer ")) {
+    const token = auth.slice(7).trim();
+    if (token.length > 0) {
+      try {
+        const payload = req.server.jwt.verify<{ sub?: string }>(token);
+        if (payload.sub) return `u:${payload.sub}`;
+      } catch {
+        // invalid token — fall through to IP
+      }
+    }
+  }
   return `ip:${req.ip}`;
 }
 

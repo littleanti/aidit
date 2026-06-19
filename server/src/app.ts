@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
+import fastifyJwt from "@fastify/jwt";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 
@@ -71,6 +72,9 @@ export async function build(): Promise<FastifyInstance> {
     },
     credentials: true,
   });
+
+  // JWT plugin — must be registered before any route that calls req.jwtVerify().
+  await app.register(fastifyJwt, { secret: config.jwtSecret });
 
   // Cross-cutting plugins (register BEFORE routes so their global hooks apply to
   // every response/request): XC-3 security headers (CSP) + XC-9 rate limiting.

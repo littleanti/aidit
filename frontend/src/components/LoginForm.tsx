@@ -3,41 +3,74 @@ import { useAuthStore } from '../stores/authStore';
 import { ApiError } from '../api/rest';
 
 interface LoginFormProps {
-  /** called after login() resolves successfully. */
+  /** called after login() or register() resolves successfully. */
   onSuccess?: () => void;
 }
 
-// Extracted login form (nickname + API key + warning + issue link + submit).
-// Shared by pages/Login.tsx (full page) and components/LoginModal.tsx (overlay).
+// Extracted login/register form.
+// Mode toggle: "처음이신가요? 회원가입" / "이미 계정이 있으신가요? 로그인"
+// Gemini key: still BYOK, stored locally only (L1). Optional field shown in
+// both modes so users can set it right away; stored via updateKey().
 export default function LoginForm({ onSuccess }: LoginFormProps) {
   const login = useAuthStore((s) => s.login);
+  const register = useAuthStore((s) => s.register);
+  const updateKey = useAuthStore((s) => s.updateKey);
 
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = username.trim().length > 0 && apiKey.trim().length > 0;
+  const canSubmit =
+    username.trim().length > 0 && password.trim().length > 0;
+
+  function toggleMode() {
+    setMode((m) => (m === 'login' ? 'register' : 'login'));
+    setError(null);
+  }
+
+  function koreanError(err: unknown): string {
+    if (!(err instanceof ApiError)) return '오류가 발생했습니다. 다시 시도해 주세요.';
+    if (err.status === 401) return '아이디 또는 비밀번호가 올바르지 않습니다.';
+    if (err.status === 409) return '이미 사용 중인 아이디입니다.';
+    if (err.status === 400) {
+      // Surface server's validation message; fall back to password length hint.
+      if (typeof err.message === 'string' && err.message) return err.message;
+      return '비밀번호는 8자 이상이어야 합니다.';
+    }
+    return err.message || '오류가 발생했습니다. 다시 시도해 주세요.';
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!canSubmit || submitting) return;
+
+    if (mode === 'register' && password.trim().length < 8) {
+      setError('비밀번호는 8자 이상이어야 합니다.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
-      // L1: only the username crosses the network; the key stays local.
-      await login(username.trim(), apiKey.trim());
+      if (mode === 'login') {
+        await login(username.trim(), password.trim());
+      } else {
+        await register(username.trim(), password.trim());
+      }
+      // Persist the Gemini key locally if the user supplied one.
+      if (apiKey.trim()) updateKey(apiKey.trim());
       onSuccess?.();
     } catch (err) {
-      const msg =
-        err instanceof ApiError
-          ? err.message
-          : '로그인에 실패했습니다. 다시 시도해 주세요.';
-      setError(msg);
+      setError(koreanError(err));
     } finally {
       setSubmitting(false);
     }
   }
+
+  const isLogin = mode === 'login';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -61,10 +94,28 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
 
       <div>
         <label
+          htmlFor="password"
+          className="mb-1 block text-sm font-medium text-term-dim"
+        >
+          비밀번호{mode === 'register' && ' (8자 이상)'}
+        </label>
+        <input
+          id="password"
+          type="password"
+          autoComplete={isLogin ? 'current-password' : 'new-password'}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 text-sm text-term-bright caret-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright"
+          placeholder="••••••••"
+        />
+      </div>
+
+      <div>
+        <label
           htmlFor="apiKey"
           className="mb-1 block text-sm font-medium text-term-dim"
         >
-          Google AI Studio API 키
+          Google AI Studio API 키 <span className="text-term-faint">(선택)</span>
         </label>
         <input
           id="apiKey"
@@ -95,8 +146,23 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         disabled={!canSubmit || submitting}
         className="min-h-[44px] w-full rounded-[2px] border border-term-cta bg-term-cta py-2.5 text-sm font-bold text-term-bright shadow-glow-cta transition hover:border-term-bright disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {submitting ? '[ 시작하는 중… ]' : '[ 시작하기 ]'}
+        {submitting
+          ? '[ 처리 중… ]'
+          : isLogin
+            ? '[ 로그인 ]'
+            : '[ 회원가입 ]'}
       </button>
+
+      <p className="text-center text-xs text-term-dim">
+        {isLogin ? '처음이신가요?' : '이미 계정이 있으신가요?'}{' '}
+        <button
+          type="button"
+          onClick={toggleMode}
+          className="text-term-bright underline"
+        >
+          {isLogin ? '회원가입' : '로그인'}
+        </button>
+      </p>
     </form>
   );
 }

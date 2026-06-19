@@ -15,9 +15,10 @@ generator client {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  username    String   @unique // display + self identification. Keys are NEVER stored.
-  createdAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  username     String   @unique // display + self identification. Keys are NEVER stored.
+  passwordHash String?  // bcrypt hash; null for legacy passwordless rows
+  createdAt    DateTime @default(now())
   communities Community[]   @relation("CreatedCommunities")
   posts       Post[]
   comments    Comment[]

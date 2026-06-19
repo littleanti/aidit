@@ -1,11 +1,12 @@
-import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "../db.js";
+import { requireAuth } from "../auth.js";
 
 // WP BE-4 — Community routes.
 // Server is KEY-BLIND (PLAN L1): no apiKey is ever read, stored, or relayed here.
-// Acting user is identified by the `x-user-id` header = persisted User.id (L11).
+// Acting user is identified by a server-signed JWT (Authorization: Bearer <token>).
 
 interface CreateCommunityBody {
   name?: unknown;
@@ -28,29 +29,6 @@ function isNonEmptyString(v: unknown): v is string {
 
 function isOptionalString(v: unknown): v is string | undefined {
   return v === undefined || typeof v === "string";
-}
-
-// Resolve and validate the acting user from the `x-user-id` header.
-// Returns the user id on success, or null after replying with the right error.
-async function resolveActingUser(
-  req: FastifyRequest,
-  reply: FastifyReply,
-): Promise<string | null> {
-  const raw = req.headers["x-user-id"];
-  const userId = Array.isArray(raw) ? raw[0] : raw;
-
-  if (!userId || userId.trim().length === 0) {
-    await reply.code(401).send({ error: "Missing x-user-id header" });
-    return null;
-  }
-
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) {
-    await reply.code(401).send({ error: "Unknown user" });
-    return null;
-  }
-
-  return user.id;
 }
 
 const plugin: FastifyPluginAsync = async (app) => {
@@ -115,7 +93,7 @@ const plugin: FastifyPluginAsync = async (app) => {
 
   // POST /communities — create a community. Acting user becomes the creator.
   app.post("/communities", async (req, reply) => {
-    const creatorId = await resolveActingUser(req, reply);
+    const creatorId = await requireAuth(req, reply);
     if (creatorId === null) return;
 
     const body = (req.body ?? {}) as CreateCommunityBody;
@@ -223,7 +201,7 @@ const plugin: FastifyPluginAsync = async (app) => {
 
   // PATCH /communities/:id — only the creator may edit.
   app.patch("/communities/:id", async (req, reply) => {
-    const actingUserId = await resolveActingUser(req, reply);
+    const actingUserId = await requireAuth(req, reply);
     if (actingUserId === null) return;
 
     const { id } = req.params as { id: string };
