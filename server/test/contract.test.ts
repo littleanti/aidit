@@ -381,6 +381,157 @@ describe("PATCH /posts/:id", () => {
   });
 });
 
+describe("bookmarks", () => {
+  it("POST bookmark -> 201 { bookmarked: true }", async () => {
+    const user = await createUser();
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.id, community.id);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/bookmark`,
+      headers: { "x-user-id": user.id },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(JSON.parse(res.body)).toEqual({ bookmarked: true });
+  });
+
+  it("POST bookmark is idempotent (second call still succeeds, one DB row)", async () => {
+    const user = await createUser();
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.id, community.id);
+
+    await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/bookmark`,
+      headers: { "x-user-id": user.id },
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/bookmark`,
+      headers: { "x-user-id": user.id },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(JSON.parse(res.body)).toEqual({ bookmarked: true });
+
+    const count = await prisma.bookmark.count({
+      where: { userId: user.id, postId: post.id },
+    });
+    expect(count).toBe(1);
+  });
+
+  it("GET /users/:id/bookmarks returns the post as a feed card", async () => {
+    const user = await createUser();
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.id, community.id, {
+      title: "Bookmarked Post",
+      body: "body here",
+    });
+
+    await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/bookmark`,
+      headers: { "x-user-id": user.id },
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/users/${user.id}/bookmarks`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body).toHaveProperty("items");
+    expect(body.items).toHaveLength(1);
+    const card = body.items[0];
+    expect(card.id).toBe(post.id);
+    expect(card.title).toBe("Bookmarked Post");
+    expect(card).toHaveProperty("communitySlug");
+    expect(card).toHaveProperty("authorUsername");
+  });
+
+  it("GET /posts/:id with x-user-id returns bookmarked:true; without returns bookmarked:false", async () => {
+    const user = await createUser();
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.id, community.id);
+
+    await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/bookmark`,
+      headers: { "x-user-id": user.id },
+    });
+
+    const withUser = await app.inject({
+      method: "GET",
+      url: `/posts/${post.id}`,
+      headers: { "x-user-id": user.id },
+    });
+    expect(JSON.parse(withUser.body).bookmarked).toBe(true);
+
+    const withoutUser = await app.inject({
+      method: "GET",
+      url: `/posts/${post.id}`,
+    });
+    expect(JSON.parse(withoutUser.body).bookmarked).toBe(false);
+  });
+
+  it("DELETE bookmark -> 200 { bookmarked: false }", async () => {
+    const user = await createUser();
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.id, community.id);
+
+    await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/bookmark`,
+      headers: { "x-user-id": user.id },
+    });
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/posts/${post.id}/bookmark`,
+      headers: { "x-user-id": user.id },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ bookmarked: false });
+  });
+
+  it("DELETE bookmark is idempotent when none exists", async () => {
+    const user = await createUser();
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.id, community.id);
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/posts/${post.id}/bookmark`,
+      headers: { "x-user-id": user.id },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ bookmarked: false });
+  });
+
+  it("POST bookmark without x-user-id -> 401", async () => {
+    const user = await createUser();
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.id, community.id);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/bookmark`,
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("POST bookmark on missing post -> 404", async () => {
+    const user = await createUser();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/posts/nonexistent-post-id/bookmark",
+      headers: { "x-user-id": user.id },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 describe("AI_SUMMARY 409 guard (BE-7)", () => {
   it("stale segmentExpected -> 409 and no double-open", async () => {
     const author = await createUser();

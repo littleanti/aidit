@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
-import { getUserCommunities, getUserPosts, ApiError } from '../api/rest';
+import { getUserCommunities, getUserPosts, getUserBookmarks, ApiError } from '../api/rest';
 import type { Community, PostListItem } from '../api/types';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
 import PostCard from '../components/PostCard';
@@ -37,6 +37,7 @@ export default function Profile() {
   // ---- my content ----
   const [communities, setCommunities] = useState<Community[]>([]);
   const [posts, setPosts] = useState<PostListItem[]>([]);
+  const [bookmarks, setBookmarks] = useState<PostListItem[]>([]);
   const [state, setState] = useState<LoadState>('loading');
   const [error, setError] = useState<string | null>(null);
 
@@ -46,11 +47,12 @@ export default function Profile() {
     setState('loading');
     setError(null);
 
-    Promise.all([getUserCommunities(userId), getUserPosts(userId)])
-      .then(([cs, ps]) => {
+    Promise.all([getUserCommunities(userId), getUserPosts(userId), getUserBookmarks(userId)])
+      .then(([cs, ps, bks]) => {
         if (cancelled) return;
         setCommunities(cs);
         setPosts(ps);
+        setBookmarks(bks);
         setState('ready');
       })
       .catch((err) => {
@@ -222,10 +224,11 @@ export default function Profile() {
             // the same userId-bound fetch.
             setState('loading');
             setError(null);
-            Promise.all([getUserCommunities(userId), getUserPosts(userId)])
-              .then(([cs, ps]) => {
+            Promise.all([getUserCommunities(userId), getUserPosts(userId), getUserBookmarks(userId)])
+              .then(([cs, ps, bks]) => {
                 setCommunities(cs);
                 setPosts(ps);
+                setBookmarks(bks);
                 setState('ready');
               })
               .catch((err) => {
@@ -299,6 +302,26 @@ export default function Profile() {
             ) : (
               <div className="space-y-2">
                 {posts.map((p) => (
+                  <PostCard key={p.id} post={p} />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <h2 className="mb-3 text-sm font-semibold text-term-faint">
+              // 북마크한 글
+            </h2>
+            {bookmarks.length === 0 ? (
+              <div className="rounded-[2px] border border-dashed border-term-border bg-term-card/40 py-2">
+                <EmptyState
+                  title="아직 북마크한 글이 없어요."
+                  hint="글 상단의 🔖 로 저장한 글이 여기 모여요."
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {bookmarks.map((p) => (
                   <PostCard key={p.id} post={p} />
                 ))}
               </div>

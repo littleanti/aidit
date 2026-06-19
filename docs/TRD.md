@@ -137,12 +137,26 @@ model ContextSegment {
   comments      Comment[]
   @@unique([postId, index])
 }
+
+// 북마크: 사용자가 글을 북마크. userId+postId unique, userId+createdAt 인덱스(최신순 조회).
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([userId, createdAt])
+}
 ```
 
 **설계 포인트**
 - **버블 = `Comment`**, 종류는 `type`(HUMAN/AI_REPLY/AI_SUMMARY). 좌/우는 클라가 `authorId === me ? 우 : 좌`로 판정(AI는 항상 좌).
 - **세그먼트(`ContextSegment`)** 가 요약 경계의 단일 출처. 활성 세그먼트의 `tokenSum`으로 128K를 판정(요청 #6/#7).
 - **`seq`** 는 post 내 전역 단조 증가 — SSE 재생/정렬/멱등의 기준.
+- **북마크(`Bookmark`)**: 사용자 프라이빗 상태. `GET /posts/:id`는 선택 `x-user-id` 헤더로 요청 사용자의 북마크 여부를 `bookmarked` 불린으로 응답(없으면 false).
 
 ---
 
@@ -167,6 +181,9 @@ model ContextSegment {
 | `GET /posts/:id/context` | **AI 호출용 컨텍스트 조립 결과** 반환 | - | §6.2 핵심 |
 | `GET /posts/:id/stream` | **SSE 구독**(새 버블/상태변경 push) | - | §7 |
 | `POST /posts/:id/upvote` | 추천 | `x-user-id` | hotScore 갱신 |
+| **`POST /posts/:id/bookmark`** | **북마크 추가**(idempotent upsert) | `x-user-id` | 201 `{bookmarked:true}` |
+| **`DELETE /posts/:id/bookmark`** | **북마크 제거**(idempotent delete) | `x-user-id` | 200 `{bookmarked:false}` |
+| **`GET /users/:id/bookmarks`** | **북마크한 글 목록**(피드 카드, 최신순) | - | 사용자별 북마크 조회 |
 | `POST /metrics/visit` | 인증 앱 오픈 시 `VisitEvent` 일별 멱등 기록 | `x-user-id` | BE-13 · 작성자 D1 |
 | `GET /metrics` | §8 KPI 집계 반환 | - | BE-13 (형상: IMPLEMENTATION_NOTES §2.2) |
 

@@ -514,3 +514,33 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
   비작성자에게는 버튼 미표시(⋯ 슬롯 비움). 클릭 시 `/create-post` + state `{editPostId: post.id}`로 링크.
   북마크 🔖는 유지(기존 표시용 placeholder).
 - [x] **FE-17 · 검증**: 서버 build + 테스트 green. 브라우저 — 작성자 편집 진입 · 폼 프리필 · 저장 · 비작성자 [편집] 미표시 확인.
+
+---
+
+## 15. M11 — 북마크 (v0.8, 2026-06-19)
+
+> 사용자가 글을 북마크하고, 북마크한 글 목록을 프로필 화면에서 모아본다.
+> DB: `Bookmark` 모델 신규(userId+postId unique, userId+createdAt 인덱스).
+> 백엔드: 3개 엔드포인트(`POST /posts/:id/bookmark`, `DELETE /posts/:id/bookmark`, `GET /users/:id/bookmarks`) +
+> `GET /posts/:id` 시 bookmarked 불린 반환. 프론트: Thread 헤더 🔖 버튼(낙관적 토글, 로그인 필요) +
+> Profile 페이지 "북마크한 글" 섹션(최신 북마크순). 완료 게이트: 서버/프론트 `build`·`test` green + 브라우저.
+
+### 작업 패키지 (WP)
+- [x] **DB-11 · `Bookmark` 모델**: `userId`+`postId` unique, `userId`+`createdAt` 인덱스(최신순 조회).
+  마이그레이션 `add_bookmark_model` 추가.
+- [x] **BE-15 · 북마크 엔드포인트**:
+  - `POST /posts/:id/bookmark` (인증: `x-user-id`) — idempotent upsert, 201 응답 `{bookmarked:true}`
+  - `DELETE /posts/:id/bookmark` (인증: `x-user-id`) — idempotent delete, 200 응답 `{bookmarked:false}`
+  - `GET /users/:id/bookmarks` (인증 불필요) — bookmarked posts 피드 카드로, 최신 북마크순
+- [x] **BE-16 · `GET /posts/:id` bookmarked 필드**: 선택 `x-user-id` 헤더 있으면 반환 유저의 북마크 여부
+  불린(없으면 `false`).
+- [x] **FE-18 · Thread 헤더 🔖 버튼**: 북마크 초기값은 `post.bookmarked`(서버 계산),
+  로컬 state로 낙관적 토글. 로그인 필요 → `openLogin()`. 클릭 시 `POST/DELETE /posts/:id/bookmark`.
+  실패 시 상태 롤백 + 토스트 "북마크 처리에 실패했습니다."
+- [x] **FE-19 · Profile 북마크한 글 섹션**: 프로필 조회 시 `getUserBookmarks(userId)`로 로드.
+  "북마크한 글" 섹션(홈 피드와 동일한 PostCard 리스트, 최신 북마크순).
+  빈상태: "북마크한 글이 없어요"
+- [x] **FE-20 · resetDb() 정리**: `server/src/test/helpers.ts` `resetDb()` 함수에서 `bookmark` 테이블도
+  정리하도록 추가.
+- [x] **FE-21 · 검증**: 서버 build + 테스트 green. 브라우저 — Thread에서 북마크 토글 · Profile에서
+  북마크한 글 목록 · 빈상태 확인.

@@ -19,6 +19,7 @@ export async function makeApp(): Promise<FastifyInstance> {
 
 // Wipe all rows between tests so suites are independent (order matters for FKs).
 export async function resetDb(): Promise<void> {
+  await prisma.bookmark.deleteMany();
   await prisma.comment.deleteMany();
   await prisma.contextSegment.deleteMany();
   await prisma.post.deleteMany();

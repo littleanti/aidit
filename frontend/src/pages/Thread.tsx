@@ -17,9 +17,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ApiError, getCommunities, getComments, getContext, getPost } from '../api/rest';
+import { addBookmark, ApiError, getCommunities, getComments, getContext, getPost, removeBookmark } from '../api/rest';
 import type { Comment, Community, Post } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
+import { useUiStore } from '../stores/uiStore';
 import { usePostIntentStore } from '../stores/postIntentStore';
 import { useThreadStore } from '../stores/threadStore';
 import { useThreadStream } from '../stream/useThreadStream';
@@ -62,9 +63,11 @@ export default function Thread() {
   const { postId } = useParams<{ postId: string }>();
   const navigate = useNavigate();
 
-  // VR-3: bookmark toggle is presentation-only (visual state). It is NOT
-  // backend-wired — there is no bookmark API/DTO; this is a local UI flag only.
+  // VR-3: bookmark toggle — persisted via POST/DELETE /posts/:id/bookmark.
+  // Initialised from loadedPost.bookmarked (server-computed via x-user-id).
   const [bookmarked, setBookmarked] = useState(false);
+
+  const openLogin = useUiStore((s) => s.openLogin);
 
   const [post, setPost] = useState<Post | null>(null);
   const [community, setCommunity] = useState<Community | null>(null);
@@ -133,12 +136,13 @@ export default function Thread() {
     (async () => {
       try {
         const [loadedPost, comments] = await Promise.all([
-          getPost(postId),
+          getPost(postId, myUserId ?? undefined),
           getComments(postId),
         ]);
         if (cancelled) return;
 
         setPost(loadedPost);
+        setBookmarked(Boolean(loadedPost.bookmarked));
         setInitial(comments);
 
         // Resolve the community for the persona header. Prefer the joined
@@ -175,7 +179,7 @@ export default function Thread() {
       cancelled = true;
       reset();
     };
-  }, [postId, reset, setInitial, reloadKey]);
+  }, [postId, reset, setInitial, reloadKey, myUserId]);
 
   // ----- AI-5: primary reply trigger (FR-4.3) -----
   // Fire EXACTLY ONCE per mount, when arriving at a just-created post with the
@@ -353,10 +357,22 @@ export default function Thread() {
         </h1>
         {/* right group */}
         <div className="flex flex-1 items-center justify-end gap-1">
-          {/* bookmark: LOCAL visual toggle only — NOT backend-wired. */}
+          {/* bookmark: backend-wired (persisted via /posts/:id/bookmark). */}
           <button
             type="button"
-            onClick={() => setBookmarked((b) => !b)}
+            onClick={async () => {
+              if (!myUserId) { openLogin(); return; }
+              const next = !bookmarked;
+              setBookmarked(next);
+              try {
+                await (next
+                  ? addBookmark(postId, myUserId)
+                  : removeBookmark(postId, myUserId));
+              } catch {
+                setBookmarked(!next);
+                showAiToast('북마크 처리에 실패했습니다.');
+              }
+            }}
             aria-pressed={bookmarked}
             aria-label={bookmarked ? '북마크 해제' : '북마크'}
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[2px] text-lg text-term-dim hover:bg-term-hover ${

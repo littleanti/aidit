@@ -264,6 +264,8 @@ const plugin: FastifyPluginAsync = async (app) => {
   );
 
   // Single post + community + author summary.
+  // OPTIONAL x-user-id header: when present, `bookmarked` reflects whether that
+  // user has bookmarked this post. No 401 — this endpoint remains public.
   app.get<{ Params: { id: string } }>("/posts/:id", async (req, reply) => {
     const post = await prisma.post.findUnique({
       where: { id: req.params.id },
@@ -284,6 +286,20 @@ const plugin: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: "Post not found" });
     }
 
+    const actingUserHeader = req.headers["x-user-id"];
+    const actingUserId = Array.isArray(actingUserHeader)
+      ? actingUserHeader[0]
+      : actingUserHeader;
+
+    let bookmarked = false;
+    if (actingUserId) {
+      const bm = await prisma.bookmark.findUnique({
+        where: { userId_postId: { userId: actingUserId, postId: post.id } },
+        select: { id: true },
+      });
+      bookmarked = bm !== null;
+    }
+
     return reply.send({
       id: post.id,
       // Top-level scalar FKs per the Post DTO. authorId is required by the
@@ -298,6 +314,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       commentCount: post.commentCount,
       hotScore: post.hotScore,
       createdAt: post.createdAt,
+      bookmarked,
       community: {
         id: post.community.id,
         slug: post.community.slug,
@@ -478,6 +495,61 @@ const plugin: FastifyPluginAsync = async (app) => {
         score: updated.score,
         hotScore: updated.hotScore,
       });
+    },
+  );
+
+  // POST /posts/:id/bookmark — idempotent upsert; requires x-user-id.
+  app.post<{ Params: { id: string } }>(
+    "/posts/:id/bookmark",
+    async (req, reply) => {
+      const userId = requireUserId(req, reply);
+      if (!userId) return;
+
+      const post = await prisma.post.findUnique({
+        where: { id: req.params.id },
+        select: { id: true },
+      });
+      if (!post) {
+        return reply.code(404).send({ error: "Post not found" });
+      }
+
+      await prisma.bookmark.upsert({
+        where: { userId_postId: { userId, postId: req.params.id } },
+        create: { userId, postId: req.params.id },
+        update: {},
+      });
+
+      return reply.code(201).send({ bookmarked: true });
+    },
+  );
+
+  // DELETE /posts/:id/bookmark — idempotent delete; requires x-user-id.
+  app.delete<{ Params: { id: string } }>(
+    "/posts/:id/bookmark",
+    async (req, reply) => {
+      const userId = requireUserId(req, reply);
+      if (!userId) return;
+
+      await prisma.bookmark.deleteMany({
+        where: { userId, postId: req.params.id },
+      });
+
+      return reply.send({ bookmarked: false });
+    },
+  );
+
+  // GET /users/:id/bookmarks — public; returns bookmarked posts as feed cards,
+  // ordered by bookmark createdAt DESC (most recently bookmarked first).
+  app.get<{ Params: { id: string } }>(
+    "/users/:id/bookmarks",
+    async (req, reply) => {
+      const rows = await prisma.bookmark.findMany({
+        where: { userId: req.params.id },
+        orderBy: { createdAt: "desc" },
+        include: { post: { include: feedInclude } },
+      });
+
+      return reply.send({ items: rows.map((r) => toFeedCard(r.post)) });
     },
   );
 };

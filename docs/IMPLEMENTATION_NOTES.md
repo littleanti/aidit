@@ -319,6 +319,34 @@ OA-6 커뮤니티 편집 패턴을 글에 적용. 작성자는 `Thread` 헤더�
 - **검증**: 프론트 빌드(tsc+vite) 클린 + 테스트 green. 브라우저 — 글 작성 후 Thread 헤더에 [편집] 표시 → 클릭 → CreatePost 폼이 제목/본문/이미지로 프리필되고 "글 수정" 제목 표시 → 수정 저장 → Thread 재진입하면 변경사항 반영. 다른 사용자 Thread에는 [편집] 미표시 확인.
 - **불변(회귀 금지)**: 글 생성 흐름·1차 AI 답변·라우팅·SSE·BYOK·요약·컨텍스트 조립. 편집은 작성자만(서버 403 가드). 이미지 필드는 이미 POST 응답·`toFeedCard`에 포함되어 있어 무영향.
 
+### 4.10 북마크 — Bookmark 모델 + 3개 엔드포인트 + Thread 🔖 버튼 + Profile 섹션 (2026-06-19)
+
+사용자가 글을 북마크하고, 북마크한 글 목록을 프로필에서 모아본다.
+
+- **DB(`server/prisma/schema.prisma`)**: 신규 `model Bookmark { id, userId, postId, createdAt, @@unique([userId, postId]), @@index([userId, createdAt]) }`. 마이그레이션 `add_bookmark_model`로 테이블 생성. `resetDb()`에서 bookmark 테이블도 정리.
+- **백엔드 3개 엔드포인트**(`server/src/routes/posts.ts`):
+  - **`POST /posts/:id/bookmark`** (인증: `x-user-id` 필수) — idempotent upsert. 이미 북마크되어 있으면 기존 row 반환(upd timestamp 갱신 안 함), 없으면 신규 생성. 201(신규) 또는 200(기존). 응답: `{ bookmarked: true }`.
+  - **`DELETE /posts/:id/bookmark`** (인증: `x-user-id` 필수) — idempotent delete. 북마크 없으면 성공(204 또는 200). 응답: `{ bookmarked: false }`.
+  - **`GET /users/:id/bookmarks`** (인증 선택) — 해당 사용자의 북마크 목록을 피드 카드로 반환. 쿼리: `prisma.bookmark.findMany({ where: { userId }, include: { post }, orderBy: { createdAt: 'desc' }, take: 50 })` → `toFeedCard`로 변환. 응답: `{ items: PostListItem[], nextCursor?: string }`.
+- **`GET /posts/:id` 갱신**: 선택 `x-user-id` 헤더 있을 때만 응답에 `bookmarked: boolean` 추가. 없으면 `bookmarked: false`(또는 필드 생략). 코드: `const bookmarked = userId ? await prisma.bookmark.findUnique({ where: { userId_postId: { userId, postId } } }) !== null : false`.
+- **프론트 타입/함수**(`frontend/src/api/rest.ts`·`api/types.ts`):
+  - `Post`·`PostListItem` DTO에 `bookmarked?: boolean` 추가(선택 필드, GET 응답용).
+  - 신규 함수: `addBookmark(postId: string, userId: string)`, `removeBookmark(postId: string, userId: string)`, `getUserBookmarks(userId: string)` — 각각 POST/DELETE/GET 호출.
+- **`Thread.tsx` 헤더 🔖 버튼**(VR-3 구현):
+  - 글 상세 헤더의 오른쪽 그룹에 북마크 버튼 추가(`aria-pressed={bookmarked}` 토글).
+  - 초기값: `post.bookmarked`(서버에서 계산, 있으면 true, 없으면 false).
+  - 낙관적 토글: 클릭 시 즉시 `setBookmarked(!bookmarked)` 후 `addBookmark()/removeBookmark()` 호출.
+  - 로그인 필수: 미로그인이면 `openLogin()` 호출 후 반환(요청 미전송).
+  - 실패 시 상태 롤백: `catch { setBookmarked(!next); showAiToast('북마크 처리에 실패했습니다.'); }`.
+  - 비-표시용(BYOK/SSE/컨텍스트 불변): 북마크는 서버 상태만 반영, 실시간 SSE 브로드캐스트 없음(사용자별 프라이빗 상태).
+- **`Profile.tsx` "북마크한 글" 섹션**:
+  - 프로필 로드 시 `Promise.all([getUserCommunities(userId), getUserPosts(userId), getUserBookmarks(userId)])`로 함께 로드.
+  - "북마크한 글" 섹션(홈 피드와 동일한 카드 리스트) — 최신 북마크순(서버가 `createdAt DESC`로 정렬).
+  - 빈상태: `<EmptyState title="북마크한 글이 없어요" />`.
+  - 클릭하면 Thread로 진입(PostCard 기존 동작).
+- **검증**: 서버 build + test 22개 green. 프론트 build + test 30개 green. 브라우저 — Thread 헤더 🔖 토글 → POST/DELETE 호출 확인, Profile 북마크한 글 목록 표시·빈상태 확인, 로그아웃 후 북마크 폼은 인증 게이트 동작.
+- **불변(회귀 금지)**: SSE(북마크 이벤트 없음)·BYOK·컨텍스트·요약·댓글 흐름. 북마크는 글별 사용자 프라이빗 상태이며 다른 사용자의 북마크 여부는 미노출.
+
 ---
 
 ## 5. 스펙에 없던 추가 보조 자산

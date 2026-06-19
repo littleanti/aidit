@@ -43,6 +43,8 @@ export interface Post {
   // optional joined relations
   community?: Community;
   author?: { id: string; username: string };
+  /** server-computed for the acting user via x-user-id on GET /posts/:id. */
+  bookmarked?: boolean;
 }
 
 /** Feed card shape (joined fields for rendering a list item). */

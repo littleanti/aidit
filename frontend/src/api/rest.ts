@@ -196,6 +196,16 @@ export async function getUserPosts(userId: string): Promise<PostListItem[]> {
 }
 
 /**
+ * GET /users/:id/bookmarks — posts bookmarked by a user, most-recent first.
+ * L1: NO apiKey. Public/read-only (no x-user-id needed).
+ * Normalizes the server's { items } envelope to an array like getUserPosts.
+ */
+export async function getUserBookmarks(userId: string): Promise<PostListItem[]> {
+  const r = await request<PostListResponse>(`/users/${userId}/bookmarks`);
+  return toItems(r);
+}
+
+/**
  * GET /users/:id/communities — communities created by a user (public, read-only).
  * Normalizes to an array consistently with getCommunities.
  */
@@ -218,8 +228,32 @@ export function postPost(body: CreatePostBody, userId: string): Promise<Post> {
   return request<Post>('/posts', { method: 'POST', body, userId });
 }
 
-export function getPost(id: string): Promise<Post> {
-  return request<Post>(`/posts/${id}`);
+export function getPost(id: string, userId?: string): Promise<Post> {
+  return request<Post>(`/posts/${id}`, { userId });
+}
+
+/**
+ * POST /posts/:id/bookmark — bookmark a post for the acting user.
+ * L1: NO apiKey. x-user-id carries the user (REQUIRED; server 401s without it).
+ * Idempotent upsert: returns { bookmarked: true } (201 or 200).
+ */
+export function addBookmark(
+  postId: string,
+  userId: string,
+): Promise<{ bookmarked: boolean }> {
+  return request(`/posts/${postId}/bookmark`, { method: 'POST', userId });
+}
+
+/**
+ * DELETE /posts/:id/bookmark — remove a bookmark for the acting user.
+ * L1: NO apiKey. x-user-id carries the user (REQUIRED; server 401s without it).
+ * Idempotent: deleting a non-existent bookmark still returns { bookmarked: false }.
+ */
+export function removeBookmark(
+  postId: string,
+  userId: string,
+): Promise<{ bookmarked: boolean }> {
+  return request(`/posts/${postId}/bookmark`, { method: 'DELETE', userId });
 }
 
 export interface UpdatePostBody {

@@ -316,7 +316,7 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 - 컨테이너: `flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2`.
 - 뒤로: `navigate(-1)` 동작, `h-9 w-9` 터치 타깃, ‹ chevron(SVG/문자).
 - 제목: `flex-1 truncate text-center text-base font-semibold text-slate-900` = `post.title`.
-- 북마크: **로컬 토글(useState, 표시용)** — 채워짐/비움 토글, `aria-pressed`. 백엔드 미연동(주석 명시).
+- **북마크 🔖** (VR-3, 2026-06-19 구현됨): **백엔드 연동 완료** — POST/DELETE `/posts/:id/bookmark` 호출. 초기값 `post.bookmarked`(서버 계산). 낙관적 토글, 로그인 필요(`openLogin()`). 실패 시 상태 롤백 + 토스트 "북마크 처리에 실패했습니다."
 - **메뉴 슬롯 (⋯ 또는 [편집])**: **작성자만 표시** `[편집](✎)` 버튼(`text-term-amber`), 클릭 시 `/create-post` + state `{editPostId: post.id}`로 편집 모드 진입. 비작성자에게는 슬롯이 비어있음(버튼 미표시). 기존 placeholder 주석 유지.
 
 ### D. 원본 게시글 카드 (Thread.tsx `<article>` 재스타일)
@@ -405,12 +405,21 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 ┌────────────────────────────┐
 │ 👤 yoon                     │
 │ • 내가 만든 커뮤니티           │
-│ • 내 글 / 내 댓글             │
+│ • 내 글                      │
+│ ── 북마크한 글 ──            │
+│ ┌────────────────────────┐ │
+│ │ r/cooking · ChefBot🍳  │ │  ← 북마크한 글 카드(최신순)
+│ │ 자취 요리 3분 레시피 모음  │ │
+│ │ ▲ 128  💬 24           │ │
+│ └────────────────────────┘ │
+│ (빈상태: "북마크한 글이 없어요") │
 │ ──────────────────────────  │
 │ 🔑 API Key  ( ••••  )[변경]  │  ← localStorage 갱신
 │ [로그아웃] (username+key 삭제) │
 └────────────────────────────┘
 ```
+
+**2026-06-19 업데이트**: "북마크한 글" 섹션 추가. `GET /users/:id/bookmarks`로 사용자의 북마크 목록 로드(최신 북마크순). PostCard 형식으로 표시, 빈상태 안내 포함.
 
 ---
 
