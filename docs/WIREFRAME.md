@@ -30,9 +30,10 @@ Login(모달) ─▶ Home ──┬──▶ Search ──┬──▶ Community
                       └──▶ CreatePost  ──▶ Thread (게시 후)
 
 하단 탭바(모바일):  [🏠 홈]  [🔍 검색]  [＋ 작성]  [👤 나]
-상단바 우측:  [ {username} ] ─▶ /me (나)   ·   비로그인 시 [ Login ] ─▶ 로그인 모달
+상단바 우측:  ● GEMINI  [ {username} ] ─▶ /me (나)   ·   비로그인 시 [ Login ] ─▶ 로그인 모달
 ```
 > **상단바 username 진입점(2026-06-19)** — 로그인 상태에서 상단바 우측의 `[ {username} ]`은 **`/me`(나) 페이지로 이동하는 링크**다(`hover:text-term-bright`). 비로그인 시에는 같은 자리에 `[ Login ]`(`openLogin()`)이 표시된다.
+> **Gemini 연결 표식(2026-06-19)** — 로그인 상태에서 `[ {username} ]` **바로 좌측**에 LED 점 + `GEMINI` 라벨 배지(`GeminiStatusBadge`)를 표시한다. **가장 최근 실제 LLM 쿼리**(`gemini.generateContent`) 결과를 반영: 성공=`● 연결됨`(초록 인광 `glow`), 실패(`GeminiError`)=`● 끊김`(`text-term-danger`, `animate-pulse`), 아직 호출 없음=`○ 미확인`(`text-term-faint`). hover 시 한국어 툴팁. 세션 한정(하드 리로드 시 `미확인` 초기화). §9 참조.
 > **Option A 동선(2026-06-19)** — **'작성' 탭(＋)은 글 작성(`/create-post`)으로 직결**한다(예전 `/create-community` 진입 폐기). **커뮤니티 만들기는 검색 화면에서만** 진입한다(상시 `[+ 커뮤니티 만들기]` 버튼 + 무결과 인라인 CTA). 데스크톱 사이드바도 "커뮤니티 만들기" 대신 **"작성"(`/create-post`, IconWrite)** 을 두며 순서는 **홈 / 검색 / 작성 / 나**. `/create-post`·`/create-community` 라우트는 **둘 다 유지**(만들기는 검색·커뮤니티 편집에서 계속 사용). **로그인은 별도 페이지가 아니라 모달 오버레이**(§1)로 어디서든 열린다(`/login` 직접 접근/딥링크는 호환 유지).
 
 ---

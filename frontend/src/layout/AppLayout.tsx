@@ -4,6 +4,7 @@ import { useUiStore } from '../stores/uiStore';
 import BottomTabBar from './BottomTabBar';
 import Logo from '../components/Logo';
 import LoginModal from '../components/LoginModal';
+import GeminiStatusBadge from '../components/GeminiStatusBadge';
 
 // Mobile-first shell.
 //  <768px : single column + bottom tab bar.
@@ -65,7 +66,9 @@ export default function AppLayout() {
           <Link to="/">
             <Logo size="sm" />
           </Link>
-          <div className="text-sm">
+          <div className="flex items-center gap-2 text-sm">
+            {/* Gemini 연결 표식: 로그인(BYOK) 상태에서 아이디 바로 좌측에 표시. */}
+            {username && <GeminiStatusBadge />}
             {username ? (
               <Link
                 to="/me"

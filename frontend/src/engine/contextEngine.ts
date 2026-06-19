@@ -28,12 +28,14 @@
 
 import type { ContextResponse } from '../api/types';
 import {
-  generateContent,
   estimateTokens,
   type GeminiContent,
   type GenerationConfig,
   GeminiError,
 } from '../api/gemini';
+// generateContent is the status-tracked wrapper (records connectivity for the
+// header badge); the underlying browser->Gemini call is unchanged.
+import { generateContent } from './geminiStatus';
 import { getContext, postComment, patchComment, ApiError } from '../api/rest';
 import { useAuthStore } from '../stores/authStore';
 import { track } from '../lib/metrics';

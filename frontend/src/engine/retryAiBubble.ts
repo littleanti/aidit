@@ -10,11 +10,9 @@
 // gemini.generateContent (browser->Gemini). Never stored/logged/sent to Aidit.
 // ============================================================================
 
-import {
-  generateContent,
-  GeminiError,
-  type GenerationConfig,
-} from '../api/gemini';
+import { GeminiError, type GenerationConfig } from '../api/gemini';
+// status-tracked wrapper (records connectivity for the header badge).
+import { generateContent } from './geminiStatus';
 import { getContext, patchComment } from '../api/rest';
 import { buildGeminiRequest, type ReplyResult } from './contextEngine';
 

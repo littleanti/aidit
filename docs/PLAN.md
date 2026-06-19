@@ -544,3 +544,22 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
   정리하도록 추가.
 - [x] **FE-21 · 검증**: 서버 build + 테스트 green. 브라우저 — Thread에서 북마크 토글 · Profile에서
   북마크한 글 목록 · 빈상태 확인.
+
+---
+
+## 16. M12 — Gemini 연결 표식 + 헤더 UX (v0.9, 2026-06-19)
+
+> 상단바에 BYOK Gemini 연결 상태를 레트로 LED 배지로 노출. **프론트 전용**(신규 API 없음) — 가장 최근 실제 LLM 쿼리 결과를 신뢰.
+
+### 작업 패키지 (WP)
+- [x] **FE-22 · `geminiStatusStore`**: 세션-한정·비영속 zustand store. `status: 'unknown'|'connected'|'disconnected'`,
+  `markSuccess()` / `markFailure(kind?)`. 하드 리로드 시 `unknown` 초기화(`aiModeStore`와 동일 철학).
+- [x] **FE-23 · 추적 래퍼 `engine/geminiStatus.ts`**: `gemini.generateContent`를 감싸 성공→`markSuccess`,
+  `GeminiError`→`markFailure(kind)` 기록 후 re-throw. `contextEngine.ts`·`retryAiBubble.ts`의 `generateContent`
+  import만 래퍼로 교체(1차/@AI/재시도/요약 전 경로를 단일 chokepoint로 커버). `gemini.ts`는 키-blind 유지.
+  `countTokens`는 폴백 보조 호출이라 신호에서 제외.
+- [x] **FE-24 · `GeminiStatusBadge` 컴포넌트**: LED 점 + `GEMINI` 라벨. 연결=`●` 초록 인광(`glow`),
+  끊김=`●` `text-term-danger`+`animate-pulse`, 미확인=`○` `text-term-faint`. hover 한국어 툴팁(`role="status"`).
+- [x] **FE-25 · AppLayout 배선**: 로그인 상태에서 `[ {username} ]` 바로 좌측에 배지 표시. (겸: 상단바 아이디
+  → `/me` 링크화, Thread `✎ 편집` 버튼을 커뮤니티 편집 버튼과 동일 스타일로 통일.)
+- [x] **FE-26 · 검증**: tsc 클린 + 프론트 테스트 30 green(엔진 import 교체 무영향).
