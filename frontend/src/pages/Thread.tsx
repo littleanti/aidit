@@ -16,7 +16,7 @@
 // by authorId === null.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, getCommunities, getComments, getContext, getPost } from '../api/rest';
 import type { Comment, Community, Post } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
@@ -365,14 +365,17 @@ export default function Thread() {
           >
             🔖
           </button>
-          {/* menu: visual placeholder — no handler yet. */}
-          <button
-            type="button"
-            aria-label="메뉴"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[2px] text-lg text-term-dim hover:bg-term-hover"
-          >
-            ⋯
-          </button>
+          {/* edit: shown only to the post's author. */}
+          {myUserId && post.authorId === myUserId && (
+            <Link
+              to="/create-post"
+              state={{ editPostId: post.id }}
+              aria-label="글 편집"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[2px] text-lg text-term-dim hover:bg-term-hover"
+            >
+              ✎
+            </Link>
+          )}
         </div>
       </header>
 

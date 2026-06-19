@@ -351,6 +351,104 @@ const plugin: FastifyPluginAsync = async (app) => {
     },
   );
 
+  // PATCH /posts/:id — only the author may edit title, body, or imageUrl.
+  app.patch<{
+    Params: { id: string };
+    Body: { title?: string; body?: string; imageUrl?: string | null };
+  }>("/posts/:id", async (req, reply) => {
+    const userId = requireUserId(req, reply);
+    if (!userId) return;
+
+    const existing = await prisma.post.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, authorId: true },
+    });
+    if (!existing) {
+      return reply.code(404).send({ error: "Post not found" });
+    }
+    if (existing.authorId !== userId) {
+      return reply.code(403).send({ error: "Only the author may edit" });
+    }
+
+    const { title, body, imageUrl } = req.body ?? {};
+
+    if (title === undefined && body === undefined && imageUrl === undefined) {
+      return reply.code(400).send({ error: "Nothing to update" });
+    }
+
+    const data: { title?: string; body?: string; imageUrl?: string | null } =
+      {};
+
+    if (title !== undefined) {
+      if (typeof title !== "string" || title.trim().length === 0) {
+        return reply
+          .code(400)
+          .send({ error: "title must be a non-empty string" });
+      }
+      data.title = title.trim();
+    }
+
+    if (body !== undefined) {
+      if (typeof body !== "string" || body.length === 0) {
+        return reply
+          .code(400)
+          .send({ error: "body must be a non-empty string" });
+      }
+      data.body = body;
+    }
+
+    if (imageUrl !== undefined) {
+      if (imageUrl !== null) {
+        if (
+          typeof imageUrl !== "string" ||
+          !imageUrl.startsWith("/uploads/") ||
+          imageUrl.includes("..")
+        ) {
+          return reply.code(400).send({ error: "Invalid imageUrl" });
+        }
+      }
+      data.imageUrl = imageUrl;
+    }
+
+    const post = await prisma.post.update({
+      where: { id: req.params.id },
+      data,
+      include: {
+        community: {
+          select: {
+            id: true,
+            slug: true,
+            name: true,
+            description: true,
+            personaIcon: true,
+          },
+        },
+        author: { select: { id: true, username: true } },
+      },
+    });
+
+    return reply.send({
+      id: post.id,
+      communityId: post.communityId,
+      authorId: post.authorId,
+      title: post.title,
+      body: post.body,
+      imageUrl: post.imageUrl,
+      score: post.score,
+      commentCount: post.commentCount,
+      hotScore: post.hotScore,
+      createdAt: post.createdAt,
+      community: {
+        id: post.community.id,
+        slug: post.community.slug,
+        name: post.community.name,
+        description: post.community.description,
+        personaIcon: post.community.personaIcon,
+      },
+      author: { id: post.author.id, username: post.author.username },
+    });
+  });
+
   // BE-9b: Upvote — increment score, recompute hotScore, persist. PoC: no dedupe.
   app.post<{ Params: { id: string } }>(
     "/posts/:id/upvote",

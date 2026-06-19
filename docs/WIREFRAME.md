@@ -311,13 +311,13 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 ### C. Thread 글 상세 헤더 (Thread.tsx `<header>` 교체)
 기존 `PersonaBadge`만 있던 헤더 → 글 상세 헤더로 교체:
 ```
-[‹ 뒤로]  [ 글 제목(중앙, 1줄 truncate, font-semibold) ]  [🔖 북마크]  [⋯ 메뉴]
+[‹ 뒤로]  [ 글 제목(중앙, 1줄 truncate, font-semibold) ]  [🔖 북마크]  [⋯ 메뉴|편집]
 ```
 - 컨테이너: `flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2`.
 - 뒤로: `navigate(-1)` 동작, `h-9 w-9` 터치 타깃, ‹ chevron(SVG/문자).
 - 제목: `flex-1 truncate text-center text-base font-semibold text-slate-900` = `post.title`.
 - 북마크: **로컬 토글(useState, 표시용)** — 채워짐/비움 토글, `aria-pressed`. 백엔드 미연동(주석 명시).
-- 메뉴(⋯): 표시용 버튼, 현재 동작 없음(placeholder, `aria-label`만). 페르소나 정보는 이 메뉴/원본 카드로 이전.
+- **메뉴 슬롯 (⋯ 또는 [편집])**: **작성자만 표시** `[편집](✎)` 버튼(`text-term-amber`), 클릭 시 `/create-post` + state `{editPostId: post.id}`로 편집 모드 진입. 비작성자에게는 슬롯이 비어있음(버튼 미표시). 기존 placeholder 주석 유지.
 
 ### D. 원본 게시글 카드 (Thread.tsx `<article>` 재스타일)
 ```

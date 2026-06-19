@@ -160,6 +160,7 @@ model ContextSegment {
 | `GET /communities/:slug/posts` | 커뮤니티별 글 | - | |
 | `POST /posts` | 글 작성(먼저 등록, seg#0 자동) | `x-user-id` | FR-4.2 · 레이트리밋(XC-9) · 본문에 선택 `imageUrl?` |
 | `GET /posts/:id` | 글 + 메타 | - | 응답에 `imageUrl: string \| null` 포함 |
+| `PATCH /posts/:id` | **글 수정**(제목/본문/이미지, 작성자만) | `x-user-id` | 작성자 검증: `post.authorId === x-user-id` → 비작성자 403 |
 | `GET /posts/:id/comments?afterSeq=` | 버블 페이지네이션 | - | FR-5 |
 | `POST /posts/:id/comments` | **버블 게시**(사람/AI/요약 텍스트) | `x-user-id`(사람) | §4.1 · clientId 멱등 |
 | `PATCH /comments/:id` | AI 버블 상태/본문 갱신(PENDING→COMPLETE/FAILED) | `x-user-id`(사람)·clientId(AI) | FR-6.2 |

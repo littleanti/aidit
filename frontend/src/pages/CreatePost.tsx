@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getCommunities, postPost, uploadImage, ApiError } from '../api/rest';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { ApiError, getCommunities, getPost, patchPost, postPost, uploadImage } from '../api/rest';
 import type { Community } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
 import { usePostIntentStore } from '../stores/postIntentStore';
@@ -24,10 +24,15 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export default function CreatePost() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const userId = useAuthStore((s) => s.userId);
   const setFirstAiReply = usePostIntentStore((s) => s.setFirstAiReply);
   const openLogin = useUiStore((s) => s.openLogin);
+
+  // Router-state handoff: { editPostId } from the Thread's ✎ edit link.
+  const editPostId = (location.state as { editPostId?: string } | null)?.editPostId;
+  const isEdit = Boolean(editPostId);
 
   const [communities, setCommunities] = useState<Community[]>([]);
   const [communitiesLoading, setCommunitiesLoading] = useState(false);
@@ -53,6 +58,43 @@ export default function CreatePost() {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Edit mode: name of the post's community (read-only label) and load flag.
+  const [editCommunityName, setEditCommunityName] = useState<string | null>(null);
+  const [loadingEdit, setLoadingEdit] = useState<boolean>(isEdit);
+
+  // Prefill: when arriving in edit mode, load the existing post and seed fields.
+  useEffect(() => {
+    if (!editPostId) return;
+    let cancelled = false;
+    setLoadingEdit(true);
+    getPost(editPostId)
+      .then((post) => {
+        if (cancelled) return;
+        setTitle(post.title);
+        setBody(post.body);
+        if (post.imageUrl) {
+          setImageUrl(post.imageUrl);
+          setImageObjectUrl(post.imageUrl);
+          setImageName('첨부 이미지');
+        }
+        setEditCommunityName(post.community?.name ?? null);
+        setSelectedCommunityId(post.communityId);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(
+          err instanceof ApiError ? err.message : '글을 불러오지 못했습니다.',
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingEdit(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editPostId]);
 
   // Load communities so we can resolve the target. When a slug is in the route
   // we still load to map slug -> id; otherwise the user picks from a selector.
@@ -119,13 +161,14 @@ export default function CreatePost() {
   const showEmptyCommunityLink =
     !slug && !communitiesLoading && communities.length === 0;
 
+  // In edit mode the community is implied by the loaded post; no picker needed.
   const canSubmit =
     !submitting &&
     !uploadingImage &&
     !!userId &&
     title.trim().length > 0 &&
     body.trim().length > 0 &&
-    communityId.length > 0;
+    (isEdit ? !loadingEdit : communityId.length > 0);
 
   function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -182,23 +225,38 @@ export default function CreatePost() {
     setSubmitting(true);
     setError(null);
     try {
-      const post = await postPost(
-        {
-          communityId,
-          title: title.trim(),
-          body: body.trim(),
-          ...(imageUrl ? { imageUrl } : {}),
-        },
-        userId,
-      );
-      // Record the AI-first-reply intent for the Thread to consume (M3).
-      setFirstAiReply(post.id, firstAi);
-      // Register-first: jump straight to the thread.
-      navigate(`/p/${post.id}`);
+      if (isEdit && editPostId) {
+        // PATCH only the mutable fields; imageUrl: null clears the attachment.
+        await patchPost(
+          editPostId,
+          {
+            title: title.trim(),
+            body: body.trim(),
+            imageUrl: imageUrl ?? null,
+          },
+          userId,
+        );
+        navigate(`/p/${editPostId}`);
+      } else {
+        const post = await postPost(
+          {
+            communityId,
+            title: title.trim(),
+            body: body.trim(),
+            ...(imageUrl ? { imageUrl } : {}),
+          },
+          userId,
+        );
+        // Record the AI-first-reply intent for the Thread to consume (M3).
+        setFirstAiReply(post.id, firstAi);
+        // Register-first: jump straight to the thread.
+        navigate(`/p/${post.id}`);
+      }
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : '글 작성에 실패했습니다.',
-      );
+      const fallback = isEdit
+        ? '글 수정에 실패했습니다. 다시 시도해 주세요.'
+        : '글 작성에 실패했습니다.';
+      setError(err instanceof ApiError ? err.message : fallback);
       setSubmitting(false);
     }
   }
@@ -222,10 +280,20 @@ export default function CreatePost() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 font-mono">
-      <h1 className="text-lg font-semibold text-term-title glow">글 작성</h1>
+      <h1 className="text-lg font-semibold text-term-title glow">
+        {isEdit ? '글 편집' : '글 작성'}
+      </h1>
 
       {/* Community target */}
-      {slug ? (
+      {isEdit ? (
+        // Edit mode: read-only community label (community is locked to the post).
+        <div className="text-sm text-term-dim">
+          커뮤니티:{' '}
+          <span className="font-medium text-term-title">
+            {editCommunityName ?? selectedCommunityId}
+          </span>
+        </div>
+      ) : slug ? (
         <div className="text-sm text-term-dim">
           커뮤니티:{' '}
           <span className="font-medium text-term-title">
@@ -399,17 +467,19 @@ export default function CreatePost() {
         )}
       </div>
 
-      {/* AI first-reply toggle (default ON) */}
-      <label className="flex items-center gap-2 text-sm text-term-dim">
-        <input
-          type="checkbox"
-          checked={firstAi}
-          onChange={(e) => setFirstAi(e.target.checked)}
-          disabled={submitting}
-          className="h-4 w-4 rounded-[2px] accent-[#3fa564]"
-        />
-        <span>게시 후 AI 1차 답변 받기</span>
-      </label>
+      {/* AI first-reply toggle: hidden in edit mode (must not re-trigger). */}
+      {!isEdit && (
+        <label className="flex items-center gap-2 text-sm text-term-dim">
+          <input
+            type="checkbox"
+            checked={firstAi}
+            onChange={(e) => setFirstAi(e.target.checked)}
+            disabled={submitting}
+            className="h-4 w-4 rounded-[2px] accent-[#3fa564]"
+          />
+          <span>게시 후 AI 1차 답변 받기</span>
+        </label>
+      )}
 
       {slugNotFound && (
         <p className="text-sm text-term-danger">
@@ -423,7 +493,13 @@ export default function CreatePost() {
         disabled={!canSubmit}
         className="min-h-[44px] rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-4 py-2.5 text-sm font-bold text-term-title glow-lg shadow-glow-cta transition disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {submitting ? '[ 게시 중… ]' : '[ 게시하기 ]'}
+        {isEdit
+          ? submitting
+            ? '[ 저장 중… ]'
+            : '[ 저장하기 ]'
+          : submitting
+            ? '[ 게시 중… ]'
+            : '[ 게시하기 ]'}
       </button>
     </form>
   );

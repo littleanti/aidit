@@ -222,6 +222,24 @@ export function getPost(id: string): Promise<Post> {
   return request<Post>(`/posts/${id}`);
 }
 
+export interface UpdatePostBody {
+  title?: string;
+  body?: string;
+  imageUrl?: string | null;
+}
+
+/**
+ * PATCH /posts/:id — update a post's title, body, or imageUrl (author-only).
+ * L1: NO apiKey. x-user-id carries the author for server-side authz.
+ */
+export function patchPost(
+  id: string,
+  body: UpdatePostBody,
+  userId: string,
+): Promise<Post> {
+  return request<Post>(`/posts/${id}`, { method: 'PATCH', body, userId });
+}
+
 // ---- Comments ----
 
 /**

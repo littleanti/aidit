@@ -495,3 +495,22 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
   피커 펼침 · 이미지 드롭존 · 로그인 모달(열기→제출) · 편집 프리필 실동작 확인.
 - [x] **OA-8 · 문서 + 머지**: IMPLEMENTATION_NOTES §4.6–4.8 · TRD §5.1 · DESIGN-SYSTEM/WIREFRAME 갱신,
   PR #4 main 머지.
+
+---
+
+## 14. M10 — 글(게시글) 편집 (v0.7, 2026-06-19)
+
+> OA-6의 **커뮤니티 편집 패턴**을 글에 적용. 작성자는 자신의 글을 조회 후 수정(제목/본문/이미지)할 수 있다.
+> 표현/라우팅·컨트랙트·BYOK·SSE 불변. 완료 게이트: 서버/프론트 `build`·`test` green + 브라우저.
+
+### 작업 패키지 (WP)
+- [x] **BE-14 · `PATCH /posts/:id` 엔드포인트**: 요청 본문에 `title?`, `body?`, `imageUrl?` 지원.
+  인증: `x-user-id`로 현재 사용자와 `post.authorId` 검증 → 비작성자는 **403 Forbidden**.
+  응답: 수정된 `Post` DTO(`title`, `body`, `imageUrl` 반영).
+- [x] **FE-15 · CreatePost 편집 모드 (링크 state)**: 라우트 `/create-post?editPostId=<id>` 또는 Link state `{editPostId}`.
+  컴포넌트가 `getPost(editPostId)`로 기존 글 로드 → 폼 프리필(제목/본문/이미지) + 제목/버튼 "수정"으로 변경.
+  제출 분기: `editPostId` 있으면 `patchPost(id, {...})` 호출 → 수정 후 Thread로 이동.
+- [x] **FE-16 · Thread 헤더 [편집] 버튼**: Thread의 ⋯ 메뉴 슬롯에 작성자만 보이는 **[편집](✎)** 버튼 추가.
+  비작성자에게는 버튼 미표시(⋯ 슬롯 비움). 클릭 시 `/create-post` + state `{editPostId: post.id}`로 링크.
+  북마크 🔖는 유지(기존 표시용 placeholder).
+- [x] **FE-17 · 검증**: 서버 build + 테스트 green. 브라우저 — 작성자 편집 진입 · 폼 프리필 · 저장 · 비작성자 [편집] 미표시 확인.

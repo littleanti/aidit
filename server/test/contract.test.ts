@@ -314,6 +314,73 @@ describe("PATCH authz (L12 / §6)", () => {
   });
 });
 
+describe("PATCH /posts/:id", () => {
+  it("author edits title+body -> 200 and response reflects new values", async () => {
+    const author = await createUser();
+    const community = await createCommunity(author.id);
+    const post = await createPostViaApi(app, author.id, community.id, {
+      title: "Original Title",
+      body: "Original body.",
+    });
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/posts/${post.id}`,
+      headers: { "x-user-id": author.id },
+      payload: { title: "Edited Title", body: "Edited body." },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.title).toBe("Edited Title");
+    expect(body.body).toBe("Edited body.");
+    expect(body.id).toBe(post.id);
+    expect(body).toHaveProperty("communityId");
+    expect(body).toHaveProperty("authorId");
+    expect(body).toHaveProperty("community");
+    expect(body).toHaveProperty("author");
+  });
+
+  it("a different user editing -> 403", async () => {
+    const author = await createUser();
+    const other = await createUser();
+    const community = await createCommunity(author.id);
+    const post = await createPostViaApi(app, author.id, community.id);
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/posts/${post.id}`,
+      headers: { "x-user-id": other.id },
+      payload: { title: "Hijack" },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("missing x-user-id -> 401", async () => {
+    const author = await createUser();
+    const community = await createCommunity(author.id);
+    const post = await createPostViaApi(app, author.id, community.id);
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/posts/${post.id}`,
+      payload: { title: "No auth" },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("non-existent post id -> 404", async () => {
+    const author = await createUser();
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/posts/nonexistent-id-that-does-not-exist",
+      headers: { "x-user-id": author.id },
+      payload: { title: "Ghost" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 describe("AI_SUMMARY 409 guard (BE-7)", () => {
   it("stale segmentExpected -> 409 and no double-open", async () => {
     const author = await createUser();
