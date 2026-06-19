@@ -19,15 +19,26 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Register mode also requires the confirm field; login does not.
   const canSubmit =
-    username.trim().length > 0 && password.trim().length > 0;
+    username.trim().length > 0 &&
+    password.trim().length > 0 &&
+    (mode === 'login' || confirmPassword.length > 0);
+
+  // Live mismatch hint (register mode, once the user has typed a confirmation).
+  const passwordsMismatch =
+    mode === 'register' &&
+    confirmPassword.length > 0 &&
+    password !== confirmPassword;
 
   function toggleMode() {
     setMode((m) => (m === 'login' ? 'register' : 'login'));
+    setConfirmPassword('');
     setError(null);
   }
 
@@ -47,9 +58,15 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     e.preventDefault();
     if (!canSubmit || submitting) return;
 
-    if (mode === 'register' && password.trim().length < 8) {
-      setError('비밀번호는 8자 이상이어야 합니다.');
-      return;
+    if (mode === 'register') {
+      if (password.length < 8) {
+        setError('비밀번호는 8자 이상이어야 합니다.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError('비밀번호가 일치하지 않습니다.');
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -109,6 +126,36 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           placeholder="••••••••"
         />
       </div>
+
+      {!isLogin && (
+        <div>
+          <label
+            htmlFor="confirmPassword"
+            className="mb-1 block text-sm font-medium text-term-dim"
+          >
+            비밀번호 확인
+          </label>
+          <input
+            id="confirmPassword"
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            aria-invalid={passwordsMismatch}
+            className={`w-full rounded-[2px] border bg-term-input px-3 py-2.5 text-sm text-term-bright caret-term-bright outline-none placeholder:text-term-faint focus:ring-1 ${
+              passwordsMismatch
+                ? 'border-term-danger focus:border-term-danger focus:ring-term-danger'
+                : 'border-term-border focus:border-term-bright focus:ring-term-bright'
+            }`}
+            placeholder="비밀번호 재입력"
+          />
+          {passwordsMismatch && (
+            <p className="mt-1 text-xs text-term-danger">
+              비밀번호가 일치하지 않습니다.
+            </p>
+          )}
+        </div>
+      )}
 
       <div>
         <label

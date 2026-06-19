@@ -11,6 +11,7 @@ import type {
 
 import { API_BASE } from '../config/api';
 import { getAuthToken } from '../lib/authToken';
+import { notifyAuthExpired } from '../lib/authEvents';
 
 // REST client base. In dev (VITE_API_ORIGIN unset), API_BASE is "/api" and
 // Vite proxies /api -> http://localhost:3001 (stripping the prefix). In prod
@@ -74,6 +75,11 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   }
 
   if (!res.ok) {
+    // A 401 on a request that CARRIED a token means the token was rejected
+    // (expired / secret rotated / invalid) — the session is no longer usable.
+    // Signal the app to clear it + prompt re-login. Gated on `tok` so that a
+    // 401 from login/register (no token attached) does NOT force a logout.
+    if (res.status === 401 && tok) notifyAuthExpired();
     // The Aidit backend reports failures as { error: "..." } (some endpoints
     // use { message }). Prefer either human-readable field so callers can show
     // the server's message (e.g. the Korean duplicate-name/slug errors) before

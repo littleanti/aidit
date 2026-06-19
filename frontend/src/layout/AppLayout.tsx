@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
 import { pingGemini } from '../engine/geminiStatus';
+import { setOnAuthExpired } from '../lib/authEvents';
 import BottomTabBar from './BottomTabBar';
 import Logo from '../components/Logo';
 import LoginModal from '../components/LoginModal';
@@ -59,7 +60,19 @@ function sidebarLinkClass({ isActive }: { isActive: boolean }): string {
 export default function AppLayout() {
   const username = useAuthStore((s) => s.username);
   const googleApiKey = useAuthStore((s) => s.googleApiKey);
+  const clearSession = useAuthStore((s) => s.clearSession);
   const openLogin = useUiStore((s) => s.openLogin);
+
+  // Zombie-session guard: when a write gets 401 (token expired / secret rotated),
+  // rest.ts fires notifyAuthExpired → clear the dead session (keep the Gemini
+  // key) and open the login modal, instead of silently 401-ing forever.
+  useEffect(() => {
+    setOnAuthExpired(() => {
+      clearSession();
+      openLogin();
+    });
+    return () => setOnAuthExpired(null);
+  }, [clearSession, openLogin]);
 
   // Gemini 연결 표식: 키가 생기거나 바뀔 때(신규 로그인 · 프로필 키 변경 · 지속
   // 세션 로드) 키당 한 번 가벼운 연결 테스트(pingGemini)를 돌려 배지를 즉시

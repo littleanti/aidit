@@ -11,6 +11,9 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-20
+- **[feat]** **회원가입 비밀번호 확인 필드 + 좀비 세션 보강**:
+  - **비밀번호 확인(UX)**: `LoginForm`의 회원가입 모드에 **`비밀번호 확인`** 필드 추가. 입력 중 불일치하면 인라인 빨간 힌트(`aria-invalid` + 빨간 테두리), 제출 시 `password !== confirmPassword`면 `'비밀번호가 일치하지 않습니다.'`로 가입 차단(서버 호출 전). 로그인 모드에는 미표시. 모드 토글 시 확인값 초기화.
+  - **좀비 세션 보강**: JWT 게이트 이전 세션(또는 시크릿 교체/토큰 만료)으로 `username`은 있는데 유효 토큰이 없어 "로그인된 듯 보이나 모든 쓰기가 401"이던 상태를 제거. ① **로드 시**: `authStore` 모듈-init이 `userId`는 있고 `token`이 없으면 `clearSession()`으로 세션 정리(Gemini 키는 보존). ② **런타임**: `rest.request`가 **토큰을 첨부한 요청이 401**이면 신규 leaf `lib/authEvents.ts`의 `notifyAuthExpired()` 호출 → `AppLayout`이 등록한 핸들러가 `clearSession()` + 로그인 모달 오픈(login/register의 무토큰 401은 `tok` 가드로 제외). 신규 `clearSession` 액션은 신원/토큰만 비우고 `googleApiKey`는 유지(만료로 BYOK 키를 잃지 않게). 순환참조 회피: rest→authEvents(leaf)→AppLayout 등록 구조. tsc 클린 + 프론트 30 테스트 green.
 - **[chore]** **로컬 `.env` 로드 + 실 `JWT_SECRET` 설정**: 기존엔 Prisma만 `.env`를 자동 로드해 앱 자체 변수(`JWT_SECRET`/`HOST`/`PORT`)는 `.env`에 넣어도 무시되고 dev 폴백을 썼다. `backend/src/config.ts` 최상단에서 Node 내장 `process.loadEnvFile()`로 `.env`를 먼저 로드(파일 없으면 try/catch로 무시 → 프로덕션은 플랫폼 주입 env 사용). 로컬 `backend/.env`(git 미추적)에 무작위 `JWT_SECRET`(48바이트 base64) + `HOST=127.0.0.1`(백엔드 비공개 바인드) 기록. 재기동 후 `[auth] WARNING` 사라짐 + `127.0.0.1:3001` 단독 바인딩으로 확인. (시크릿 회전이므로 이전 dev-폴백 토큰은 무효 → 재로그인 필요)
 
 ### 2026-06-19 (M15 — 실인증 JWT)

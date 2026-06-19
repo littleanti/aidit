@@ -22,6 +22,9 @@ interface AuthState {
   register: (username: string, password: string) => Promise<void>;
   /** update ONLY the local Google API key (L1: never sent to the server). */
   updateKey: (key: string) => void;
+  /** clear identity + token but KEEP the local Gemini key. Used for an expired /
+   *  rejected token and for clearing a tokenless "zombie" session on load. */
+  clearSession: () => void;
   /** clear all identity + token + key from memory and localStorage. */
   logout: () => void;
 }
@@ -65,6 +68,12 @@ export const useAuthStore = create<AuthState>()(
         set({ googleApiKey: key });
       },
 
+      clearSession: () => {
+        setAuthToken(null);
+        // keep googleApiKey (BYOK local key shouldn't be lost on token expiry)
+        set({ userId: null, username: null, token: null });
+      },
+
       logout: () => {
         setAuthToken(null);
         set({ userId: null, username: null, token: null, googleApiKey: null });
@@ -87,17 +96,16 @@ export const useAuthStore = create<AuthState>()(
   ),
 );
 
-// Module-init: arm from localStorage synchronously (handles environments where
-// onRehydrateStorage fires after the first render/request cycle).
+// Module-init: zustand persist rehydrates localStorage synchronously during
+// create(), so the state is already populated here. Arm the in-memory token
+// holder from it. If a session has an identity but NO token — a leftover from
+// before the JWT gate, or a cleared token — drop it (keeping the Gemini key) so
+// the UI never shows a logged-in-but-tokenless "zombie" that 401s every write.
 {
-  const raw = localStorage.getItem('aidit-auth');
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw) as { state?: { token?: string } };
-      const t = parsed?.state?.token;
-      if (t) setAuthToken(t);
-    } catch {
-      // malformed storage -- ignore
-    }
+  const st = useAuthStore.getState();
+  if (st.token) {
+    setAuthToken(st.token);
+  } else if (st.userId) {
+    st.clearSession();
   }
 }
