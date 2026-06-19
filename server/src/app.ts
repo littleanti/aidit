@@ -36,6 +36,11 @@ export async function build(): Promise<FastifyInstance> {
   const DEFAULT_ALLOWED_ORIGINS: Array<string | RegExp> = [
     /^http:\/\/localhost(:\d+)?$/,
     /^http:\/\/127\.0\.0\.1(:\d+)?$/,
+    // Private-LAN IPv4 over http — lets a phone on the same Wi-Fi reach the dev
+    // server when the frontend runs with `vite --host` (the proxied request
+    // forwards Origin: http://192.168.x.x:5173). http-only + private ranges, so
+    // production https origins never match. (RFC1918: 10/8, 172.16-31/12, 192.168/16)
+    /^http:\/\/(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})(:\d+)?$/,
     "https://littleanti.github.io",
   ];
 
@@ -59,7 +64,10 @@ export async function build(): Promise<FastifyInstance> {
       const allowed = allowedOrigins.some((o) =>
         o instanceof RegExp ? o.test(origin) : o === origin
       );
-      cb(allowed ? null : new Error("Not allowed by CORS"), allowed);
+      // Graceful deny: a disallowed origin gets NO CORS headers (browser blocks
+      // it client-side) but the request itself is not turned into a 500. Passing
+      // an Error here previously made every cross-origin call fail hard.
+      cb(null, allowed);
     },
     credentials: true,
   });
