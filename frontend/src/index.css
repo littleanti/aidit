@@ -10,10 +10,20 @@
   }
 
   body {
-    /* GREEN-PHOSPHOR CRT RETRO TERMINAL base shell. */
-    @apply bg-term-screen font-mono text-term-dim antialiased;
+    /* GREEN-PHOSPHOR CRT RETRO TERMINAL base shell.
+       Background is raw CSS (not @apply bg-term-screen) so it never depends on
+       a backgroundImage-derived utility being resolvable at @apply time — that
+       fails on dev servers holding a stale tailwind.config in require-cache. */
+    @apply font-mono text-term-dim antialiased;
     margin: 0;
     background-color: #04130b;
+    background-image: radial-gradient(
+      120% 80% at 50% 0%,
+      #06190e 0%,
+      #04130b 55%,
+      #020a05 100%
+    );
+    background-attachment: fixed;
     -webkit-tap-highlight-color: transparent;
   }
 
