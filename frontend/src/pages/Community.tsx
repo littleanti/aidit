@@ -202,7 +202,7 @@ function CommunityDetail({ slug }: { slug: string }) {
         // fallback, which could surface the wrong community), then its posts.
         const [found, postList] = await Promise.all([
           getCommunity(slug),
-          getCommunityPosts(slug),
+          getCommunityPosts(slug, userId ?? undefined),
         ]);
         if (cancelled) return;
         setCommunity(found);

@@ -1,5 +1,9 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { PostListItem } from '../api/types';
+import { upvotePost, removeUpvote } from '../api/rest';
+import { useAuthStore } from '../stores/authStore';
+import { useUiStore } from '../stores/uiStore';
 
 /** Compact relative time in Korean (방금 / N분 / N시간 / N일 / N주, else date). */
 function relativeTime(iso: string): string {
@@ -28,6 +32,35 @@ interface PostCardProps {
 
 export default function PostCard({ post }: PostCardProps) {
   const navigate = useNavigate();
+  const myUserId = useAuthStore((s) => s.userId);
+  const openLogin = useUiStore((s) => s.openLogin);
+
+  const [score, setScore] = useState(post.score);
+  const [voted, setVoted] = useState(Boolean(post.voted));
+
+  async function handleUpvote(e: React.MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!myUserId) {
+      openLogin();
+      return;
+    }
+    const next = !voted;
+    // optimistic update
+    setVoted(next);
+    setScore((s) => s + (next ? 1 : -1));
+    try {
+      const res = await (next
+        ? upvotePost(post.id, myUserId)
+        : removeUpvote(post.id, myUserId));
+      // sync with server-confirmed score
+      setScore(res.score);
+    } catch {
+      // revert on error
+      setVoted(!next);
+      setScore((s) => s + (next ? -1 : 1));
+    }
+  }
 
   return (
     <article
@@ -86,10 +119,18 @@ export default function PostCard({ post }: PostCardProps) {
 
       {/* meta line */}
       <div className="mt-2 flex items-center gap-3 text-xs text-term-dim">
-        <span className="inline-flex items-center gap-0.5" aria-label="점수">
+        <button
+          type="button"
+          aria-label={voted ? '추천 취소' : '추천'}
+          aria-pressed={voted}
+          onClick={handleUpvote}
+          className={`inline-flex items-center gap-0.5 rounded-[2px] transition hover:text-term-amber ${
+            voted ? 'text-term-amber' : ''
+          }`}
+        >
           <span aria-hidden>▲</span>
-          {post.score}
-        </span>
+          {score}
+        </button>
         <span className="inline-flex items-center gap-0.5" aria-label="댓글 수">
           <svg
             aria-hidden

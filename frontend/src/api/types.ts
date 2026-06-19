@@ -45,6 +45,8 @@ export interface Post {
   author?: { id: string; username: string };
   /** server-computed for the acting user via x-user-id on GET /posts/:id. */
   bookmarked?: boolean;
+  /** server-computed for the acting user via x-user-id; score is the live vote count. */
+  voted?: boolean;
 }
 
 /** Feed card shape (joined fields for rendering a list item). */
@@ -64,6 +66,8 @@ export interface PostListItem {
   authorUsername: string;
   /** optional uploaded image (filesystem-served URL); null = no image. */
   imageUrl?: string | null;
+  /** server-computed for the acting user via x-user-id; score is the live vote count. */
+  voted?: boolean;
 }
 
 export type CommentType = 'HUMAN' | 'AI_REPLY' | 'AI_SUMMARY';

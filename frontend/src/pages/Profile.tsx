@@ -47,7 +47,7 @@ export default function Profile() {
     setState('loading');
     setError(null);
 
-    Promise.all([getUserCommunities(userId), getUserPosts(userId), getUserBookmarks(userId)])
+    Promise.all([getUserCommunities(userId), getUserPosts(userId, userId), getUserBookmarks(userId, userId)])
       .then(([cs, ps, bks]) => {
         if (cancelled) return;
         setCommunities(cs);
@@ -224,7 +224,7 @@ export default function Profile() {
             // the same userId-bound fetch.
             setState('loading');
             setError(null);
-            Promise.all([getUserCommunities(userId), getUserPosts(userId), getUserBookmarks(userId)])
+            Promise.all([getUserCommunities(userId), getUserPosts(userId, userId), getUserBookmarks(userId, userId)])
               .then(([cs, ps, bks]) => {
                 setCommunities(cs);
                 setPosts(ps);

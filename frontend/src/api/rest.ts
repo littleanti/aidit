@@ -169,18 +169,18 @@ export interface PostsPage {
   nextCursor: string | null;
 }
 
-export async function getPosts(params: GetPostsParams = {}): Promise<PostsPage> {
+export async function getPosts(params: GetPostsParams = {}, userId?: string): Promise<PostsPage> {
   const r = await request<PostListResponse | { items: PostListItem[]; nextCursor?: string | null }>(
     '/posts',
-    { query: { sort: params.sort, cursor: params.cursor } },
+    { query: { sort: params.sort, cursor: params.cursor }, userId },
   );
   const nextCursor =
     !Array.isArray(r) && 'nextCursor' in r ? (r.nextCursor ?? null) : null;
   return { items: toItems(r), nextCursor };
 }
 
-export async function getCommunityPosts(slug: string): Promise<PostListItem[]> {
-  const r = await request<PostListResponse>(`/communities/${slug}/posts`);
+export async function getCommunityPosts(slug: string, userId?: string): Promise<PostListItem[]> {
+  const r = await request<PostListResponse>(`/communities/${slug}/posts`, { userId });
   return toItems(r);
 }
 
@@ -189,19 +189,20 @@ export async function getCommunityPosts(slug: string): Promise<PostListItem[]> {
 /**
  * GET /users/:id/posts — posts authored by a user (public, read-only).
  * Normalizes the server's { items } envelope to an array like getPosts.
+ * Pass actingUserId to have the server compute voted per card via x-user-id.
  */
-export async function getUserPosts(userId: string): Promise<PostListItem[]> {
-  const r = await request<PostListResponse>(`/users/${userId}/posts`);
+export async function getUserPosts(userId: string, actingUserId?: string): Promise<PostListItem[]> {
+  const r = await request<PostListResponse>(`/users/${userId}/posts`, { userId: actingUserId });
   return toItems(r);
 }
 
 /**
  * GET /users/:id/bookmarks — posts bookmarked by a user, most-recent first.
- * L1: NO apiKey. Public/read-only (no x-user-id needed).
+ * L1: NO apiKey. Pass actingUserId to have the server compute voted per card.
  * Normalizes the server's { items } envelope to an array like getUserPosts.
  */
-export async function getUserBookmarks(userId: string): Promise<PostListItem[]> {
-  const r = await request<PostListResponse>(`/users/${userId}/bookmarks`);
+export async function getUserBookmarks(userId: string, actingUserId?: string): Promise<PostListItem[]> {
+  const r = await request<PostListResponse>(`/users/${userId}/bookmarks`, { userId: actingUserId });
   return toItems(r);
 }
 
@@ -254,6 +255,30 @@ export function removeBookmark(
   userId: string,
 ): Promise<{ bookmarked: boolean }> {
   return request(`/posts/${postId}/bookmark`, { method: 'DELETE', userId });
+}
+
+/**
+ * POST /posts/:id/upvote — upvote a post for the acting user.
+ * L1: NO apiKey. x-user-id carries the user (REQUIRED; server 401s without it).
+ * Idempotent upsert of a Vote(userId, postId). Recomputes score + hotScore.
+ */
+export function upvotePost(
+  postId: string,
+  userId: string,
+): Promise<{ id: string; score: number; hotScore: number; voted: boolean }> {
+  return request(`/posts/${postId}/upvote`, { method: 'POST', userId });
+}
+
+/**
+ * DELETE /posts/:id/upvote — remove an upvote for the acting user.
+ * L1: NO apiKey. x-user-id carries the user (REQUIRED; server 401s without it).
+ * Idempotent deleteMany Vote(userId, postId). Recomputes score + hotScore.
+ */
+export function removeUpvote(
+  postId: string,
+  userId: string,
+): Promise<{ id: string; score: number; hotScore: number; voted: boolean }> {
+  return request(`/posts/${postId}/upvote`, { method: 'DELETE', userId });
 }
 
 export interface UpdatePostBody {

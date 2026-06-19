@@ -150,6 +150,19 @@ model Bookmark {
   @@unique([userId, postId])
   @@index([userId, createdAt])
 }
+
+// 추천(업보트): 사용자가 글을 추천. userId+postId unique. Post.score = 이 행의 count.
+model Vote {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([postId])
+}
 ```
 
 **설계 포인트**
@@ -157,6 +170,7 @@ model Bookmark {
 - **세그먼트(`ContextSegment`)** 가 요약 경계의 단일 출처. 활성 세그먼트의 `tokenSum`으로 128K를 판정(요청 #6/#7).
 - **`seq`** 는 post 내 전역 단조 증가 — SSE 재생/정렬/멱등의 기준.
 - **북마크(`Bookmark`)**: 사용자 프라이빗 상태. `GET /posts/:id`는 선택 `x-user-id` 헤더로 요청 사용자의 북마크 여부를 `bookmarked` 불린으로 응답(없으면 false).
+- **추천(`Vote`)**: `@@unique([userId, postId])`로 사용자당 글당 1표. **`Post.score`는 더 이상 단순 증가 카운터가 아니라 `Vote` 행 수(count)** 이며 추천 추가/취소마다 재계산된다(기존 "score+1 무중복방지" 폐기). `GET /posts/:id`와 모든 피드 카드는 선택 `x-user-id`로 요청 사용자의 추천 여부를 `voted` 불린으로 응답(북마크와 동일 패턴).
 
 ---
 
@@ -175,14 +189,15 @@ model Bookmark {
 | `GET /communities/:slug/posts` | 커뮤니티별 글 | - | |
 | `POST /posts` | 글 작성(먼저 등록, seg#0 자동) | `x-user-id` | FR-4.2 · 레이트리밋(XC-9) · 본문에 선택 `imageUrl?` |
 | `POST /uploads` | 단일 이미지 업로드(multipart) → `{ imageUrl }`(서버 상대 `/uploads/<name>`) | `x-user-id` | 글/댓글 이미지 첨부. 형식 PNG/JPEG/WebP/GIF · 최대 5MB · 정적 서빙 `GET /uploads/*` |
-| `GET /posts/:id` | 글 + 메타 | 선택 `x-user-id` | 응답에 `imageUrl`, `bookmarked`, `community.personaPrompt`(L6: 클라 AI systemInstruction 소스) 포함 |
+| `GET /posts/:id` | 글 + 메타 | 선택 `x-user-id` | 응답에 `imageUrl`, `bookmarked`, `voted`, `community.personaPrompt`(L6: 클라 AI systemInstruction 소스) 포함 |
 | `PATCH /posts/:id` | **글 수정**(제목/본문/이미지, 작성자만) | `x-user-id` | 작성자 검증: `post.authorId === x-user-id` → 비작성자 403 |
 | `GET /posts/:id/comments?afterSeq=` | 버블 페이지네이션 | - | FR-5 |
 | `POST /posts/:id/comments` | **버블 게시**(사람/AI/요약 텍스트) | `x-user-id`(사람) | §4.1 · clientId 멱등 |
 | `PATCH /comments/:id` | AI 버블 상태/본문 갱신(PENDING→COMPLETE/FAILED) | `x-user-id`(사람)·clientId(AI) | FR-6.2 |
 | `GET /posts/:id/context` | **AI 호출용 컨텍스트 조립 결과** 반환 | - | §6.2 핵심 |
 | `GET /posts/:id/stream` | **SSE 구독**(새 버블/상태변경 push) | - | §7 |
-| `POST /posts/:id/upvote` | 추천 | `x-user-id` | hotScore 갱신 |
+| `POST /posts/:id/upvote` | **추천(토글-추가, 멱등 upsert)** | `x-user-id` | `score=vote count` + hotScore 재계산, `{id,score,hotScore,voted:true}` |
+| `DELETE /posts/:id/upvote` | **추천 취소(멱등)** | `x-user-id` | `score=vote count` + hotScore 재계산, `{id,score,hotScore,voted:false}` |
 | **`POST /posts/:id/bookmark`** | **북마크 추가**(idempotent upsert) | `x-user-id` | 201 `{bookmarked:true}` |
 | **`DELETE /posts/:id/bookmark`** | **북마크 제거**(idempotent delete) | `x-user-id` | 200 `{bookmarked:false}` |
 | **`GET /users/:id/bookmarks`** | **북마크한 글 목록**(피드 카드, 최신순) | - | 사용자별 북마크 조회 |

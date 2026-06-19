@@ -566,3 +566,25 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 - [x] **FE-27 · 로그인 시 1회 연결 테스트**: `pingGemini(apiKey)`(= `countTokens`, 생성 비용 0)를
   키가 생기거나 바뀔 때(신규 로그인 · 키 변경 · 지속 세션 로드) **키당 한 번** 실행해 배지를 즉시 갱신.
   `AppLayout` effect가 `googleApiKey` 변화를 감지, `useRef`로 동일 키 중복 핑 방지. tsc 클린 + 테스트 30 green.
+
+---
+
+## 17. M13 — 추천(업보트) 토글 (v1.0, 2026-06-19)
+
+> 북마크를 거울한 투표 시스템. 사용자당 글당 유일한 Vote 레코드, Post.score는 실시간 vote count로 재계산.
+> 백엔드: POST/DELETE `/posts/:id/upvote` 멱등 토글(점수 갱신). 프론트: PostCard·Thread의 ▲ 버튼 interactive
+> (낙관적, 로그인 필수, voted 강조 색). 완료 게이트: 서버/프론트 `build`·`test` green + 브라우저.
+
+### 작업 패키지 (WP)
+- [ ] **DB-12 · `Vote` 모델**: `userId`+`postId` unique index. 마이그레이션 `add_vote_model` 추가.
+- [ ] **BE-17 · POST /posts/:id/upvote (toggle-add)**: 인증(`x-user-id`), idempotent upsert(`findUnique`/`create`/`ignore` 분기). 응답 `{voted:true}`. hotScore 재계산.
+- [ ] **BE-18 · DELETE /posts/:id/upvote (toggle-remove)**: 인증(`x-user-id`), idempotent delete. 응답 `{voted:false}`. hotScore 재계산.
+- [ ] **BE-19 · `GET /posts/:id` voted 필드**: 선택 `x-user-id` 헤더 있으면 반환 유저의 vote 여부 불린(없으면 `false`).
+- [ ] **BE-20 · 피드 voted 필드**: GET `/posts`, `/communities/:slug/posts`, `/users/:id/posts`, `/users/:id/bookmarks`의 `toFeedCard`에 `voted` 추가(x-user-id 있을 때만).
+- [ ] **FE-28 · PostCard ▲ 버튼 (toggle)**: 초기값 `post.voted`(서버 계산), 낙관적 UI. 로그인 필수(`openLogin()`). 클릭 시 POST/DELETE `/posts/:id/upvote`. voted=true일 때 `text-term-amber` 강조색. 실패 시 롤백 + 토스트.
+- [ ] **FE-29 · Thread 원본 카드 ▲ 버튼**: PostCard와 동일 패턴, 피드 카드에서 상세로 진입 시에도 voted 상태 유지.
+- [ ] **FE-30 · Feed fetcher x-user-id forward**: 홈/커뮤니티/프로필/북마크 피드의 `getPosts`/`getCommunityPosts`/`getUserPosts`/`getUserBookmarks`가 모두 `x-user-id` 헤더로 voted 상태를 요청.
+- [ ] **XC-13 · resetDb() 정리**: `server/src/test/helpers.ts`에서 `vote` 테이블 삭제 추가.
+- [ ] **XC-14 · 검증**: 서버 build + 테스트 green. 프론트 build + 테스트 green. 브라우저 — PostCard/Thread에서 ▲ 토글 · voted 강조색 · 재로드 후 상태 유지(x-user-id forward) 확인.
+
+**M13 종료 기준**: POST/DELETE `/posts/:id/upvote`가 멱등 토글; GET `/posts/:id` + 모든 피드가 `voted` boolean 반환(x-user-id 있을 때); PostCard/Thread의 ▲ 버튼이 로그인 필요하며 낙관적 토글, voted=true일 때 강조색; Post.score는 실시간 vote count를 반영.

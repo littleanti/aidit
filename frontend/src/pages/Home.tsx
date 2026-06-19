@@ -4,6 +4,7 @@ import { getPosts, ApiError, type PostSort } from '../api/rest';
 import type { PostListItem } from '../api/types';
 import PostCard from '../components/PostCard';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
+import { useAuthStore } from '../stores/authStore';
 
 type Tab = Extract<PostSort, 'hot' | 'new'>;
 
@@ -13,6 +14,7 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export default function Home() {
+  const myUserId = useAuthStore((s) => s.userId);
   const [sort, setSort] = useState<Tab>('hot');
   const [posts, setPosts] = useState<PostListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -31,10 +33,10 @@ export default function Home() {
       setLoading(true);
       setError(null);
       try {
-        const { items, nextCursor: serverCursor } = await getPosts({
-          sort: nextSort,
-          cursor,
-        });
+        const { items, nextCursor: serverCursor } = await getPosts(
+          { sort: nextSort, cursor },
+          myUserId ?? undefined,
+        );
         if (reqRef.current !== reqId) return; // superseded
         setPosts((prev) => (cursor ? [...prev, ...items] : items));
         setNextCursor(serverCursor);
@@ -53,7 +55,7 @@ export default function Home() {
         }
       }
     },
-    [],
+    [myUserId],
   );
 
   // Reset + load whenever the tab changes.

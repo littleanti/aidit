@@ -68,6 +68,7 @@ function toFeedCard(
     author: { username: string };
   },
   hotScoreOverride?: number,
+  voted = false,
 ) {
   return {
     id: p.id,
@@ -84,6 +85,7 @@ function toFeedCard(
     communityPersonaIcon: p.community.personaIcon,
     authorId: p.authorId,
     authorUsername: p.author.username,
+    voted,
   };
 }
 
@@ -161,6 +163,7 @@ const plugin: FastifyPluginAsync = async (app) => {
         commentCount: post.commentCount,
         hotScore: post.hotScore,
         createdAt: post.createdAt,
+        voted: false,
         community: {
           slug: post.community.slug,
           name: post.community.name,
@@ -238,6 +241,21 @@ const plugin: FastifyPluginAsync = async (app) => {
         nextCursor = encodeCursor(anchor, last.id);
       }
 
+      // Batch voted lookup for optional acting user.
+      const actingUserHeader = req.headers["x-user-id"];
+      const actingUserId = Array.isArray(actingUserHeader)
+        ? actingUserHeader[0]
+        : actingUserHeader;
+      const votedSet = new Set<string>();
+      if (actingUserId && page.length > 0) {
+        const pageIds = page.map((p) => p.id);
+        const userVotes = await prisma.vote.findMany({
+          where: { userId: actingUserId, postId: { in: pageIds } },
+          select: { postId: true },
+        });
+        for (const v of userVotes) votedSet.add(v.postId);
+      }
+
       // XC-8: for the hot feed, recompute the effective hotScore at read time and
       // re-sort the in-page rows so the visible order reflects current age. The
       // stored value (and thus pagination) is untouched.
@@ -251,13 +269,15 @@ const plugin: FastifyPluginAsync = async (app) => {
           (a, b) => b.eff - a.eff || (a.row.id < b.row.id ? 1 : -1),
         );
         return reply.send({
-          items: withEffective.map((e) => toFeedCard(e.row, e.eff)),
+          items: withEffective.map((e) =>
+            toFeedCard(e.row, e.eff, votedSet.has(e.row.id)),
+          ),
           nextCursor,
         });
       }
 
       return reply.send({
-        items: page.map((p) => toFeedCard(p)),
+        items: page.map((p) => toFeedCard(p, undefined, votedSet.has(p.id))),
         nextCursor,
       });
     },
@@ -296,12 +316,18 @@ const plugin: FastifyPluginAsync = async (app) => {
       : actingUserHeader;
 
     let bookmarked = false;
+    let voted = false;
     if (actingUserId) {
       const bm = await prisma.bookmark.findUnique({
         where: { userId_postId: { userId: actingUserId, postId: post.id } },
         select: { id: true },
       });
       bookmarked = bm !== null;
+      const vt = await prisma.vote.findUnique({
+        where: { userId_postId: { userId: actingUserId, postId: post.id } },
+        select: { id: true },
+      });
+      voted = vt !== null;
     }
 
     return reply.send({
@@ -319,6 +345,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       hotScore: post.hotScore,
       createdAt: post.createdAt,
       bookmarked,
+      voted,
       community: {
         id: post.community.id,
         slug: post.community.slug,
@@ -356,7 +383,23 @@ const plugin: FastifyPluginAsync = async (app) => {
         include: feedInclude,
       });
 
-      return reply.send({ items: rows.map(toFeedCard) });
+      const actingUserHeader = req.headers["x-user-id"];
+      const actingUserId = Array.isArray(actingUserHeader)
+        ? actingUserHeader[0]
+        : actingUserHeader;
+      const votedSet = new Set<string>();
+      if (actingUserId && rows.length > 0) {
+        const pageIds = rows.map((p) => p.id);
+        const userVotes = await prisma.vote.findMany({
+          where: { userId: actingUserId, postId: { in: pageIds } },
+          select: { postId: true },
+        });
+        for (const v of userVotes) votedSet.add(v.postId);
+      }
+
+      return reply.send({
+        items: rows.map((p) => toFeedCard(p, undefined, votedSet.has(p.id))),
+      });
     },
   );
 
@@ -370,7 +413,23 @@ const plugin: FastifyPluginAsync = async (app) => {
         include: feedInclude,
       });
 
-      return reply.send({ items: rows.map((p) => toFeedCard(p)) });
+      const actingUserHeader = req.headers["x-user-id"];
+      const actingUserId = Array.isArray(actingUserHeader)
+        ? actingUserHeader[0]
+        : actingUserHeader;
+      const votedSet = new Set<string>();
+      if (actingUserId && rows.length > 0) {
+        const pageIds = rows.map((p) => p.id);
+        const userVotes = await prisma.vote.findMany({
+          where: { userId: actingUserId, postId: { in: pageIds } },
+          select: { postId: true },
+        });
+        for (const v of userVotes) votedSet.add(v.postId);
+      }
+
+      return reply.send({
+        items: rows.map((p) => toFeedCard(p, undefined, votedSet.has(p.id))),
+      });
     },
   );
 
@@ -478,7 +537,7 @@ const plugin: FastifyPluginAsync = async (app) => {
     });
   });
 
-  // BE-9b: Upvote — increment score, recompute hotScore, persist. PoC: no dedupe.
+  // POST /posts/:id/upvote — idempotent upsert of a Vote; recomputes score + hotScore.
   app.post<{ Params: { id: string } }>(
     "/posts/:id/upvote",
     async (req, reply) => {
@@ -487,13 +546,60 @@ const plugin: FastifyPluginAsync = async (app) => {
 
       const post = await prisma.post.findUnique({
         where: { id: req.params.id },
-        select: { score: true, commentCount: true, createdAt: true },
+        select: { id: true, commentCount: true, createdAt: true },
       });
       if (!post) {
         return reply.code(404).send({ error: "Post not found" });
       }
 
-      const newScore = post.score + 1;
+      await prisma.vote.upsert({
+        where: { userId_postId: { userId, postId: req.params.id } },
+        create: { userId, postId: req.params.id },
+        update: {},
+      });
+
+      const newScore = await prisma.vote.count({
+        where: { postId: req.params.id },
+      });
+      const newHot = hotScore(newScore, post.commentCount, post.createdAt);
+
+      const updated = await prisma.post.update({
+        where: { id: req.params.id },
+        data: { score: newScore, hotScore: newHot },
+        select: { id: true, score: true, hotScore: true },
+      });
+
+      return reply.code(201).send({
+        id: updated.id,
+        score: updated.score,
+        hotScore: updated.hotScore,
+        voted: true,
+      });
+    },
+  );
+
+  // DELETE /posts/:id/upvote — idempotent remove; recomputes score + hotScore.
+  app.delete<{ Params: { id: string } }>(
+    "/posts/:id/upvote",
+    async (req, reply) => {
+      const userId = requireUserId(req, reply);
+      if (!userId) return;
+
+      await prisma.vote.deleteMany({
+        where: { userId, postId: req.params.id },
+      });
+
+      const post = await prisma.post.findUnique({
+        where: { id: req.params.id },
+        select: { id: true, commentCount: true, createdAt: true },
+      });
+      if (!post) {
+        return reply.code(404).send({ error: "Post not found" });
+      }
+
+      const newScore = await prisma.vote.count({
+        where: { postId: req.params.id },
+      });
       const newHot = hotScore(newScore, post.commentCount, post.createdAt);
 
       const updated = await prisma.post.update({
@@ -506,6 +612,7 @@ const plugin: FastifyPluginAsync = async (app) => {
         id: updated.id,
         score: updated.score,
         hotScore: updated.hotScore,
+        voted: false,
       });
     },
   );
@@ -561,7 +668,25 @@ const plugin: FastifyPluginAsync = async (app) => {
         include: { post: { include: feedInclude } },
       });
 
-      return reply.send({ items: rows.map((r) => toFeedCard(r.post)) });
+      const actingUserHeader = req.headers["x-user-id"];
+      const actingUserId = Array.isArray(actingUserHeader)
+        ? actingUserHeader[0]
+        : actingUserHeader;
+      const votedSet = new Set<string>();
+      if (actingUserId && rows.length > 0) {
+        const pageIds = rows.map((r) => r.post.id);
+        const userVotes = await prisma.vote.findMany({
+          where: { userId: actingUserId, postId: { in: pageIds } },
+          select: { postId: true },
+        });
+        for (const v of userVotes) votedSet.add(v.postId);
+      }
+
+      return reply.send({
+        items: rows.map((r) =>
+          toFeedCard(r.post, undefined, votedSet.has(r.post.id)),
+        ),
+      });
     },
   );
 };

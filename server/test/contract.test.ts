@@ -547,6 +547,161 @@ describe("bookmarks", () => {
   });
 });
 
+describe("upvote toggle", () => {
+  it("POST upvote -> 201 { voted: true, score: 1 }", async () => {
+    const user = await createUser();
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.id, community.id);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/upvote`,
+      headers: { "x-user-id": user.id },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = JSON.parse(res.body);
+    expect(body.voted).toBe(true);
+    expect(body.score).toBe(1);
+    expect(body).toHaveProperty("id");
+    expect(body).toHaveProperty("hotScore");
+  });
+
+  it("POST upvote is idempotent (second call: score stays 1, one DB row)", async () => {
+    const user = await createUser();
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.id, community.id);
+
+    await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/upvote`,
+      headers: { "x-user-id": user.id },
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/upvote`,
+      headers: { "x-user-id": user.id },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = JSON.parse(res.body);
+    expect(body.score).toBe(1);
+    expect(body.voted).toBe(true);
+
+    const count = await prisma.vote.count({
+      where: { userId: user.id, postId: post.id },
+    });
+    expect(count).toBe(1);
+  });
+
+  it("DELETE upvote -> 200 { voted: false, score: 0 }", async () => {
+    const user = await createUser();
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.id, community.id);
+
+    await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/upvote`,
+      headers: { "x-user-id": user.id },
+    });
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/posts/${post.id}/upvote`,
+      headers: { "x-user-id": user.id },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.voted).toBe(false);
+    expect(body.score).toBe(0);
+  });
+
+  it("DELETE upvote is idempotent when no vote exists", async () => {
+    const user = await createUser();
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.id, community.id);
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/posts/${post.id}/upvote`,
+      headers: { "x-user-id": user.id },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.voted).toBe(false);
+    expect(body.score).toBe(0);
+  });
+
+  it("GET /posts/:id with x-user-id returns voted:true; without returns voted:false", async () => {
+    const user = await createUser();
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.id, community.id);
+
+    await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/upvote`,
+      headers: { "x-user-id": user.id },
+    });
+
+    const withUser = await app.inject({
+      method: "GET",
+      url: `/posts/${post.id}`,
+      headers: { "x-user-id": user.id },
+    });
+    expect(JSON.parse(withUser.body).voted).toBe(true);
+
+    const withoutUser = await app.inject({
+      method: "GET",
+      url: `/posts/${post.id}`,
+    });
+    expect(JSON.parse(withoutUser.body).voted).toBe(false);
+  });
+
+  it("GET /posts (feed) with x-user-id reflects voted per card", async () => {
+    const user = await createUser();
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.id, community.id);
+
+    await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/upvote`,
+      headers: { "x-user-id": user.id },
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/posts",
+      headers: { "x-user-id": user.id },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    const card = body.items.find((c: { id: string }) => c.id === post.id);
+    expect(card).toBeDefined();
+    expect(card.voted).toBe(true);
+  });
+
+  it("POST upvote without x-user-id -> 401", async () => {
+    const user = await createUser();
+    const community = await createCommunity(user.id);
+    const post = await createPostViaApi(app, user.id, community.id);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/upvote`,
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("POST upvote on missing post -> 404", async () => {
+    const user = await createUser();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/posts/nonexistent-post-id/upvote",
+      headers: { "x-user-id": user.id },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 describe("AI_SUMMARY 409 guard (BE-7)", () => {
   it("stale segmentExpected -> 409 and no double-open", async () => {
     const author = await createUser();

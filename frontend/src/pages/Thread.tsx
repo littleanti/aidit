@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { addBookmark, ApiError, getCommunities, getComments, getContext, getPost, removeBookmark } from '../api/rest';
+import { addBookmark, ApiError, getCommunities, getComments, getContext, getPost, removeBookmark, upvotePost, removeUpvote } from '../api/rest';
 import type { Comment, Community, Post } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
@@ -66,6 +66,11 @@ export default function Thread() {
   // VR-3: bookmark toggle — persisted via POST/DELETE /posts/:id/bookmark.
   // Initialised from loadedPost.bookmarked (server-computed via x-user-id).
   const [bookmarked, setBookmarked] = useState(false);
+
+  // Upvote toggle — persisted via POST/DELETE /posts/:id/upvote.
+  // Initialised from loadedPost.voted (server-computed via x-user-id).
+  const [voted, setVoted] = useState(false);
+  const [postScore, setPostScore] = useState(0);
 
   const openLogin = useUiStore((s) => s.openLogin);
 
@@ -143,6 +148,8 @@ export default function Thread() {
 
         setPost(loadedPost);
         setBookmarked(Boolean(loadedPost.bookmarked));
+        setVoted(Boolean(loadedPost.voted));
+        setPostScore(loadedPost.score);
         setInitial(comments);
 
         // Resolve the community for the persona header. Prefer the joined
@@ -432,7 +439,32 @@ export default function Thread() {
               u/{authorName} · {relativeTime(post.createdAt)}
             </span>
             <span className="ml-auto flex items-center gap-2">
-              <span>▲{post.score}</span>
+              <button
+                type="button"
+                aria-label={voted ? '추천 취소' : '추천'}
+                aria-pressed={voted}
+                onClick={async () => {
+                  if (!myUserId) { openLogin(); return; }
+                  const next = !voted;
+                  setVoted(next);
+                  setPostScore((s) => s + (next ? 1 : -1));
+                  try {
+                    const res = await (next
+                      ? upvotePost(postId, myUserId)
+                      : removeUpvote(postId, myUserId));
+                    setPostScore(res.score);
+                  } catch {
+                    setVoted(!next);
+                    setPostScore((s) => s + (next ? -1 : 1));
+                    showAiToast('추천 처리에 실패했습니다.');
+                  }
+                }}
+                className={`flex items-center gap-0.5 rounded-[2px] transition hover:text-term-amber ${
+                  voted ? 'text-term-amber' : ''
+                }`}
+              >
+                ▲{postScore}
+              </button>
               <span>💬{post.commentCount}</span>
             </span>
           </div>

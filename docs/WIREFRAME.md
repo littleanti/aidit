@@ -332,7 +332,7 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 │ (Avatar sm, seed=authorName) u/{authorName} · {상대시간}   [우측 ml-auto] ▲{score} 💬{commentCount}
 └────────────────────────────────────────────────────────┘
 ```
-- 좋아요/점수: 기존 `post.score`를 `▲`(또는 하트) 아이콘과 함께 표시(읽기 전용, 기존과 동일 비기능).
+- 좋아요/점수: `▲ + post.score`. **(2026-06-19) 이제 인터랙티브 추천 토글 버튼** — PostCard(피드)·Thread(원본 글) 양쪽에서 클릭 시 `POST/DELETE /posts/:id/upvote` 토글. 로그인 필요(`openLogin()`), 낙관적 갱신+실패 롤백, `voted=true`면 `text-term-amber` 강조. `score`는 실시간 vote count. PostCard는 카드 전체가 navigate 대상이므로 버튼이 `stopPropagation`+`preventDefault`.
 - 댓글 수: `post.commentCount`. (Post DTO에 존재.)
 - **글 이미지(2026-06-19)**: `post.imageUrl`이 있으면 본문 아래 `<img>`(`max-w-full rounded-[2px] border border-term-border`).
   src/베이스 경로 처리는 ChatBubble의 댓글 이미지 렌더 방식을 그대로 따른다(동일 업로드 경로/프록시).

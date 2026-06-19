@@ -23,6 +23,7 @@ model User {
   comments    Comment[]
   visitEvents VisitEvent[]
   bookmarks   Bookmark[]
+  votes       Vote[]
 }
 
 model Community {
@@ -54,6 +55,7 @@ model Post {
   comments     Comment[]
   segments     ContextSegment[]
   bookmarks    Bookmark[]
+  votes        Vote[]
 }
 
 enum CommentType {
@@ -129,4 +131,16 @@ model Bookmark {
 
   @@unique([userId, postId])
   @@index([userId, createdAt])
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([postId])
 }
