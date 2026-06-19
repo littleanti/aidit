@@ -47,7 +47,7 @@ interface Tab {
 const TABS: Tab[] = [
   { to: '/', label: '홈', icon: IconHome, exact: true },
   { to: '/search', label: '검색', icon: IconSearch },
-  { to: '/create-community', label: '작성', icon: IconWrite },
+  { to: '/create-post', label: '작성', icon: IconWrite },
   { to: '/me', label: '나', icon: IconProfile },
 ];
 

@@ -74,6 +74,16 @@ export default function PostCard({ post }: PostCardProps) {
         {post.title}
       </h2>
 
+      {/* optional attached image thumbnail */}
+      {post.imageUrl && (
+        <img
+          src={post.imageUrl}
+          alt="첨부 이미지"
+          className="mt-2 h-32 w-full rounded-[2px] border border-term-border object-cover"
+          loading="lazy"
+        />
+      )}
+
       {/* meta line */}
       <div className="mt-2 flex items-center gap-3 text-xs text-term-dim">
         <span className="inline-flex items-center gap-0.5" aria-label="점수">

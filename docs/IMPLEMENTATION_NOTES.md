@@ -11,6 +11,7 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-19
+- **[feat]** **Option A 동선 개편 + 글 이미지 첨부 + 로그인 모달**: ① IA — 하단/사이드바 '작성' 탭을 글 작성(`/create-post`)으로 직결하고 커뮤니티 만들기는 검색 화면 진입으로 일원화(라우트는 둘 다 유지), ② 글 작성에 **펼침형 커뮤니티 피커**(`<select>` 대체) + **빈상태 보조 링크**(커뮤니티 0개 → `/search`) + **이미지 첨부**(Composer 패턴 재사용) 추가, ③ `Post.imageUrl`(nullable) 풀스택 반영(스키마/`POST /posts`·`GET /posts/:id`·`toFeedCard` + 프론트 타입/표시), ④ **로그인을 별도 페이지 → 모달 오버레이**로 전환(신규 `uiStore`·`LoginModal`·추출된 `LoginForm`, 헤더 `[ Login ]`이 `openLogin()` 호출, 쓰기 게이트 하드 리다이렉트 제거). (§4.6)
 - **[fix]** 홈 피드 "Invalid cursor" 무한 루프: `rest.ts::getPosts`가 페이지네이션 envelope를 풀어 `items` 배열만 반환하고 `nextCursor`를 버리자, Home이 마지막 항목의 **원본 id**를 다음 커서로 넘겨 서버가 이를 불투명 커서로 디코드하지 못해 매 페이지 "Invalid cursor"로 실패→재요청을 반복했다. `getPosts`가 서버 envelope **`{ items, nextCursor }`** 를 그대로 반환하도록 되돌리고, Home은 서버가 준 **불투명 `nextCursor`로 페이지네이션**하며 **`null`이면 정지**하도록 수정(원본 id 도출 제거). (§4.5)
 
 ### 2026-06-18
@@ -244,6 +245,40 @@ WIREFRAME §12("디자인 시스템 v0.3 — 전 화면 적용, 구현 단일 �
 11. **홈 피드 무한 루프 — 원본 id를 커서로 오용 (envelope `nextCursor` 유실)**
     - 증상: 홈 피드 무한 스크롤이 첫 페이지 이후 매 추가 요청마다 서버에서 **"Invalid cursor"** 로 실패하고, 클라가 같은 (잘못된) 커서로 재요청을 반복해 **무한 루프**에 빠졌다. `rest.ts::getPosts`가 `{ items, nextCursor }` envelope를 풀어 `items` 배열만 반환하면서 `nextCursor`를 폐기 → Home은 다음 커서를 알 수 없어 `items[items.length-1].id`(원본 정수/문자열 id)를 커서로 넘겼고, 서버는 이를 불투명 커서로 디코드하지 못해 거부했다.
     - 수정: `getPosts`를 서버 envelope **`{ items, nextCursor }`** 를 그대로 반환하도록 되돌리고(배열 강제 정규화 제거), Home은 서버가 발급한 **불투명 `nextCursor`** 로만 페이지네이션하며 **`nextCursor === null`이면 더 불러오기를 정지**하도록 변경(마지막 항목 id 도출 로직 제거). 이로써 커서 의미 체계가 서버↔클라 간 일치하고 끝 페이지에서 깔끔히 종료된다.
+
+### 4.6 Option A 동선 개편 + 글 이미지 첨부 + 로그인 모달 (2026-06-19)
+
+레트로 터미널 비주얼(v0.5)은 적용됐으나 재설계에서 합의된 **동선/기능**이 코드에 미반영된 상태였다. 본 작업은 표현이 아니라 **IA·작성 흐름·인증 표면·데이터 모델**을 Option A 합의대로 정렬한다. 시각 클래스는 기존 `term-*` 토큰 + 레트로 패턴을 그대로 재사용한다.
+
+**① IA: '작성' 탭 = 글 작성 직결, '커뮤니티 만들기' = 검색 진입**
+- `frontend/src/layout/BottomTabBar.tsx`: '작성' 탭 `to`를 `/create-community` → **`/create-post`** 로 변경(아이콘 `IconWrite`·라벨 '작성' 유지).
+- `frontend/src/layout/AppLayout.tsx`: 데스크톱 사이드바의 "커뮤니티 만들기"(`/create-community`) NavLink를 **"작성"(`/create-post`, IconWrite)** 으로 교체. 순서 = 홈 / 검색 / 작성 / 나. 커뮤니티 만들기는 검색 화면의 상시 버튼으로 일원화(사이드바에서 제거).
+- `frontend/src/App.tsx`: `/create-post`·`/create-community` 라우트는 **둘 다 유지**(만들기는 검색·커뮤니티 편집에서 계속 사용 — 라우트 삭제 없음).
+
+**② 글 작성 커뮤니티 피커 + ③ 빈상태 보조 링크 (`frontend/src/pages/CreatePost.tsx`)**
+- slug 라우트(커뮤니티 고정)면 기존 잠금 표시 유지(피커 없음). slug 없는 일반 작성이면 `<select>`를 **펼침형 피커**로 교체. 신규 상태 `pickerOpen:boolean`·`pickerQuery:string`(선택값은 기존 `selectedCommunityId` 유지). 목록은 기존 `getCommunities()` 사용, 이름 부분일치(대소문자 무시) 클라 필터, 행별 `[*]`/`[ ]` 마크.
+- **빈상태 보조 링크**: slug 없는 작성 + 로드 후 `communities.length===0`일 때만 피커 대신 `! 가입한 커뮤니티가 없어요 · 검색에서 만들기 →`(`text-term-amber`)를 `/search`로 노출. 1개 이상이면 숨김.
+- 기존 submit/canSubmit/route-slug 로직, AI 1차 답변 체크박스, 제목/내용 입력은 보존.
+
+**④ 글 이미지 첨부 (풀스택) — `Post.imageUrl` 컨트랙트**
+- 백엔드 `server/`:
+  - `prisma/schema.prisma` `model Post`에 **`imageUrl String?`**(body 아래, `Comment.imageUrl`과 동일한 nullable 패턴) 추가. 마이그레이션 `add_post_image_url`(sqlite, nullable이라 비파괴 — `20260619022438_comment_image_url` 선례와 동일, **DB reset 금지**).
+  - `src/routes/posts.ts`: `POST /posts` Body 타입에 `imageUrl?: string` 추가 → `tx.post.create({ data:{ …, imageUrl: imageUrl ?? null } })`, 201 응답에 `imageUrl: post.imageUrl` 포함. `toFeedCard` 입력/반환 타입에 `imageUrl: string|null` 추가(findMany는 include만 지정 → Post 스칼라 전체 선택되어 자동 포함). `GET /posts/:id` 응답에 `imageUrl: post.imageUrl` 추가.
+- 프론트 컨트랙트:
+  - `frontend/src/api/types.ts`: `Post`·`PostListItem`에 **`imageUrl?: string | null`** 추가.
+  - `frontend/src/api/rest.ts`: `CreatePostBody`에 `imageUrl?: string` 추가(`postPost`는 body 그대로 전송 → 추가 변경 불필요).
+  - **API 컨트랙트(동결)**: `POST /posts` 요청 본문은 `{ communityId, title, body, imageUrl? }`, 응답 Post DTO와 `GET /posts/:id`·홈/커뮤니티 피드 카드(`toFeedCard`)는 모두 **`imageUrl: string | null`** 을 노출한다. 첨부 없으면 `null`.
+- 첨부/표시 UI: `CreatePost.tsx`에 점선 드롭존 `[+] 이미지 첨부`(`<input type=file accept="image/*">` → `uploadImage(file, userId)` → `imageUrl` 상태 + 썸네일 칩 + `[x]` 제거, 실패는 `text-term-danger`). 제출은 `postPost({ communityId, title, body, imageUrl }, userId)`. 표시는 `Thread.tsx` 원본 카드 본문 아래 `<img>`(src/베이스 경로는 ChatBubble 댓글 이미지 렌더 방식 그대로) + `PostCard.tsx` 제목 아래 작은 썸네일(`h-32` 내외, `object-cover`).
+
+**⑤ 로그인: 별도 페이지 → 모달 오버레이**
+- 신규 **`frontend/src/stores/uiStore.ts`**(zustand, persist 없음): 컨트랙트 = `{ loginOpen:boolean; openLogin():void; closeLogin():void }`. 사용처는 `import { useUiStore } from '../stores/uiStore'` → `const openLogin = useUiStore(s => s.openLogin)`.
+- 신규 **`frontend/src/components/LoginForm.tsx`**: 기존 `pages/Login.tsx`의 폼(닉네임/API키/경고/발급링크/제출)을 추출. props `onSuccess?: () => void`(로그인 resolve 시 호출). `authStore.login`·에러처리·`canSubmit` 로직 보존.
+- 신규 **`frontend/src/components/LoginModal.tsx`**: `uiStore.loginOpen`일 때 오버레이(`fixed inset-0 z-[60]` 딤 `bg-[rgba(2,8,5,0.82)]` 중앙 정렬). 카드 = dc.html LOGIN MODAL(`border border-term-cta bg-[#06160c] rounded-[3px] shadow-[0_0_32px_rgba(43,212,111,0.28)]`), 우상단 `[x]`(closeLogin), A-mark + AIDIT(glow-lg) + 부제, `<LoginForm onSuccess={closeLogin} />`. 배경/[x] 클릭으로 닫힘(카드 클릭은 stopPropagation).
+- `pages/Login.tsx`는 페이지 셸에서 `<LoginForm onSuccess={() => navigate('/')} />`를 렌더(라우트 유지 — 직접 URL/딥링크 호환). `AppLayout.tsx` 헤더 `[ Login ]`을 Link → `<button onClick={openLogin}>`(text-term-amber 유지)로 바꾸고 레이아웃에 `<LoginModal />`를 렌더. `CreatePost.tsx` 비로그인 게이트는 `navigate('/login')` 하드 리다이렉트 제거 → `openLogin()` + "로그인이 필요해요" 안내 + `[ 로그인 ]` 버튼.
+
+**변경 파일 요약**: `frontend/src/layout/{BottomTabBar,AppLayout}.tsx`, `frontend/src/App.tsx`, `frontend/src/pages/{CreatePost,Login,Thread}.tsx`, `frontend/src/components/{PostCard,LoginForm,LoginModal}.tsx`, `frontend/src/stores/uiStore.ts`, `frontend/src/api/{types,rest}.ts`, `server/prisma/schema.prisma`(+마이그레이션 `add_post_image_url`), `server/src/routes/posts.ts`.
+
+**불변(회귀 금지)**: 기존 라우팅(`/create-post`·`/create-community`·`/login` 전부 유지)·스토어·검색 화면(상시 만들기 버튼 + 무결과 인라인 CTA)·SSE·BYOK·테스트 동작. 이미지 nullable이라 기존 글/응답은 `imageUrl=null`로 무영향.
 
 ---
 

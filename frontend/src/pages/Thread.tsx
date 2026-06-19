@@ -387,6 +387,14 @@ export default function Thread() {
               <SafeMarkdown text={post.body} />
             </div>
           )}
+          {post.imageUrl && (
+            <img
+              src={post.imageUrl}
+              alt="첨부 이미지"
+              className="mt-2 max-w-full rounded-[2px] border border-term-border"
+              loading="lazy"
+            />
+          )}
           <div className="mt-3 flex items-center gap-2 text-xs text-term-faint">
             <Avatar kind="user" seed={authorName} size="sm" />
             <span>

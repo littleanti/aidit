@@ -1,7 +1,9 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
+import { useUiStore } from '../stores/uiStore';
 import BottomTabBar from './BottomTabBar';
 import Logo from '../components/Logo';
+import LoginModal from '../components/LoginModal';
 
 // Mobile-first shell.
 //  <768px : single column + bottom tab bar.
@@ -53,6 +55,7 @@ function sidebarLinkClass({ isActive }: { isActive: boolean }): string {
 
 export default function AppLayout() {
   const username = useAuthStore((s) => s.username);
+  const openLogin = useUiStore((s) => s.openLogin);
 
   return (
     <div className="min-h-full">
@@ -66,9 +69,13 @@ export default function AppLayout() {
             {username ? (
               <span className="text-term-dim">[ {username} ]</span>
             ) : (
-              <Link to="/login" className="text-term-amber">
+              <button
+                type="button"
+                onClick={openLogin}
+                className="text-term-amber"
+              >
                 [ Login ]
-              </Link>
+              </button>
             )}
           </div>
         </div>
@@ -86,9 +93,9 @@ export default function AppLayout() {
               <IconSearch />
               검색
             </NavLink>
-            <NavLink to="/create-community" className={sidebarLinkClass}>
+            <NavLink to="/create-post" className={sidebarLinkClass}>
               <IconWrite />
-              커뮤니티 만들기
+              작성
             </NavLink>
             <NavLink to="/me" className={sidebarLinkClass}>
               <IconProfile />
@@ -103,6 +110,7 @@ export default function AppLayout() {
       </div>
 
       <BottomTabBar />
+      <LoginModal />
     </div>
   );
 }

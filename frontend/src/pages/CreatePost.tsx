@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { getCommunities, postPost, ApiError } from '../api/rest';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { getCommunities, postPost, uploadImage, ApiError } from '../api/rest';
 import type { Community } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
 import { usePostIntentStore } from '../stores/postIntentStore';
+import { useUiStore } from '../stores/uiStore';
 
 // FE-7: write a post (register-first, FR-4.2).
 // Flow: resolve target community -> POST /posts -> navigate immediately to the
@@ -11,28 +12,47 @@ import { usePostIntentStore } from '../stores/postIntentStore';
 // recorded in postIntentStore keyed by the new postId so the Thread (M3) can
 // consume it and auto-fire the first AI reply.
 
+// Single-image attach constraints (mirrored server-side for defense in depth).
+const ALLOWED_IMAGE_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
 export default function CreatePost() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
 
   const userId = useAuthStore((s) => s.userId);
   const setFirstAiReply = usePostIntentStore((s) => s.setFirstAiReply);
+  const openLogin = useUiStore((s) => s.openLogin);
 
   const [communities, setCommunities] = useState<Community[]>([]);
   const [communitiesLoading, setCommunitiesLoading] = useState(false);
   const [selectedCommunityId, setSelectedCommunityId] = useState('');
 
+  // 작업2: expandable community picker state. Selection still lives in
+  // selectedCommunityId; these only drive the picker UI.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState('');
+
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [firstAi, setFirstAi] = useState(true); // default ON
 
+  // 작업4b: single-image attachment. We hold the server URL (after upload) so it
+  // can ride the postPost body; the local object URL drives the preview chip.
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageName, setImageName] = useState<string | null>(null);
+  const [imageObjectUrl, setImageObjectUrl] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Login is required to post.
-  useEffect(() => {
-    if (!userId) navigate('/login', { replace: true });
-  }, [userId, navigate]);
 
   // Load communities so we can resolve the target. When a slug is in the route
   // we still load to map slug -> id; otherwise the user picks from a selector.
@@ -58,6 +78,14 @@ export default function CreatePost() {
     };
   }, []);
 
+  // Revoke any live object URL on unmount.
+  useEffect(() => {
+    return () => {
+      if (imageObjectUrl) URL.revokeObjectURL(imageObjectUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Community implied by the route slug, if any.
   const slugCommunity = useMemo(
     () => (slug ? communities.find((c) => c.slug === slug) ?? null : null),
@@ -74,12 +102,79 @@ export default function CreatePost() {
 
   const slugNotFound = Boolean(slug) && !communitiesLoading && !slugCommunity;
 
+  // 작업2: the currently-selected community (for the picker field label).
+  const selectedCommunity = useMemo(
+    () => communities.find((c) => c.id === selectedCommunityId) ?? null,
+    [communities, selectedCommunityId],
+  );
+
+  // 작업2: client-side name filter (case-insensitive, partial match).
+  const filteredCommunities = useMemo(() => {
+    const q = pickerQuery.trim().toLowerCase();
+    if (!q) return communities;
+    return communities.filter((c) => c.name.toLowerCase().includes(q));
+  }, [communities, pickerQuery]);
+
+  // 작업3: only when not slug-scoped, after load, and zero communities.
+  const showEmptyCommunityLink =
+    !slug && !communitiesLoading && communities.length === 0;
+
   const canSubmit =
     !submitting &&
+    !uploadingImage &&
     !!userId &&
     title.trim().length > 0 &&
     body.trim().length > 0 &&
     communityId.length > 0;
+
+  function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Always reset the input value so re-picking the same file fires onChange.
+    e.target.value = '';
+    if (!file) return;
+    setImageError(null);
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setImageError('지원하지 않는 이미지 형식입니다 (PNG, JPEG, WebP, GIF).');
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setImageError('이미지가 너무 큽니다 (최대 5MB).');
+      return;
+    }
+    if (!userId) return;
+
+    // Replace any previous selection, revoking its object URL first.
+    if (imageObjectUrl) URL.revokeObjectURL(imageObjectUrl);
+    const localUrl = URL.createObjectURL(file);
+    setImageObjectUrl(localUrl);
+    setImageName(file.name);
+    setUploadingImage(true);
+    uploadImage(file, userId)
+      .then(({ imageUrl: url }) => {
+        setImageUrl(url);
+      })
+      .catch((err) => {
+        setImageError(
+          err instanceof ApiError ? err.message : '이미지 업로드에 실패했습니다.',
+        );
+        // Roll back the chip on failure.
+        if (localUrl) URL.revokeObjectURL(localUrl);
+        setImageObjectUrl(null);
+        setImageName(null);
+        setImageUrl(null);
+      })
+      .finally(() => {
+        setUploadingImage(false);
+      });
+  }
+
+  function clearImage() {
+    if (imageObjectUrl) URL.revokeObjectURL(imageObjectUrl);
+    setImageObjectUrl(null);
+    setImageName(null);
+    setImageUrl(null);
+    setImageError(null);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -88,7 +183,12 @@ export default function CreatePost() {
     setError(null);
     try {
       const post = await postPost(
-        { communityId, title: title.trim(), body: body.trim() },
+        {
+          communityId,
+          title: title.trim(),
+          body: body.trim(),
+          ...(imageUrl ? { imageUrl } : {}),
+        },
         userId,
       );
       // Record the AI-first-reply intent for the Thread to consume (M3).
@@ -103,7 +203,22 @@ export default function CreatePost() {
     }
   }
 
-  if (!userId) return null; // redirecting to /login
+  // 작업5 게이트: login is required to post, but instead of a hard redirect we
+  // show a gate that opens the login modal.
+  if (!userId) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-16 text-center font-mono">
+        <p className="text-sm text-term-dim">로그인이 필요해요</p>
+        <button
+          type="button"
+          onClick={openLogin}
+          className="min-h-[44px] rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-4 py-2.5 text-sm font-bold text-term-title glow-lg shadow-glow-cta transition"
+        >
+          [ 로그인 ]
+        </button>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 font-mono">
@@ -117,25 +232,91 @@ export default function CreatePost() {
             {slugCommunity ? slugCommunity.name : slug}
           </span>
         </div>
+      ) : showEmptyCommunityLink ? (
+        // 작업3: zero communities — point the user at search to create one.
+        <Link
+          to="/search"
+          className="text-sm font-medium text-term-amber hover:underline"
+        >
+          ! 가입한 커뮤니티가 없어요 · 검색에서 만들기 →
+        </Link>
       ) : (
-        <label className="flex flex-col gap-1">
+        // 작업2: expandable community picker.
+        <div className="flex flex-col gap-1">
           <span className="text-sm font-medium text-term-dim">커뮤니티</span>
-          <select
-            value={selectedCommunityId}
-            onChange={(e) => setSelectedCommunityId(e.target.value)}
+          <button
+            type="button"
+            onClick={() => setPickerOpen((v) => !v)}
             disabled={communitiesLoading || submitting}
-            className="bg-term-input border border-term-border rounded-[2px] px-3 py-2.5 text-sm text-term-bright outline-none focus:border-term-bright focus:ring-1 focus:ring-term-bright"
+            className="flex items-center justify-between gap-2 bg-term-input border border-term-border rounded-[2px] px-3 py-2.5 text-sm outline-none focus:border-term-bright focus:ring-1 focus:ring-term-bright disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <option value="" disabled>
-              {communitiesLoading ? '불러오는 중…' : '커뮤니티 선택'}
-            </option>
-            {communities.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            <span
+              className={
+                selectedCommunity
+                  ? 'font-bold text-term-bright'
+                  : 'text-term-faint'
+              }
+            >
+              {communitiesLoading
+                ? '불러오는 중…'
+                : selectedCommunity
+                  ? selectedCommunity.name
+                  : '커뮤니티 선택'}
+            </span>
+            <span className="text-term-dim">▾ 변경</span>
+          </button>
+
+          {pickerOpen && (
+            <div className="mt-1 flex flex-col gap-2 border border-term-border bg-term-card rounded-[2px] p-2">
+              {/* (a) search filter */}
+              <div className="flex items-center gap-2 bg-term-input border border-term-border rounded-[2px] px-2.5 py-2">
+                <span className="select-none font-bold text-term-cta">
+                  &gt;
+                </span>
+                <input
+                  type="text"
+                  value={pickerQuery}
+                  onChange={(e) => setPickerQuery(e.target.value)}
+                  placeholder="커뮤니티 검색"
+                  autoFocus
+                  className="flex-1 bg-transparent text-sm text-term-bright outline-none placeholder:text-term-faint"
+                />
+              </div>
+
+              {/* (b) list */}
+              {filteredCommunities.length > 0 ? (
+                <ul className="flex max-h-56 flex-col overflow-y-auto">
+                  {filteredCommunities.map((c) => {
+                    const selected = c.id === selectedCommunityId;
+                    return (
+                      <li key={c.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCommunityId(c.id);
+                            setPickerOpen(false);
+                            setPickerQuery('');
+                          }}
+                          className="flex w-full items-center gap-2 rounded-[2px] px-2 py-2 text-left text-sm hover:bg-term-hover"
+                        >
+                          <span className="select-none font-bold text-term-amber">
+                            {selected ? '[*]' : '[ ]'}
+                          </span>
+                          <span className="text-term-title">{c.name}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                // (c) no match
+                <p className="px-2 py-2 text-sm text-term-faint">
+                  일치하는 커뮤니티가 없어요.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Title */}
@@ -164,6 +345,59 @@ export default function CreatePost() {
           className="resize-y bg-term-input border border-term-border rounded-[2px] px-3 py-2.5 text-sm text-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright"
         />
       </label>
+
+      {/* 작업4b: image attachment */}
+      <div className="flex flex-col gap-1">
+        <span className="text-sm font-medium text-term-dim">이미지</span>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="hidden"
+          onChange={onPickImage}
+        />
+        {imageObjectUrl ? (
+          // Thumbnail chip with filename + remove.
+          <div className="flex items-center gap-2 border border-term-border bg-term-card rounded-[2px] px-2.5 py-2">
+            <img
+              src={imageObjectUrl}
+              alt="첨부 미리보기"
+              className="h-10 w-10 rounded-[2px] border border-term-border object-cover"
+            />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm text-term-bright">
+                {imageName}
+              </span>
+              <span className="text-xs text-term-dim">
+                {uploadingImage ? '이미지 · 업로드 중…' : '이미지 · 첨부됨'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={clearImage}
+              disabled={submitting}
+              aria-label="이미지 제거"
+              className="shrink-0 select-none rounded-[2px] border border-term-border px-2 py-1 text-xs font-bold text-term-bright hover:bg-term-hover"
+            >
+              [x]
+            </button>
+          </div>
+        ) : (
+          // Dashed dropzone.
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={submitting}
+            className="flex flex-col items-center justify-center gap-1 rounded-[2px] border border-dashed border-term-border px-3 py-6 text-sm text-term-dim hover:border-term-bright hover:text-term-bright disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span className="font-bold">[+] 이미지 첨부</span>
+            <span className="text-xs text-term-faint">PNG · JPG</span>
+          </button>
+        )}
+        {imageError && (
+          <p className="text-sm text-term-danger">{imageError}</p>
+        )}
+      </div>
 
       {/* AI first-reply toggle (default ON) */}
       <label className="flex items-center gap-2 text-sm text-term-dim">

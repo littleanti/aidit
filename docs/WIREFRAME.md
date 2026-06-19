@@ -24,20 +24,30 @@
 ## 0. 화면 인벤토리 & 내비게이션
 
 ```
-Login ──▶ Home ──┬──▶ Community(검색결과/상세) ──▶ Thread
-                 ├──▶ Thread (인기글 직접 진입)
-                 ├──▶ CreatePost  ──▶ Thread (게시 후)
-                 └──▶ CreateCommunity ──▶ Community
+Login(모달) ─▶ Home ──┬──▶ Search ──┬──▶ Community(상세) ──▶ Thread
+                      │             └──▶ CreateCommunity ──▶ Community
+                      ├──▶ Thread (인기글 직접 진입)
+                      └──▶ CreatePost  ──▶ Thread (게시 후)
 
 하단 탭바(모바일):  [🏠 홈]  [🔍 검색]  [＋ 작성]  [👤 나]
 ```
+> **Option A 동선(2026-06-19)** — **'작성' 탭(＋)은 글 작성(`/create-post`)으로 직결**한다(예전 `/create-community` 진입 폐기). **커뮤니티 만들기는 검색 화면에서만** 진입한다(상시 `[+ 커뮤니티 만들기]` 버튼 + 무결과 인라인 CTA). 데스크톱 사이드바도 "커뮤니티 만들기" 대신 **"작성"(`/create-post`, IconWrite)** 을 두며 순서는 **홈 / 검색 / 작성 / 나**. `/create-post`·`/create-community` 라우트는 **둘 다 유지**(만들기는 검색·커뮤니티 편집에서 계속 사용). **로그인은 별도 페이지가 아니라 모달 오버레이**(§1)로 어디서든 열린다(`/login` 직접 접근/딥링크는 호환 유지).
 
 ---
 
-## 1. Login (로그인 = username + Google API Key)
+## 1. Login (로그인 = username + Google API Key) — **모달 오버레이 (Option A)**
+
+> **2026-06-19** — 로그인은 **별도 페이지가 아니라 앱 위에 뜨는 모달 오버레이**다. 헤더의
+> `[ Login ]`(`text-term-amber`)이나 쓰기 게이트에서 `openLogin()`으로 열리며, 폼 본체는
+> `LoginForm`(닉네임/API키/경고/발급링크/제출 로직)으로 추출되어 모달·페이지 양쪽에서 공유된다.
+> 오버레이: `fixed inset-0 z-[60]` + 딤 `bg-[rgba(2,8,5,0.82)]`, 중앙 카드
+> `border border-term-cta bg-[#06160c] rounded-[3px] shadow-[0_0_32px_rgba(43,212,111,0.28)]`,
+> 우상단 `[x]`(닫기), A-mark + `AIDIT`(glow-lg) + 부제. **배경/[x] 클릭으로 닫힘**(카드 클릭은 전파 차단),
+> 제출 성공 시 닫힘. `/login` 라우트는 유지되어 페이지 셸에서 동일 `LoginForm`을 렌더(딥링크 호환,
+> 성공 시 `/`로 이동). 상태는 신규 `uiStore`(`loginOpen/openLogin/closeLogin`)가 보유.
 
 ```
-┌────────────────────────────┐
+┌──── 모달 오버레이 (딤 배경 위) ───┐
 │            Aidit            │
 │   하나의 AI를 함께 쓰는 커뮤니티  │
 │                            │
@@ -57,7 +67,8 @@ Login ──▶ Home ──┬──▶ Community(검색결과/상세) ──▶
 ```
 - 검증: 둘 다 입력 시 활성. (선택) "시작하기" 시 `countTokens` 1회로 키 유효성 가벼운 확인.
 - 저장: `localStorage{ username, googleApiKey }`. 서버에는 username만 upsert(`POST /auth/session`).
-- 미로그인도 홈/스레드 **열람**은 가능 → 쓰기/`@AI` 시점에 이 화면으로 유도.
+- 미로그인도 홈/스레드 **열람**은 가능 → 쓰기/`@AI` 시점에 **로그인 모달**로 유도. 글 작성 게이트는
+  하드 리다이렉트(`navigate('/login')`) 대신 **"로그인이 필요해요" 안내 + `[ 로그인 ]` 버튼(`openLogin()`)** 으로 그 자리에서 모달을 띄운다.
 
 ---
 
@@ -144,19 +155,53 @@ Login ──▶ Home ──┬──▶ Community(검색결과/상세) ──▶
 
 ---
 
-## 5. CreatePost (글 작성)
+## 5. CreatePost (글 작성) — **'작성' 탭 직결 · 커뮤니티 피커 · 이미지 첨부 (Option A)**
+
+> **2026-06-19** — 하단 '작성' 탭(＋)에서 곧장 도달한다. slug 라우트(커뮤니티 고정 진입)면 기존
+> **커뮤니티 잠금 표시**를 유지(피커 없음). slug 없는 일반 작성이면 예전 `<select>` 대신 **펼침형
+> 커뮤니티 피커**를 쓰고, 이미지 첨부 드롭존을 둔다. 가입/접근 가능한 **커뮤니티가 0개**면 피커 대신
+> 검색으로 가는 **빈상태 보조 링크**를 보여준다.
 
 ```
-┌────────────────────────────┐
-│ ‹ r/cooking 에 글쓰기         │
-│ 제목 ( 계란만 있을 때 뭐 해먹지?) │
-│ ┌────────────────────────┐ │
-│ │ 본문…                    │ │
-│ └────────────────────────┘ │
-│  ☑ 게시 후 AI 1차 답변 받기   │ ← 기본 ON (FR-4.3)
-│        [  게시하기  ]         │
-└────────────────────────────┘
+┌──────────────────────────────────┐
+│ ‹ 글 작성                          │
+│ 커뮤니티                            │  ← slug 고정 진입이면 잠금 표시(피커 없음)
+│ ┌──────────────────────────────┐ │
+│ │ r/cooking            ▾ 변경    │ │  ← 선택 필드(없으면 '커뮤니티 선택' placeholder)
+│ └──────────────────────────────┘ │
+│   ▾ 펼침 패널(변경 클릭 시)         │
+│   ┌────────────────────────────┐ │
+│   │ > ( cook…  )                │ │  ← 이름 부분일치 필터(클라, 대소문자 무시)
+│   │ [*] r/cooking               │ │  ← [*]=선택됨 / [ ]=아님
+│   │ [ ] r/cookware              │ │
+│   │ (일치 없음 → "일치하는 …없어요") │
+│   └────────────────────────────┘ │
+│   ── 커뮤니티 0개일 때(피커 대신) ── │
+│   ! 가입한 커뮤니티가 없어요 ·       │  ← /search 로 가는 보조 링크(text-term-amber)
+│     검색에서 만들기 →               │
+│ 제목 ( 계란만 있을 때 뭐 해먹지?)     │
+│ ┌──────────────────────────────┐ │
+│ │ 본문…                          │ │
+│ └──────────────────────────────┘ │
+│ ┌── [+] 이미지 첨부 (점선 드롭존) ─┐ │  ← <input type=file accept="image/*">
+│ │ PNG · JPG                      │ │     uploadImage(file,userId)→imageUrl
+│ └──────────────────────────────┘ │
+│ 🖼 cooking.png · 이미지 · 첨부됨 [x] │  ← 업로드 후 썸네일 칩([x]로 제거)
+│  ☑ 게시 후 AI 1차 답변 받기         │ ← 기본 ON (FR-4.3)
+│        [  게시하기  ]               │
+└──────────────────────────────────┘
 ```
+- **커뮤니티 피커**(slug 없을 때): 선택 필드 행(`bg-term-input border border-term-border`) 왼쪽=선택된
+  이름(없으면 placeholder, `text-term-bright`), 오른쪽=`▾ 변경`(`text-term-dim`). 클릭 시 펼침 패널 토글
+  (상태 `pickerOpen`/`pickerQuery`, 선택은 기존 `selectedCommunityId` 유지). 패널은 `> ` 프롬프트 검색
+  입력 + 행별 `[*]`/`[ ]` 마크 목록(클릭 → 선택·닫힘·쿼리 초기화). 목록은 기존 `getCommunities()` 사용.
+- **빈상태 보조 링크**: slug 없는 작성 + 로드 후 `communities.length===0`일 때만 피커 대신
+  `! 가입한 커뮤니티가 없어요 · 검색에서 만들기 →`(`text-term-amber`)를 `/search`로 노출. 1개 이상이면 숨김.
+- **이미지 첨부**(Composer 댓글 이미지와 동일 패턴/URL 처리 재사용): 점선 드롭존 `[+] 이미지 첨부`
+  (`border-dashed border-term-border`, 안내 'PNG · JPG') → 파일 선택 → `uploadImage(file, userId)` →
+  반환 `imageUrl` 상태 저장 + 썸네일 칩(`[x]` 제거). 업로드 실패는 `text-term-danger` 문구. 제출 시
+  `postPost({ communityId, title, body, imageUrl }, userId)`로 전송.
+- **비로그인 게이트**: 하드 리다이렉트 없이 "로그인이 필요해요" 안내 + `[ 로그인 ]`(`openLogin()`)로 모달 유도(§1).
 **게시 인터랙션 (FR-4.2/4.3)**
 ```
 [게시] → ① POST /posts (먼저 등록) → ② Thread로 즉시 이동
@@ -286,6 +331,9 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 ```
 - 좋아요/점수: 기존 `post.score`를 `▲`(또는 하트) 아이콘과 함께 표시(읽기 전용, 기존과 동일 비기능).
 - 댓글 수: `post.commentCount`. (Post DTO에 존재.)
+- **글 이미지(2026-06-19)**: `post.imageUrl`이 있으면 본문 아래 `<img>`(`max-w-full rounded-[2px] border border-term-border`).
+  src/베이스 경로 처리는 ChatBubble의 댓글 이미지 렌더 방식을 그대로 따른다(동일 업로드 경로/프록시).
+  PostCard(홈/커뮤니티 리스트)도 제목 아래 작은 썸네일(`h-32` 정도, `object-cover`, `rounded-[2px] border`)로 선택 표시.
 
 ### E. ChatBubble (행 레이아웃 전면 교체)
 행 컨테이너: `flex w-full items-end gap-2 px-2 py-1` + 본인이면 `flex-row-reverse`.

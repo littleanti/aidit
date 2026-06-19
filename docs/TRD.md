@@ -89,6 +89,7 @@ model Post {
   author      User     @relation(fields: [authorId], references: [id])
   title       String
   body        String
+  imageUrl    String?                   // 선택 첨부 이미지 URL(업로드 파일 서빙 경로). null=이미지 없음
   score       Int      @default(0)      // 추천(인기 정렬용)
   commentCount Int     @default(0)
   hotScore    Float    @default(0)      // 비정규화 인기점수(§9)
@@ -157,8 +158,8 @@ model ContextSegment {
 | `PATCH /communities/:id` | 페르소나/설명 수정(생성자만) | `x-user-id` | FR-3.3 |
 | `GET /posts?sort=hot&cursor=` | 홈 인기 피드 | - | FR-1.1, 커서 페이지네이션 |
 | `GET /communities/:slug/posts` | 커뮤니티별 글 | - | |
-| `POST /posts` | 글 작성(먼저 등록, seg#0 자동) | `x-user-id` | FR-4.2 · 레이트리밋(XC-9) |
-| `GET /posts/:id` | 글 + 메타 | - | |
+| `POST /posts` | 글 작성(먼저 등록, seg#0 자동) | `x-user-id` | FR-4.2 · 레이트리밋(XC-9) · 본문에 선택 `imageUrl?` |
+| `GET /posts/:id` | 글 + 메타 | - | 응답에 `imageUrl: string \| null` 포함 |
 | `GET /posts/:id/comments?afterSeq=` | 버블 페이지네이션 | - | FR-5 |
 | `POST /posts/:id/comments` | **버블 게시**(사람/AI/요약 텍스트) | `x-user-id`(사람) | §4.1 · clientId 멱등 |
 | `PATCH /comments/:id` | AI 버블 상태/본문 갱신(PENDING→COMPLETE/FAILED) | `x-user-id`(사람)·clientId(AI) | FR-6.2 |

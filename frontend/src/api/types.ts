@@ -38,6 +38,8 @@ export interface Post {
   commentCount: number;
   hotScore: number;
   createdAt: string;
+  /** optional uploaded image (filesystem-served URL); null = no image. */
+  imageUrl?: string | null;
   // optional joined relations
   community?: Community;
   author?: { id: string; username: string };
@@ -58,6 +60,8 @@ export interface PostListItem {
   communityPersonaIcon?: string | null;
   authorId: string;
   authorUsername: string;
+  /** optional uploaded image (filesystem-served URL); null = no image. */
+  imageUrl?: string | null;
 }
 
 export type CommentType = 'HUMAN' | 'AI_REPLY' | 'AI_SUMMARY';

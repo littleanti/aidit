@@ -210,6 +210,8 @@ export interface CreatePostBody {
   communityId: string;
   title: string;
   body: string;
+  /** optional uploaded image URL (server-relative /uploads/<name>). */
+  imageUrl?: string;
 }
 
 export function postPost(body: CreatePostBody, userId: string): Promise<Post> {

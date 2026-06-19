@@ -45,6 +45,7 @@ model Post {
   author       User     @relation(fields: [authorId], references: [id])
   title        String
   body         String
+  imageUrl     String?  // optional uploaded image (filesystem-served URL); null = no image
   score        Int      @default(0)   // upvotes (popularity sort)
   commentCount Int      @default(0)
   hotScore     Float    @default(0)   // denormalized hot score (§9)
