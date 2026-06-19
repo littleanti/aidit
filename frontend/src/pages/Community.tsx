@@ -108,7 +108,7 @@ export function CommunitySearch() {
           <Link
             to="/create-community"
             state={trimmed ? { name: trimmed } : undefined}
-            className="font-semibold text-brand underline"
+            className="font-semibold text-brand-600 underline"
           >
             + {trimmed ? `'${trimmed}' ` : ''}만들기
           </Link>

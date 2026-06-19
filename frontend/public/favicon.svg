@@ -1,0 +1,11 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Aidit">
+  <defs>
+    <linearGradient id="aidit-mark" x1="10" y1="6" x2="40" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5B6CF5"/>
+      <stop offset="0.55" stop-color="#6848F8"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+  </defs>
+  <path d="M22.9 7.4 Q24 5 25.1 7.4 L42 41 Q42.8 42.5 41 42.5 L33 42.5 Q31.8 42.5 31.2 41.4 L24.9 29.6 Q24 28 23.1 29.6 L16.8 41.4 Q16.2 42.5 15 42.5 L7 42.5 Q5.2 42.5 6 41 Z"
+        fill="url(#aidit-mark)"/>
+</svg>

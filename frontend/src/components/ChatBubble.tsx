@@ -128,7 +128,7 @@ export default function ChatBubble({
   } else if (isAi) {
     // AI reply — light purple border.
     bubbleClass =
-      'bg-purple-50 text-slate-800 border border-purple-200 rounded-2xl rounded-bl-md';
+      'bg-brand-50 text-slate-800 border border-brand-200 rounded-2xl rounded-bl-md';
   } else {
     // other human — gray.
     bubbleClass = 'bg-slate-100 text-slate-800 rounded-2xl rounded-bl-md';
@@ -162,10 +162,10 @@ export default function ChatBubble({
           <div className="flex items-center gap-1 px-1 text-xs text-slate-500">
             {isAi ? (
               <>
-                <span className="font-medium text-purple-700">
+                <span className="font-medium text-brand-700">
                   {personaLabel}
                 </span>
-                <span className="rounded bg-purple-100 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-purple-700">
+                <span className="rounded bg-brand-100 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
                   AI
                 </span>
               </>

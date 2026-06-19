@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { ApiError } from '../api/rest';
+import Logo from '../components/Logo';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -37,11 +38,8 @@ export default function Login() {
   return (
     <div className="mx-auto max-w-sm py-8">
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-1 flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand text-lg font-bold text-white">
-            A
-          </span>
-          <h1 className="text-2xl font-bold text-brand">Aidit</h1>
+        <div className="mb-1">
+          <Logo size="lg" />
         </div>
         <p className="mb-6 text-sm text-slate-600">
           커뮤니티에서 함께 만드는 AI 대화
@@ -89,7 +87,7 @@ export default function Login() {
               href="https://aistudio.google.com/app/apikey"
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-2 inline-block text-xs text-brand underline"
+              className="mt-2 inline-block text-xs text-brand-600 underline"
             >
               aistudio.google.com에서 키 발급받기
             </a>
@@ -100,7 +98,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={!canSubmit || submitting}
-            className="min-h-[44px] w-full rounded-xl bg-brand py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-[44px] w-full rounded-xl bg-brand-gradient py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? '시작하는 중…' : '시작하기'}
           </button>

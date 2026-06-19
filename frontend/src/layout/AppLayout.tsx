@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import BottomTabBar from './BottomTabBar';
+import Logo from '../components/Logo';
 
 // Mobile-first shell.
 //  <768px : single column + bottom tab bar.
@@ -21,14 +22,14 @@ export default function AppLayout() {
       {/* top app bar */}
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-12 max-w-app items-center justify-between px-4 desktop:max-w-5xl">
-          <Link to="/" className="text-lg font-bold text-brand">
-            Aidit
+          <Link to="/">
+            <Logo size="sm" />
           </Link>
           <div className="text-sm text-slate-600">
             {username ? (
               <span>{username}</span>
             ) : (
-              <Link to="/login" className="text-brand">
+              <Link to="/login" className="text-brand-600">
                 로그인
               </Link>
             )}

@@ -172,7 +172,7 @@ export default function CreatePost() {
           checked={firstAi}
           onChange={(e) => setFirstAi(e.target.checked)}
           disabled={submitting}
-          className="h-4 w-4 rounded border-slate-300 accent-violet-600 focus:ring-brand"
+          className="h-4 w-4 rounded border-slate-300 accent-[#6848F8] focus:ring-brand"
         />
         <span>게시 후 AI 1차 답변 받기</span>
       </label>

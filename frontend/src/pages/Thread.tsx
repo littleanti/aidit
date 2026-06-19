@@ -440,14 +440,14 @@ export default function Thread() {
       {showSummaryBadge && (
         <div className="px-3 pb-1">
           <div
-            className="group relative inline-flex items-center gap-1.5 rounded-full border border-purple-300 bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700"
+            className="group relative inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700"
             title="다음 @AI 호출 시 먼저 요약이 실행됩니다. 요약은 호출한 분의 Gemini 키로 생성됩니다(비용 발생)."
           >
             <span aria-hidden>🟣</span>
             <span>{summaryNeeded ? '다음 @AI 호출 시 요약됩니다' : '곧 대화가 요약됩니다'}</span>
             <span
               aria-hidden
-              className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-purple-200 text-[10px] text-purple-700"
+              className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-brand-200 text-[10px] text-brand-700"
             >
               ?
             </span>

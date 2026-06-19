@@ -305,7 +305,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
             type="checkbox"
             checked={aiMode}
             onChange={() => toggleAiMode(postId)}
-            className="h-4 w-4 shrink-0 cursor-pointer accent-violet-600"
+            className="h-4 w-4 shrink-0 cursor-pointer accent-[#6848F8]"
           />
           <span>🤖 AI에게 묻기</span>
         </label>
@@ -318,7 +318,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
       </div>
 
       {hasMention && !aiMode && (
-        <div className="px-3 pt-1 text-xs font-medium text-purple-600">
+        <div className="px-3 pt-1 text-xs font-medium text-brand-600">
           🤖 @AI 멘션 포함 — AI가 응답합니다
         </div>
       )}
@@ -363,14 +363,14 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
         <div
           className={`flex max-h-32 min-h-[44px] flex-1 items-center gap-2 rounded-full border bg-slate-50 px-4 py-1 focus-within:bg-white ${
             aiMode
-              ? 'border-purple-300 focus-within:border-purple-500'
+              ? 'border-brand-300 focus-within:border-brand-500'
               : 'border-slate-300 focus-within:border-brand'
           }`}
         >
           {aiMode && (
             <span
               aria-label="AI에게 전송"
-              className="shrink-0 select-none rounded-full bg-purple-100 px-2 py-0.5 text-xs font-bold text-purple-700"
+              className="shrink-0 select-none rounded-full bg-brand-100 px-2 py-0.5 text-xs font-bold text-brand-700"
             >
               @AI
             </span>
@@ -391,9 +391,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
           onClick={() => void handleSend()}
           disabled={!canSend}
           aria-label="전송"
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white transition active:scale-95 disabled:opacity-40 ${
-            wantsAI ? 'bg-purple-600' : 'bg-brand'
-          }`}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white transition active:scale-95 disabled:opacity-40 bg-brand-gradient"
         >
           <span aria-hidden>↑</span>
         </button>

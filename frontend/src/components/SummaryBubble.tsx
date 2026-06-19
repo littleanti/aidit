@@ -28,11 +28,11 @@ function SummaryTyping() {
   return (
     <span className="inline-flex items-center gap-1.5" aria-label="요약 정리 중">
       <span className="inline-flex gap-0.5" aria-hidden>
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-purple-500 [animation-delay:-0.3s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-purple-500 [animation-delay:-0.15s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-purple-500" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-500 [animation-delay:-0.3s]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-500 [animation-delay:-0.15s]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-500" />
       </span>
-      <span className="text-xs font-medium text-purple-700">⟳ 요약 정리 중…</span>
+      <span className="text-xs font-medium text-brand-700">⟳ 요약 정리 중…</span>
     </span>
   );
 }
@@ -58,18 +58,18 @@ export default function SummaryBubble({
     >
       {/* full-width band: distinct amber→purple gradient marks the boundary */}
       <div
-        className={`rounded-xl border bg-gradient-to-r from-amber-50 via-purple-50 to-purple-100 px-3 py-3 ${
-          isFailed ? 'border-red-300' : 'border-purple-300'
+        className={`rounded-xl border bg-gradient-to-r from-amber-50 via-brand-50 to-brand-100 px-3 py-3 ${
+          isFailed ? 'border-red-300' : 'border-brand-200'
         }`}
       >
         {/* label row */}
-        <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-purple-700">
+        <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-brand-700">
           <span aria-hidden>≈</span>
           <span>AI 요약 (여기까지)</span>
           <span aria-hidden className="text-sm leading-none">
             {personaEmoji}
           </span>
-          <span className="ml-auto rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-purple-700">
+          <span className="ml-auto rounded bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
             {personaLabel}
           </span>
         </div>
@@ -101,10 +101,10 @@ export default function SummaryBubble({
 
       {/* boundary microcopy (FR-7.4): everything below is assembled against
           the summary above. Rendered as a centered divider line. */}
-      <div className="mt-1.5 flex items-center gap-2 px-2 text-[11px] font-medium text-purple-400">
-        <span className="h-px flex-1 bg-purple-200" />
+      <div className="mt-1.5 flex items-center gap-2 px-2 text-[11px] font-medium text-brand-400">
+        <span className="h-px flex-1 bg-brand-200" />
         <span>이후 대화는 위 요약 기준</span>
-        <span className="h-px flex-1 bg-purple-200" />
+        <span className="h-px flex-1 bg-brand-200" />
       </div>
     </div>
   );

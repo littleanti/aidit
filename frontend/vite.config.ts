@@ -50,12 +50,12 @@ export default defineConfig({
     cspInjectionPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon-192.png', 'icon-512.png', 'maskable-512.png'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'maskable-512.png'],
       manifest: {
         name: 'Aidit',
         short_name: 'Aidit',
         description: 'Reddit-style community where every post is a shared AI chat thread.',
-        theme_color: '#7c3aed',
+        theme_color: '#6848F8',
         background_color: '#0f172a',
         display: 'standalone',
         orientation: 'portrait',

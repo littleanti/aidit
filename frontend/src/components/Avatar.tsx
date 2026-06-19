@@ -57,7 +57,7 @@ export default function Avatar({
 }: AvatarProps) {
   const isAi = kind === 'ai';
   const colorClass = isAi
-    ? 'bg-gradient-to-br from-violet-500 to-purple-600'
+    ? 'bg-brand-gradient'
     : colorFor(seed);
   return (
     <span
