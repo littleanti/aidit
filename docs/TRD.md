@@ -168,11 +168,13 @@ model Bookmark {
 |---------------|------|------|------|
 | `POST /auth/session` | username 등록/확인(없으면 생성), **`{id,username}` 반환** | - | 키 미전송. username upsert |
 | `GET /communities?q=` | 커뮤니티 검색(부분일치) | - | FR-1.2 |
+| `GET /communities/:slug` | 단일 커뮤니티 조회(slug 정확 일치, 없으면 404) | - | 상세 뷰 |
 | `POST /communities` | 커뮤니티 생성(name, slug, personaPrompt, personaIcon) | `x-user-id` | FR-3.1 |
 | `PATCH /communities/:id` | 페르소나/설명 수정(생성자만) | `x-user-id` | FR-3.3 |
 | `GET /posts?sort=hot&cursor=` | 홈 인기 피드 | - | FR-1.1, 커서 페이지네이션 |
 | `GET /communities/:slug/posts` | 커뮤니티별 글 | - | |
 | `POST /posts` | 글 작성(먼저 등록, seg#0 자동) | `x-user-id` | FR-4.2 · 레이트리밋(XC-9) · 본문에 선택 `imageUrl?` |
+| `POST /uploads` | 단일 이미지 업로드(multipart) → `{ imageUrl }`(서버 상대 `/uploads/<name>`) | `x-user-id` | 글/댓글 이미지 첨부. 형식 PNG/JPEG/WebP/GIF · 최대 5MB · 정적 서빙 `GET /uploads/*` |
 | `GET /posts/:id` | 글 + 메타 | - | 응답에 `imageUrl: string \| null` 포함 |
 | `PATCH /posts/:id` | **글 수정**(제목/본문/이미지, 작성자만) | `x-user-id` | 작성자 검증: `post.authorId === x-user-id` → 비작성자 403 |
 | `GET /posts/:id/comments?afterSeq=` | 버블 페이지네이션 | - | FR-5 |
@@ -184,6 +186,8 @@ model Bookmark {
 | **`POST /posts/:id/bookmark`** | **북마크 추가**(idempotent upsert) | `x-user-id` | 201 `{bookmarked:true}` |
 | **`DELETE /posts/:id/bookmark`** | **북마크 제거**(idempotent delete) | `x-user-id` | 200 `{bookmarked:false}` |
 | **`GET /users/:id/bookmarks`** | **북마크한 글 목록**(피드 카드, 최신순) | - | 사용자별 북마크 조회 |
+| `GET /users/:id/posts` | 사용자가 작성한 글 목록(피드 카드, 최신순) | - | 프로필(나) — 내 글 |
+| `GET /users/:id/communities` | 사용자가 생성한 커뮤니티 목록 | - | 프로필(나) — 내 커뮤니티 |
 | `POST /metrics/visit` | 인증 앱 오픈 시 `VisitEvent` 일별 멱등 기록 | `x-user-id` | BE-13 · 작성자 D1 |
 | `GET /metrics` | §8 KPI 집계 반환 | - | BE-13 (형상: IMPLEMENTATION_NOTES §2.2) |
 
