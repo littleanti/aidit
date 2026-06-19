@@ -1,7 +1,10 @@
 // Aidit — MIT License. See LICENSE.
+import { mkdirSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
 
 import { config } from "./config.js";
 import rateLimit from "./plugins/rateLimit.js";
@@ -12,7 +15,9 @@ import communityRoutes from "./routes/communities.js";
 import contextRoutes from "./routes/context.js";
 import metricsRoutes from "./routes/metrics.js";
 import postRoutes from "./routes/posts.js";
+import uploadRoutes from "./routes/uploads.js";
 import streamRoutes from "./realtime/stream.js";
+import { UPLOAD_DIR } from "./uploads-dir.js";
 
 export async function build(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -34,6 +39,23 @@ export async function build(): Promise<FastifyInstance> {
   await app.register(security);
   await app.register(rateLimit);
 
+  // Ensure the upload directory exists before registering static serving so the
+  // first GET /uploads/<name> never races a missing dir. Same path in dev/prod.
+  mkdirSync(UPLOAD_DIR, { recursive: true });
+
+  // Multipart parsing for POST /uploads (single file, 5MB cap). Register BEFORE
+  // the upload route so req.file() is available. Server stays key-blind.
+  await app.register(multipart, {
+    limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  });
+  // Serve stored images at /uploads/<name> (no /api prefix). decorateReply:false
+  // avoids clobbering reply.sendFile used elsewhere (none today, future-safe).
+  await app.register(fastifyStatic, {
+    root: UPLOAD_DIR,
+    prefix: "/uploads/",
+    decorateReply: false,
+  });
+
   // Health check.
   app.get("/health", async () => ({ status: "ok" }));
 
@@ -44,6 +66,7 @@ export async function build(): Promise<FastifyInstance> {
   await app.register(commentRoutes, { prefix: "/" });
   await app.register(contextRoutes, { prefix: "/" });
   await app.register(metricsRoutes, { prefix: "/" });
+  await app.register(uploadRoutes, { prefix: "/" });
   await app.register(streamRoutes, { prefix: "/" });
 
   return app;

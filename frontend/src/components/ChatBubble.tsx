@@ -183,12 +183,25 @@ export default function ChatBubble({
           {isPending ? (
             <TypingDots isAi={isAi} />
           ) : (
-            // XC-3: user/AI body is untrusted markdown — render via the
-            // sanitize chokepoint, never as raw HTML.
-            <SafeMarkdown
-              text={comment.body}
-              className="prose-chat whitespace-pre-wrap break-words"
-            />
+            <>
+              {comment.imageUrl && (
+                <img
+                  src={comment.imageUrl}
+                  alt="첨부 이미지"
+                  className="mb-1 max-h-60 rounded-lg object-contain"
+                  loading="lazy"
+                />
+              )}
+              {/* Render only the image when the body is empty (image-only). */}
+              {comment.body && (
+                // XC-3: user/AI body is untrusted markdown — render via the
+                // sanitize chokepoint, never as raw HTML.
+                <SafeMarkdown
+                  text={comment.body}
+                  className="prose-chat whitespace-pre-wrap break-words"
+                />
+              )}
+            </>
           )}
         </div>
 

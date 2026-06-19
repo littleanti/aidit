@@ -13,6 +13,7 @@ import fp from "fastify-plugin";
 
 const CSP = [
   "default-src 'self'",
+  "img-src 'self' blob: data:",
   "connect-src 'self' https://generativelanguage.googleapis.com",
   "script-src 'self'",
   "object-src 'none'",

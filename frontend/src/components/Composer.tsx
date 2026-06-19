@@ -17,14 +17,46 @@
 // handed straight to the engine (browser->Gemini) and only { type, body,
 // clientId } crosses the Aidit wire.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useThreadStore } from '../stores/threadStore';
 import { useAiModeStore } from '../stores/aiModeStore';
-import { postComment } from '../api/rest';
+import { postComment, uploadImage } from '../api/rest';
 import type { Comment } from '../api/types';
 import { runAtAiReply } from '../engine/contextEngine';
+
+// Single-image attach constraints (mirrored server-side for defense in depth).
+const ALLOWED_IMAGE_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** Read a File as base64 inline data (mimeType + base64 WITHOUT the data: prefix)
+ *  for a Gemini inlineData part. Read from the File, never a (revocable) URL. */
+function fileToInlineData(
+  file: File,
+): Promise<{ mimeType: string; data: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('파일을 읽지 못했습니다.'));
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error('파일을 읽지 못했습니다.'));
+        return;
+      }
+      // result is a data URL: "data:<mime>;base64,<data>". Strip the prefix.
+      const comma = result.indexOf(',');
+      const data = comma >= 0 ? result.slice(comma + 1) : result;
+      resolve({ mimeType: file.type, data });
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 interface ComposerProps {
   postId: string;
@@ -56,7 +88,12 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // Single-image attachment: the chosen File (held locally until send) + its
+  // object URL (for the preview thumbnail / optimistic bubble).
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const trimmed = text.trim();
   const hasMention = AI_MENTION.test(text);
@@ -64,12 +101,47 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
   // the user manually typed an '@AI' token (one-off shortcut). A single source
   // of truth so we never double-trigger when both are true.
   const wantsAI = aiMode || hasMention;
-  const canSend = trimmed.length > 0 && !sending;
+  // Text becomes optional when an image is attached (image-only sends allowed).
+  const canSend = (trimmed.length > 0 || imageFile != null) && !sending;
 
   function showToast(msg: string) {
     setToast(msg);
     window.setTimeout(() => setToast(null), 2500);
   }
+
+  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Always reset the input value so re-picking the same file fires onChange.
+    e.target.value = '';
+    if (!file) return;
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      showToast('지원하지 않는 이미지 형식입니다 (PNG, JPEG, WebP, GIF).');
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      showToast('이미지가 너무 큽니다 (최대 5MB).');
+      return;
+    }
+    // Replace any previous selection, revoking its object URL first.
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    setImageFile(file);
+    setObjectUrl(URL.createObjectURL(file));
+  }
+
+  function clearImage() {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    setImageFile(null);
+    setObjectUrl(null);
+  }
+
+  // Revoke any live object URL on unmount (only — not on every state change, so
+  // the optimistic bubble's blob: src stays valid until the send reconciles).
+  useEffect(() => {
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSend() {
     if (!canSend) return;
@@ -101,7 +173,26 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
         ? crypto.randomUUID()
         : `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-    // 2/3. optimistic temp bubble — instant right-side render.
+    // 6.1.1 Capture the attachment up front — all subsequent logic uses these
+    // locals, never the React state (which is cleared on re-render mid-send).
+    const file = imageFile;
+    const localUrl = objectUrl;
+
+    // 6.1.2 Pre-read the AI base64 from the captured File (NOT a revocable URL)
+    // BEFORE any setState, so the image rides the fresh-upload @AI turn even
+    // after the preview URL is revoked.
+    let imagePart: { mimeType: string; data: string } | undefined;
+    if (willInvokeAi && file) {
+      try {
+        imagePart = await fileToInlineData(file);
+      } catch {
+        showToast('이미지를 읽지 못했습니다 — 다시 시도해 주세요.');
+        return;
+      }
+    }
+
+    // 2/3 + 6.1.3. optimistic temp bubble — instant right-side render. Point its
+    // imageUrl at the local blob: URL so the preview shows before the upload.
     const optimistic: Comment = {
       id: `optimistic-${clientId}`,
       postId,
@@ -115,37 +206,59 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
       replyToId: null,
       clientId,
       seq: tempSeq(),
+      imageUrl: localUrl,
       createdAt: new Date().toISOString(),
     };
 
     addOptimistic(optimistic);
-    setText('');
     setSending(true);
 
     let humanCommentId: string | null = null;
+    let sendSucceeded = false;
     try {
-      // 4. post the human comment FIRST (FR-6.2: human before AI).
-      const saved = await postComment(postId, { type: 'HUMAN', body, clientId }, userId);
-      // 5. fast-path reconcile; SSE 'comment.created' dedupes by clientId too.
+      // 6.1.4 Upload the image FIRST (before postComment). On failure: toast,
+      // abort, leave imageFile/objectUrl intact (don't lose the file) and do
+      // NOT revoke the object URL.
+      const { imageUrl } = file
+        ? await uploadImage(file, userId)
+        : { imageUrl: null };
+
+      // 6.1.5 post the human comment (FR-6.2: human before AI), carrying the
+      // server image URL.
+      const saved = await postComment(
+        postId,
+        { type: 'HUMAN', body, clientId, imageUrl: imageUrl ?? null },
+        userId,
+      );
+      // fast-path reconcile; SSE 'comment.created' dedupes by clientId too. This
+      // swaps the optimistic blob: URL for the server /uploads/... URL.
       upsertComment(saved);
       humanCommentId = saved.id;
+      sendSucceeded = true;
+
+      // 6.1.6 On success only: clear text + attachment, then defer revoking the
+      // local blob URL until AFTER upsertComment reconciled the bubble.
+      setText('');
+      setImageFile(null);
+      setObjectUrl(null);
+      if (localUrl) URL.revokeObjectURL(localUrl);
     } catch {
-      // 6. mark/remove optimistic bubble + toast.
+      // mark/remove optimistic bubble + toast. Keep the file + object URL so the
+      // user can retry without re-picking the image.
       upsertComment({ ...optimistic, status: 'FAILED' });
       showToast('전송 실패 — 다시 시도해 주세요.');
-      // restore the text so the user can retry without retyping.
-      setText(body);
     } finally {
       setSending(false);
       taRef.current?.focus();
     }
 
-    // 7. @AI invocation (AI-7). Only after the human comment is committed; the
+    // 6.1.7 @AI invocation (AI-7). Only after the human comment is committed; the
     // engine fetches context (which now includes this turn), posts a PENDING
-    // AI_REPLY (rendered via SSE), then resolves it with the CALLER's key.
+    // AI_REPLY (rendered via SSE), then resolves it with the CALLER's key. The
+    // pre-read image bytes ride ONLY this fresh-upload turn.
     // The PENDING/FAILED AI bubble surfaces in the thread via SSE; we don't
     // need to touch the human bubble on AI failure (NFR-5).
-    if (willInvokeAi && humanCommentId && apiKey) {
+    if (willInvokeAi && sendSucceeded && humanCommentId && apiKey) {
       const callerUsername = useAuthStore.getState().username ?? '사용자';
       void runAtAiReply({
         postId,
@@ -154,6 +267,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
         callerUsername,
         callerApiKey: apiKey,
         humanCommentBody: body,
+        image: imagePart,
       }).then((res) => {
         if (!res.ok && res.errorMessage) showToast(res.errorMessage);
       });
@@ -209,13 +323,40 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
         </div>
       )}
 
+      {objectUrl && (
+        <div className="flex items-center gap-2 px-3 pt-2">
+          <div className="relative inline-block">
+            <img
+              src={objectUrl}
+              alt="첨부 미리보기"
+              className="h-16 w-16 rounded-lg border border-slate-200 object-cover"
+            />
+            <button
+              type="button"
+              onClick={clearImage}
+              aria-label="이미지 제거"
+              className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-xs font-bold text-white shadow active:scale-95"
+            >
+              <span aria-hidden>×</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 px-3 py-2">
-        {/* Leading attach button — VISUAL placeholder only. Non-functional;
-            no handler is wired. Reserved for a future attachment feature. */}
+        {/* Leading attach button — opens the native image picker. */}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="hidden"
+          onChange={onPick}
+        />
         <button
           type="button"
-          aria-label="첨부"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg text-slate-400"
+          aria-label="이미지 첨부"
+          onClick={() => fileRef.current?.click()}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg text-brand hover:bg-slate-100 active:scale-95"
         >
           <span aria-hidden>＋</span>
         </button>

@@ -80,6 +80,8 @@ export interface Comment {
   clientId?: string | null;
   /** L4: monotonic per-post ordering key. */
   seq: number;
+  /** optional uploaded image (filesystem-served URL); null = no image. */
+  imageUrl?: string | null;
   createdAt: string;
 }
 
@@ -100,6 +102,8 @@ export interface CreateCommentRequest {
   segmentExpected?: number;
   /** optional pre-computed token count (else server estimates ~chars/4). */
   tokenCount?: number;
+  /** optional uploaded image URL (server-relative /uploads/<name>). */
+  imageUrl?: string | null;
 }
 
 /**

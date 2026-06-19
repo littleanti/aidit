@@ -39,6 +39,7 @@ interface CommentRow {
   type: CommentType;
   status: CommentStatus;
   body: string;
+  imageUrl: string | null;
   tokenCount: number;
   segmentId: string;
   replyToId: string | null;
@@ -63,6 +64,7 @@ function toCommentDTO(row: CommentRow): CommentDTO {
     type: row.type,
     status: row.status,
     body: row.body,
+    imageUrl: row.imageUrl ?? null,
     tokenCount: row.tokenCount,
     segmentId: row.segmentId,
     replyToId: row.replyToId,
@@ -82,6 +84,7 @@ const LIST_PAGE_SIZE = 50;
 interface CreateCommentBody {
   type?: CommentType;
   body?: string;
+  imageUrl?: string | null;
   status?: CommentStatus;
   replyToId?: string | null;
   clientId?: string;
@@ -109,6 +112,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       const {
         type,
         body,
+        imageUrl,
         status,
         replyToId,
         clientId,
@@ -118,13 +122,30 @@ const plugin: FastifyPluginAsync = async (app) => {
       if (type !== "HUMAN" && type !== "AI_REPLY" && type !== "AI_SUMMARY") {
         return reply.code(400).send({ error: "Invalid or missing type" });
       }
+      // R-6: a provided imageUrl must be a server-relative /uploads/ path with no
+      // traversal — reject attacker-controlled absolute/arbitrary URLs.
+      if (imageUrl !== undefined && imageUrl !== null) {
+        if (
+          typeof imageUrl !== "string" ||
+          !imageUrl.startsWith("/uploads/") ||
+          imageUrl.includes("..")
+        ) {
+          return reply.code(400).send({ error: "Invalid imageUrl" });
+        }
+      }
+      const hasImage = typeof imageUrl === "string" && imageUrl.length > 0;
       // A PENDING bubble (AI loading placeholder, FR-6.2) legitimately has no
       // body yet — its text arrives via PATCH on COMPLETE. Only require a
-      // non-empty body for non-PENDING comments.
+      // non-empty body for non-PENDING comments. R-5: an image-only HUMAN comment
+      // may have an empty body when an imageUrl is present.
       if (typeof body !== "string") {
         return reply.code(400).send({ error: "body is required" });
       }
-      if (body.length === 0 && status !== "PENDING") {
+      if (
+        body.length === 0 &&
+        status !== "PENDING" &&
+        !(type === "HUMAN" && hasImage)
+      ) {
         return reply.code(400).send({ error: "body is required" });
       }
       if (typeof clientId !== "string" || clientId.length === 0) {
@@ -306,6 +327,7 @@ const plugin: FastifyPluginAsync = async (app) => {
               type,
               status: resolvedStatus,
               body,
+              imageUrl: imageUrl ?? null,
               tokenCount,
               segmentId: segment.id,
               replyToId: replyToId ?? null,

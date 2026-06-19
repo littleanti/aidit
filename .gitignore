@@ -12,6 +12,9 @@ build/
 *.tsbuildinfo
 .vite/
 
+# --- Uploaded images (filesystem storage, auto-created on boot) ---
+server/uploads/
+
 # --- Environment / secrets ---
 .env
 .env.*

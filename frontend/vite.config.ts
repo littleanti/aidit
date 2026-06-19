@@ -11,6 +11,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 // would block — so dev is left untouched.
 const CSP_PRODUCTION = [
   "default-src 'self'",
+  "img-src 'self' blob: data:",
   "connect-src 'self' https://generativelanguage.googleapis.com",
   "script-src 'self'",
   "object-src 'none'",
@@ -93,6 +94,12 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+      // Served image files live at /uploads/<name> on the server (no /api
+      // prefix, no rewrite — the path passes through verbatim).
+      '/uploads': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
       },
     },
   },

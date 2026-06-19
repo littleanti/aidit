@@ -16,6 +16,7 @@ export interface CommentDTO {
   type: "HUMAN" | "AI_REPLY" | "AI_SUMMARY";
   status: "PENDING" | "COMPLETE" | "FAILED";
   body: string;
+  imageUrl?: string | null;
   tokenCount: number;
   segmentId: string;
   replyToId?: string | null;
@@ -115,6 +116,10 @@ export function serializeEvent(event: ThreadEvent): string {
       payload = { comment: event.data.comment };
       break;
     case EVENT_COMMENT_UPDATED:
+      // INTENTIONAL OMISSION (Step 9.2): comment.updated must NOT carry imageUrl.
+      // imageUrl is set ONCE at comment creation and delivered via comment.created
+      // only. The AI PATCH→COMPLETE/FAILED path edits body/status and must never
+      // mutate or carry a sibling/human comment's image. Do NOT add imageUrl here.
       payload = {
         id: event.data.id,
         body: event.data.body,
