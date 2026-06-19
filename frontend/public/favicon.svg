@@ -1,11 +1,21 @@
-<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Aidit">
+<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Aidit">
   <defs>
-    <linearGradient id="aidit-mark" x1="10" y1="6" x2="40" y2="44" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#5B6CF5"/>
-      <stop offset="0.55" stop-color="#6848F8"/>
-      <stop offset="1" stop-color="#8B5CF6"/>
-    </linearGradient>
+    <radialGradient id="aidit-screen" cx="50%" cy="30%" r="80%">
+      <stop offset="0" stop-color="#06190e"/>
+      <stop offset="0.55" stop-color="#04130b"/>
+      <stop offset="1" stop-color="#020a05"/>
+    </radialGradient>
+    <filter id="aidit-glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="0.9" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
-  <path d="M22.9 7.4 Q24 5 25.1 7.4 L42 41 Q42.8 42.5 41 42.5 L33 42.5 Q31.8 42.5 31.2 41.4 L24.9 29.6 Q24 28 23.1 29.6 L16.8 41.4 Q16.2 42.5 15 42.5 L7 42.5 Q5.2 42.5 6 41 Z"
-        fill="url(#aidit-mark)"/>
+  <!-- CRT screen tile -->
+  <rect x="1" y="1" width="46" height="46" rx="10" fill="url(#aidit-screen)" stroke="#1d4a30" stroke-width="2"/>
+  <!-- Terminal triangle "A"-mark: open green-phosphor stroke, matches in-app Logo -->
+  <path d="M22.9 9.4 Q24 7 25.1 9.4 L40 39 Q40.8 40.5 39 40.5 L32 40.5 Q30.8 40.5 30.2 39.4 L24.9 29.6 Q24 28 23.1 29.6 L17.8 39.4 Q17.2 40.5 16 40.5 L9 40.5 Q7.2 40.5 8 39 Z"
+        fill="none" stroke="#5cff9a" stroke-width="2.6" stroke-linejoin="round" filter="url(#aidit-glow)"/>
 </svg>
