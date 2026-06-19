@@ -8,9 +8,45 @@ import {
 } from '../api/rest';
 import type { Community as CommunityDTO, PostListItem } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
-import PersonaBadge from '../components/PersonaBadge';
 import Avatar from '../components/Avatar';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
+
+// Robot persona tile (phosphor stroke line-art) — matches the canonical
+// retro screens. Honors a community's personaIcon when present, otherwise
+// falls back to the robot SVG glyph.
+function RobotTile({
+  personaIcon,
+  className = '',
+  iconSize = 20,
+}: {
+  personaIcon?: string | null;
+  className?: string;
+  iconSize?: number;
+}) {
+  const icon = personaIcon && personaIcon.trim() ? personaIcon : null;
+  return (
+    <div
+      aria-hidden
+      className={`flex flex-none items-center justify-center rounded-[3px] border border-term-border bg-term-screen text-term-title ${className}`}
+    >
+      {icon ?? (
+        <svg
+          width={iconSize}
+          height={iconSize}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        >
+          <rect x="5" y="8" width="14" height="11" rx="2" />
+          <circle cx="9.5" cy="13" r="1.2" fill="currentColor" stroke="none" />
+          <circle cx="14.5" cy="13" r="1.2" fill="currentColor" stroke="none" />
+          <path d="M12 5v3M9 19v2.4M15 19v2.4" />
+        </svg>
+      )}
+    </div>
+  );
+}
 
 // FE-5: community detail (/c/:slug). The slug-less case redirects to the
 // dedicated '/search' route which renders <CommunitySearch /> (see Search.tsx),
@@ -63,16 +99,30 @@ export function CommunitySearch() {
   const trimmed = q.trim();
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-lg font-bold text-slate-800">커뮤니티 검색</h1>
+    <div className="space-y-4 font-mono">
+      <h1 className="text-lg font-bold text-term-title glow">// 커뮤니티 검색</h1>
 
-      <input
-        type="search"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="커뮤니티 이름으로 검색"
-        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-      />
+      <div className="flex items-center gap-2 rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 focus-within:border-term-bright">
+        <span aria-hidden className="text-term-cta">
+          &gt;
+        </span>
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="커뮤니티 이름으로 검색"
+          aria-label="커뮤니티 이름으로 검색"
+          className="w-full flex-1 bg-transparent text-sm text-term-bright outline-none placeholder:text-term-dim"
+        />
+      </div>
+
+      <Link
+        to="/create-community"
+        state={trimmed ? { name: trimmed } : undefined}
+        className="flex items-center justify-center gap-2 rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-4 py-3 text-sm font-bold tracking-wider text-term-title shadow-glow-cta glow-lg transition hover:border-term-bright"
+      >
+        [+] 커뮤니티 만들기
+      </Link>
 
       {error && <ErrorState variant="banner" message={error} />}
 
@@ -84,15 +134,18 @@ export function CommunitySearch() {
             <li key={c.id}>
               <Link
                 to={`/c/${c.slug}`}
-                className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition active:bg-slate-50 hover:border-brand/40"
+                className="flex items-center gap-3 rounded-[2px] border border-term-border bg-term-card px-3 py-2.5 transition active:bg-term-hover hover:border-term-bright"
               >
-                <PersonaBadge
+                <RobotTile
                   personaIcon={c.personaIcon}
-                  name={c.name}
-                  size="sm"
+                  className="h-[38px] w-[38px]"
+                  iconSize={20}
                 />
+                <span className="truncate text-sm font-bold text-term-title glow">
+                  {c.name}
+                </span>
                 {c.description && (
-                  <span className="ml-auto truncate text-xs text-slate-500">
+                  <span className="ml-auto truncate text-xs text-term-faint">
                     {c.description}
                   </span>
                 )}
@@ -103,14 +156,15 @@ export function CommunitySearch() {
       )}
 
       {!loading && !error && results.length === 0 && (
-        <div className="rounded-xl border border-dashed border-slate-300 px-3 py-4 text-center text-sm text-slate-500">
-          결과 없음?{' '}
+        <div className="rounded-[2px] border border-dashed border-term-border px-3 py-4 text-center text-sm leading-relaxed text-term-dim">
+          {trimmed ? `'${trimmed}' ` : ''}커뮤니티가 없어요
+          <br />
           <Link
             to="/create-community"
             state={trimmed ? { name: trimmed } : undefined}
-            className="font-semibold text-brand-600 underline"
+            className="font-bold text-term-amber"
           >
-            + {trimmed ? `'${trimmed}' ` : ''}만들기
+            [+] {trimmed ? `'${trimmed}' ` : ''}만들기 →
           </Link>
         </div>
       )}
@@ -189,7 +243,7 @@ function CommunityDetail({ slug }: { slug: string }) {
         action={
           <Link
             to="/search"
-            className="inline-flex min-h-[44px] items-center rounded-xl bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
+            className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-5 text-sm font-bold text-term-bright shadow-glow-cta transition hover:border-term-bright"
           >
             커뮤니티 검색으로
           </Link>
@@ -206,23 +260,25 @@ function CommunityDetail({ slug }: { slug: string }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 font-mono">
       {/* header */}
-      <header className="space-y-3 border-b border-slate-200 pb-4">
-        <div className="flex items-center gap-2">
-          <PersonaBadge
+      <header className="space-y-4 border-b border-term-border pb-5">
+        <div className="flex items-center gap-3">
+          <RobotTile
             personaIcon={community.personaIcon}
-            name={community.name}
-            size="lg"
-            className="min-w-0 flex-1"
+            className="h-[46px] w-[46px] rounded-[4px]"
+            iconSize={26}
           />
+          <h1 className="min-w-0 flex-1 truncate text-[22px] font-bold text-term-title glow">
+            {community.name}
+          </h1>
           {isCreator && (
             <Link
               to={`/create-community`}
-              state={{ editId: community.id }}
-              className="shrink-0 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 transition hover:border-brand hover:text-brand"
-              aria-label="페르소나 편집"
-              title="페르소나 편집"
+              state={{ editSlug: community.slug }}
+              className="shrink-0 rounded-[2px] border border-term-border px-2 py-1 text-xs text-term-dim transition hover:border-term-bright hover:text-term-bright"
+              aria-label="커뮤니티 편집"
+              title="커뮤니티 편집"
             >
               ✎ 편집
             </Link>
@@ -230,19 +286,24 @@ function CommunityDetail({ slug }: { slug: string }) {
         </div>
 
         {community.description && (
-          <p className="text-sm text-slate-600">{community.description}</p>
+          <p className="text-sm text-term-dim">{community.description}</p>
         )}
 
-        <div className="rounded-xl bg-slate-50 px-3 py-2.5">
-          <p className="mb-1 text-xs font-semibold text-slate-500">페르소나</p>
-          <p className="line-clamp-3 whitespace-pre-wrap text-sm text-slate-700">
+        <div className="relative rounded-[2px] border border-term-border bg-term-card px-4 py-3.5">
+          <span
+            aria-hidden
+            className="absolute -top-1 left-[13px] bg-term-tag px-1.5 text-[9px] tracking-wider text-term-faint"
+          >
+            PERSONA
+          </span>
+          <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-relaxed text-term-dim">
             {community.personaPrompt}
           </p>
         </div>
 
         <Link
           to={`/c/${community.slug}/create-post`}
-          className="inline-block rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
+          className="flex items-center justify-center rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-4 py-3 text-sm font-bold tracking-wider text-term-title shadow-glow-cta glow-lg transition hover:border-term-bright"
         >
           + 이 커뮤니티에 글쓰기
         </Link>
@@ -250,7 +311,9 @@ function CommunityDetail({ slug }: { slug: string }) {
 
       {/* posts */}
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-slate-700">글</h2>
+        <h2 className="text-xs font-semibold tracking-wider text-term-faint">
+          // 글
+        </h2>
         {posts.length === 0 ? (
           <EmptyState
             title="아직 글이 없습니다."
@@ -258,7 +321,7 @@ function CommunityDetail({ slug }: { slug: string }) {
             action={
               <Link
                 to={`/c/${community.slug}/create-post`}
-                className="inline-flex min-h-[44px] items-center rounded-xl bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
+                className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-4 text-sm font-bold text-term-bright shadow-glow-cta transition hover:border-term-bright"
               >
                 + 첫 글 쓰기
               </Link>
@@ -271,15 +334,15 @@ function CommunityDetail({ slug }: { slug: string }) {
               <li key={p.id}>
                 <Link
                   to={`/p/${p.id}`}
-                  className="block rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition active:bg-slate-50 hover:border-brand/40"
+                  className="block rounded-[2px] border border-term-border bg-term-card px-4 py-3.5 transition active:bg-term-hover hover:border-term-bright"
                 >
-                  <p className="truncate font-medium text-slate-800">
+                  <p className="truncate text-base font-bold text-term-title glow">
                     {p.title}
                   </p>
-                  <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">
+                  <p className="mt-1.5 line-clamp-2 text-sm text-term-dim">
                     {p.body}
                   </p>
-                  <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
+                  <p className="mt-3 flex items-center gap-2 text-xs text-term-faint">
                     <Avatar kind="user" seed={p.authorUsername} size="sm" />
                     u/{p.authorUsername} · 점수 {p.score} · 댓글{' '}
                     {p.commentCount}

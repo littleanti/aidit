@@ -57,6 +57,7 @@ function toFeedCard(
     id: string;
     title: string;
     body: string;
+    imageUrl: string | null;
     score: number;
     commentCount: number;
     hotScore: number;
@@ -72,6 +73,7 @@ function toFeedCard(
     id: p.id,
     title: p.title,
     body: p.body,
+    imageUrl: p.imageUrl,
     score: p.score,
     commentCount: p.commentCount,
     hotScore: hotScoreOverride ?? p.hotScore,
@@ -94,13 +96,20 @@ const feedInclude = {
 
 const plugin: FastifyPluginAsync = async (app) => {
   // BE-5: Create a post + its initial ContextSegment (index 0, isActive) atomically.
-  app.post<{ Body: { communityId?: string; title?: string; body?: string } }>(
+  app.post<{
+    Body: {
+      communityId?: string;
+      title?: string;
+      body?: string;
+      imageUrl?: string;
+    };
+  }>(
     "/posts",
     async (req, reply) => {
       const userId = requireUserId(req, reply);
       if (!userId) return;
 
-      const { communityId, title, body } = req.body ?? {};
+      const { communityId, title, body, imageUrl } = req.body ?? {};
       if (!communityId || !title || !body) {
         return reply
           .code(400)
@@ -125,6 +134,7 @@ const plugin: FastifyPluginAsync = async (app) => {
             authorId: userId,
             title,
             body,
+            imageUrl: imageUrl ?? null,
             score: 0,
             commentCount: 0,
             hotScore: initialHot,
@@ -146,6 +156,7 @@ const plugin: FastifyPluginAsync = async (app) => {
         authorId: post.authorId,
         title: post.title,
         body: post.body,
+        imageUrl: post.imageUrl,
         score: post.score,
         commentCount: post.commentCount,
         hotScore: post.hotScore,
@@ -282,6 +293,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       authorId: post.authorId,
       title: post.title,
       body: post.body,
+      imageUrl: post.imageUrl,
       score: post.score,
       commentCount: post.commentCount,
       hotScore: post.hotScore,

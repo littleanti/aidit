@@ -89,6 +89,7 @@ model Post {
   author      User     @relation(fields: [authorId], references: [id])
   title       String
   body        String
+  imageUrl    String?                   // 선택 첨부 이미지 URL(업로드 파일 서빙 경로). null=이미지 없음
   score       Int      @default(0)      // 추천(인기 정렬용)
   commentCount Int     @default(0)
   hotScore    Float    @default(0)      // 비정규화 인기점수(§9)
@@ -157,8 +158,8 @@ model ContextSegment {
 | `PATCH /communities/:id` | 페르소나/설명 수정(생성자만) | `x-user-id` | FR-3.3 |
 | `GET /posts?sort=hot&cursor=` | 홈 인기 피드 | - | FR-1.1, 커서 페이지네이션 |
 | `GET /communities/:slug/posts` | 커뮤니티별 글 | - | |
-| `POST /posts` | 글 작성(먼저 등록, seg#0 자동) | `x-user-id` | FR-4.2 · 레이트리밋(XC-9) |
-| `GET /posts/:id` | 글 + 메타 | - | |
+| `POST /posts` | 글 작성(먼저 등록, seg#0 자동) | `x-user-id` | FR-4.2 · 레이트리밋(XC-9) · 본문에 선택 `imageUrl?` |
+| `GET /posts/:id` | 글 + 메타 | - | 응답에 `imageUrl: string \| null` 포함 |
 | `GET /posts/:id/comments?afterSeq=` | 버블 페이지네이션 | - | FR-5 |
 | `POST /posts/:id/comments` | **버블 게시**(사람/AI/요약 텍스트) | `x-user-id`(사람) | §4.1 · clientId 멱등 |
 | `PATCH /comments/:id` | AI 버블 상태/본문 갱신(PENDING→COMPLETE/FAILED) | `x-user-id`(사람)·clientId(AI) | FR-6.2 |
@@ -208,6 +209,7 @@ model ContextSegment {
 - 글 원본/타인 댓글/AI 버블 → 역할 매핑: 사람 발화는 `role:"user"`, AI 버블은 `role:"model"`.
 - 다자 대화이므로 각 user turn 앞에 `「{username}」: ` 접두로 화자 구분(Gemini는 멀티 user 화자 개념이 약해 텍스트로 표기).
 - 요약 버블은 새 세그먼트의 첫 `user` turn으로 "지금까지 요약: ..." 형태 주입(§6.3).
+- **멀티모달 이미지**: 컨텍스트 턴은 텍스트(`parts:[{text}]`)로만 매핑한다. 이미지는 **"그 호출에서 신규로 실리는" 한 장**만 user turn에 `inlineData`(base64) 파트로 덧붙는다 — ① `@AI` 댓글에 방금 업로드한 이미지(Composer), ② **글 작성 시 첨부한 이미지의 1차 AI 답변**(`runPrimaryReply`: 글 본문 텍스트 턴 뒤에 작성자 user turn으로 `Post.imageUrl`을 `inlineData`로 첨부). 과거 글/댓글의 이미지는 후속 호출에서 재전송하지 않는다(컨텍스트는 텍스트). 인코딩 실패 시 텍스트 only로 진행(답변을 막지 않음).
 
 ---
 

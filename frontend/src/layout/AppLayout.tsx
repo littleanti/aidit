@@ -1,37 +1,81 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
+import { useUiStore } from '../stores/uiStore';
 import BottomTabBar from './BottomTabBar';
 import Logo from '../components/Logo';
+import LoginModal from '../components/LoginModal';
 
 // Mobile-first shell.
 //  <768px : single column + bottom tab bar.
 //  >=1024px (desktop): multi-column (sidebar + main).
 
-// Desktop sidebar nav item — active state mirrors the bottom tab bar (text-brand).
+function IconHome() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" aria-hidden>
+      <path d="M3 11 12 3l9 8" />
+      <path d="M5 9.5V20h14V9.5" />
+      <path d="M10 20v-5h4v5" />
+    </svg>
+  );
+}
+
+function IconSearch() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+      <circle cx="11" cy="11" r="6" />
+      <path d="M16 16l4.5 4.5" />
+    </svg>
+  );
+}
+
+function IconWrite() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" aria-hidden>
+      <path d="M4 20l1-4L16 5l3 3L8 19z" />
+      <path d="M14 7l3 3" />
+    </svg>
+  );
+}
+
+function IconProfile() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+      <circle cx="12" cy="8" r="3.4" />
+      <path d="M5.5 20c0-3.6 2.9-5.5 6.5-5.5s6.5 1.9 6.5 5.5" />
+    </svg>
+  );
+}
+
+// Desktop sidebar nav item — active: amber highlight; inactive: dim with hover.
 function sidebarLinkClass({ isActive }: { isActive: boolean }): string {
   return isActive
-    ? 'block rounded-lg px-3 py-2 font-medium text-brand bg-slate-100'
-    : 'block rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100 hover:text-brand';
+    ? 'flex items-center gap-2.5 rounded-[2px] px-3 py-2 font-medium text-term-amber bg-term-hover'
+    : 'flex items-center gap-2.5 rounded-[2px] px-3 py-2 text-term-dim hover:bg-term-hover hover:text-term-bright';
 }
 
 export default function AppLayout() {
   const username = useAuthStore((s) => s.username);
+  const openLogin = useUiStore((s) => s.openLogin);
 
   return (
     <div className="min-h-full">
       {/* top app bar */}
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
+      <header className="sticky top-0 z-10 border-b border-term-border bg-term-screen/90 backdrop-blur">
         <div className="mx-auto flex h-12 max-w-app items-center justify-between px-4 desktop:max-w-5xl">
           <Link to="/">
             <Logo size="sm" />
           </Link>
-          <div className="text-sm text-slate-600">
+          <div className="text-sm">
             {username ? (
-              <span>{username}</span>
+              <span className="text-term-dim">[ {username} ]</span>
             ) : (
-              <Link to="/login" className="text-brand-600">
-                로그인
-              </Link>
+              <button
+                type="button"
+                onClick={openLogin}
+                className="text-term-amber"
+              >
+                [ Login ]
+              </button>
             )}
           </div>
         </div>
@@ -42,16 +86,20 @@ export default function AppLayout() {
         <aside className="hidden desktop:block desktop:py-4">
           <nav className="sticky top-16 space-y-1 text-sm">
             <NavLink to="/" end className={sidebarLinkClass}>
-              🏠 홈
+              <IconHome />
+              홈
             </NavLink>
             <NavLink to="/search" className={sidebarLinkClass}>
-              🔍 검색
+              <IconSearch />
+              검색
             </NavLink>
-            <NavLink to="/create-community" className={sidebarLinkClass}>
-              ✏️ 커뮤니티 만들기
+            <NavLink to="/create-post" className={sidebarLinkClass}>
+              <IconWrite />
+              작성
             </NavLink>
             <NavLink to="/me" className={sidebarLinkClass}>
-              👤 나
+              <IconProfile />
+              나
             </NavLink>
           </nav>
         </aside>
@@ -62,6 +110,7 @@ export default function AppLayout() {
       </div>
 
       <BottomTabBar />
+      <LoginModal />
     </div>
   );
 }

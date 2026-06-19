@@ -86,8 +86,8 @@ export default function Home() {
   return (
     <div className="pb-4">
       {/* tabs */}
-      <div className="sticky top-0 z-10 -mx-4 mb-3 border-b border-slate-200 bg-white px-4">
-        <div className="flex gap-1">
+      <div className="sticky top-0 z-10 -mx-4 mb-3 border-b border-term-border bg-term-screen px-4">
+        <div className="flex">
           {TABS.map((t) => {
             const active = sort === t.key;
             return (
@@ -98,8 +98,8 @@ export default function Home() {
                 aria-pressed={active}
                 className={`min-h-[44px] flex-1 border-b-2 text-sm font-semibold transition ${
                   active
-                    ? 'border-brand text-brand'
-                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                    ? 'border-term-amber bg-[rgba(255,207,74,0.06)] text-term-amber'
+                    : 'border-transparent text-term-dim hover:text-term-bright'
                 }`}
               >
                 {t.label}
@@ -107,6 +107,12 @@ export default function Home() {
             );
           })}
         </div>
+      </div>
+
+      {/* terminal prompt line */}
+      <div className="mb-3 text-xs text-term-faint">
+        aidit@yoon:~$ feed --sort={sort}{' '}
+        <span aria-hidden className="term-cursor" />
       </div>
 
       {error && (
@@ -129,7 +135,7 @@ export default function Home() {
           action={
             <Link
               to="/create-post"
-              className="inline-flex min-h-[44px] items-center rounded-xl bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-4 text-sm font-bold text-term-title glow-lg shadow-glow-cta transition"
             >
               + 첫 글 쓰기
             </Link>
@@ -149,12 +155,12 @@ export default function Home() {
       {!isEmpty && (
         <div
           ref={sentinelRef}
-          className="flex justify-center py-6 text-xs text-slate-400"
+          className="flex justify-center py-6 text-xs text-term-faint"
         >
           {loading && posts.length > 0
             ? '불러오는 중…'
             : done && posts.length > 0
-              ? '마지막 글이에요'
+              ? '— EOF · 마지막 글이에요 —'
               : ''}
         </div>
       )}

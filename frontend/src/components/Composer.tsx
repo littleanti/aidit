@@ -288,11 +288,11 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
   // this row grows. Mobile tab-bar clearance is handled at the Thread root
   // (bottom padding), not by a sticky offset here.
   return (
-    <div className="shrink-0 border-t border-slate-200 bg-white">
+    <div className="shrink-0 border-t border-term-border bg-term-bg font-mono">
       {toast && (
         <div
           role="alert"
-          className="mx-3 mb-1 mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="mx-3 mb-1 mt-2 rounded-[2px] border border-term-danger bg-term-bg px-3 py-2 text-sm text-term-danger"
         >
           {toast}
         </div>
@@ -300,17 +300,35 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
 
       {/* Thin control row: thread-scoped AI-mode toggle + BYOK cost hint. */}
       <div className="flex items-center gap-2 px-3 pt-2">
-        <label className="group inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-600">
+        <label className="group inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 text-xs font-medium text-term-amber">
           <input
             type="checkbox"
             checked={aiMode}
             onChange={() => toggleAiMode(postId)}
-            className="h-4 w-4 shrink-0 cursor-pointer accent-[#6848F8]"
+            className="sr-only"
           />
-          <span>🤖 AI에게 묻기</span>
+          <span aria-hidden className="select-none font-bold text-term-amber">
+            {aiMode ? '[X]' : '[ ]'}
+          </span>
+          <span className="inline-flex items-center gap-1 text-term-bright">
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <rect x="5" y="8" width="14" height="11" rx="1" />
+              <path d="M12 8V4M9 4h6" />
+              <circle cx="9" cy="13" r="1" fill="currentColor" stroke="none" />
+              <circle cx="15" cy="13" r="1" fill="currentColor" stroke="none" />
+            </svg>
+            AI에게 묻기
+          </span>
         </label>
         <span
-          className="text-[11px] text-slate-400"
+          className="text-[11px] text-term-dim"
           title="AI에게 묻기가 켜져 있으면 보내는 메시지마다 내 Gemini 키로 호출됩니다(비용 발생)."
         >
           메시지마다 내 키로 호출됩니다
@@ -318,8 +336,21 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
       </div>
 
       {hasMention && !aiMode && (
-        <div className="px-3 pt-1 text-xs font-medium text-brand-600">
-          🤖 @AI 멘션 포함 — AI가 응답합니다
+        <div className="flex items-center gap-1 px-3 pt-1 text-xs font-medium text-term-amber">
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            className="h-3.5 w-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
+            <rect x="5" y="8" width="14" height="11" rx="1" />
+            <path d="M12 8V4M9 4h6" />
+            <circle cx="9" cy="13" r="1" fill="currentColor" stroke="none" />
+            <circle cx="15" cy="13" r="1" fill="currentColor" stroke="none" />
+          </svg>
+          @AI 멘션 포함 — AI가 응답합니다
         </div>
       )}
 
@@ -329,15 +360,25 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
             <img
               src={objectUrl}
               alt="첨부 미리보기"
-              className="h-16 w-16 rounded-lg border border-slate-200 object-cover"
+              className="h-16 w-16 rounded-[2px] border border-term-border object-cover"
             />
             <button
               type="button"
               onClick={clearImage}
               aria-label="이미지 제거"
-              className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-xs font-bold text-white shadow active:scale-95"
+              className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-[2px] border border-term-border bg-term-bg text-xs font-bold text-term-bright active:scale-95"
             >
-              <span aria-hidden>×</span>
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                className="h-3 w-3"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="square"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
             </button>
           </div>
         </div>
@@ -356,21 +397,31 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
           type="button"
           aria-label="이미지 첨부"
           onClick={() => fileRef.current?.click()}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg text-brand hover:bg-slate-100 active:scale-95"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[2px] border border-term-border text-term-bright hover:bg-term-border active:scale-95"
         >
-          <span aria-hidden>＋</span>
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="square"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
         </button>
         <div
-          className={`flex max-h-32 min-h-[44px] flex-1 items-center gap-2 rounded-full border bg-slate-50 px-4 py-1 focus-within:bg-white ${
+          className={`flex max-h-32 min-h-[44px] flex-1 items-center gap-2 rounded-[2px] border bg-term-bg px-4 py-1 ${
             aiMode
-              ? 'border-brand-300 focus-within:border-brand-500'
-              : 'border-slate-300 focus-within:border-brand'
+              ? 'border-term-amber focus-within:border-term-amber'
+              : 'border-term-border focus-within:border-term-bright'
           }`}
         >
           {aiMode && (
             <span
               aria-label="AI에게 전송"
-              className="shrink-0 select-none rounded-full bg-brand-100 px-2 py-0.5 text-xs font-bold text-brand-700"
+              className="shrink-0 select-none rounded-[2px] border border-term-amber px-2 py-0.5 text-xs font-bold text-term-amber"
             >
               @AI
             </span>
@@ -383,7 +434,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
             rows={1}
             placeholder={aiMode ? 'AI에게 메시지 보내기…' : '메시지를 입력하세요…'}
             aria-label="댓글 입력"
-            className="max-h-28 flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed text-slate-900 outline-none placeholder:text-slate-400"
+            className="max-h-28 flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed text-term-bright outline-none placeholder:text-term-dim"
           />
         </div>
         <button
@@ -391,9 +442,19 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
           onClick={() => void handleSend()}
           disabled={!canSend}
           aria-label="전송"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white transition active:scale-95 disabled:opacity-40 bg-brand-gradient"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] text-lg font-bold text-term-bright shadow-glow-cta transition active:scale-95 disabled:opacity-40"
         >
-          <span aria-hidden>↑</span>
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="square"
+          >
+            <path d="M12 19V5M5 12l7-7 7 7" />
+          </svg>
         </button>
       </div>
     </div>

@@ -26,11 +26,11 @@ export default function OfflineBanner({
     <div
       role="status"
       aria-live="polite"
-      className={`flex items-center justify-center gap-1.5 rounded-xl bg-amber-50 px-3 py-1 text-center text-xs font-medium text-amber-700 ${className}`}
+      className={`flex items-center justify-center gap-1.5 rounded-[2px] border border-term-amber bg-term-info px-3 py-1 text-center text-xs font-medium text-term-amber ${className}`}
     >
       <span
         aria-hidden
-        className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"
+        className="h-1.5 w-1.5 animate-pulse rounded-full bg-term-amber"
       />
       <span>{label}</span>
     </div>

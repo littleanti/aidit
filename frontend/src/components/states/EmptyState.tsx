@@ -27,15 +27,15 @@ export default function EmptyState({
 }: EmptyStateProps) {
   return (
     <div
-      className={`flex flex-col items-center gap-3 py-16 text-center ${className}`}
+      className={`flex flex-col items-center gap-3 rounded-[2px] border border-dashed border-term-border py-16 text-center ${className}`}
     >
       {icon && (
         <span aria-hidden className="text-3xl">
           {icon}
         </span>
       )}
-      <p className="text-sm font-medium text-slate-600">{title}</p>
-      {hint && <p className="-mt-1 text-sm text-slate-400">{hint}</p>}
+      <p className="text-sm font-medium text-term-dim">{title}</p>
+      {hint && <p className="-mt-1 text-sm text-term-faint">{hint}</p>}
       {action && <div className="mt-1">{action}</div>}
     </div>
   );
