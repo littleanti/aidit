@@ -95,6 +95,11 @@ export default function Thread() {
   const myUserId = useAuthStore((s) => s.userId);
   const consumeFirstAiReply = usePostIntentStore((s) => s.consumeFirstAiReply);
 
+  // Live shell-prompt routing: mirror only the Composer's wantsAI boolean (the
+  // live comment TEXT is intentionally NOT mirrored — surfacing it would force a
+  // thread-wide re-render on every keystroke; only the boolean is surfaced).
+  const [wantsAI, setWantsAI] = useState(false);
+
   // transient toast for AI-side failures surfaced from the engine.
   const [aiToast, setAiToast] = useState<string | null>(null);
   function showAiToast(msg: string) {
@@ -416,7 +421,17 @@ export default function Thread() {
 
       {/* scrolling region: pinned original post + chat list */}
       <div className="flex-1 overflow-y-auto">
-        <ShellPrompt command={`tail -f /p/${postId.slice(0, 8)}`} className="mb-3 px-4 pt-3" />
+        {/* Live shell prompt reflects the Composer's wantsAI boolean ONLY (toggle
+            ON or an @AI mention); the live comment TEXT is intentionally NOT
+            mirrored — it would force a thread-wide re-render per keystroke. */}
+        <ShellPrompt
+          command={
+            wantsAI
+              ? `ai --ask /p/${postId.slice(0, 8)}`
+              : `tail -f /p/${postId.slice(0, 8)}`
+          }
+          className="mb-3 px-4 pt-3"
+        />
         {/* PINNED original post (FR-5.1) */}
         <article className="relative mx-3 my-3 rounded-[2px] border border-term-border bg-term-card px-4 py-3">
           {/* corner tag */}
@@ -540,7 +555,11 @@ export default function Thread() {
       )}
 
       {/* Composer fixed at the bottom */}
-      <Composer postId={postId} communityPersonaPrompt={community?.personaPrompt ?? ''} />
+      <Composer
+        postId={postId}
+        communityPersonaPrompt={community?.personaPrompt ?? ''}
+        onWantsAIChange={setWantsAI}
+      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 # Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
 
 > 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
-> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-20 (ShellPrompt 전 화면 확장)
+> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-20 (라이브 프롬프트 polish)
 > 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
 
 ---
@@ -11,6 +11,7 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-20
+- **[feat]** **라이브 프롬프트 polish — ShellPrompt a11y·공유 util·파생 커맨드 반영**: ShellPrompt a11y 수정(전체 행 `aria-hidden="true"` + `role="presentation"` — 보조 기술이 장식 터미널 텍스트를 읽지 않도록; `aria-live` 미사용), 공유 순수 유틸 `src/lib/shellArg.ts::formatPromptArg` 도입(공백 압축 + ~32자 잘라내기 + 말줄임표 + 미관용 따옴표 이스케이프) + 단위 테스트, `CreateCommunity` 파생 slug 반영(`mkdir /c/<slug>`, 빈 slug → `mkdir /c/new`), `CreatePost` 잘라내기·이스케이프된 title 반영(`post --new r/<slug> "<title>"`, 빈 title → 기본 커맨드), `Thread` 정적 스왑(`tail -f /p/<id>` ↔ `ai --ask /p/<id>`, wantsAI boolean 콜백으로 리프트업; 라이브 댓글 텍스트 미러링은 의도적으로 제외). `Search`는 선례 화면으로 그대로 유지. 커맨드 문자열은 i18n 비적용 유지. (§4.13)
 - **[feat]** **ShellPrompt 컴포넌트 추출 + 전 화면 확장**: 기존 Home 화면에만 하드코딩된 `aidit@yoon` 고정 문자열 프롬프트를 재사용 가능한 `src/components/ShellPrompt.tsx`로 추출. `authStore`에서 사용자명을 반응형으로 읽고 미로그인 시 `guest` 폴백 적용. 그린 CRT 터미널 스타일(`text-term-bright`, `glow`) + 블링킹 커서 애니메이션 보존. 8개 주요 화면(Home·Community·Thread·Search·CreatePost·CreateCommunity·Profile·Login)에 화면별 커맨드 매핑으로 일괄 적용. 기존 Home의 `aidit@yoon` 하드코딩 사용자명 버그 수정(로그인 사용자명 미반영 문제 해소). 커맨드 문자열은 번역 대상이 아님(i18n 비적용). (§4.12)
 - **[feat]** **회원가입 비밀번호 확인 필드 + 좀비 세션 보강**:
   - **비밀번호 확인(UX)**: `LoginForm`의 회원가입 모드에 **`비밀번호 확인`** 필드 추가. 입력 중 불일치하면 인라인 빨간 힌트(`aria-invalid` + 빨간 테두리), 제출 시 `password !== confirmPassword`면 `'비밀번호가 일치하지 않습니다.'`로 가입 차단(서버 호출 전). 로그인 모드에는 미표시. 모드 토글 시 확인값 초기화.
@@ -453,6 +454,53 @@ UGC(사용자가 입력한 글 제목·본문·댓글·커뮤니티 이름/설�
 **변경 파일**: `frontend/src/components/ShellPrompt.tsx`(신규), `frontend/src/pages/{Home,Community,Thread,Search,CreatePost,CreateCommunity,Profile,Login}.tsx`.
 
 **불변(회귀 금지)**: 라우팅·스토어·API 계약·SSE·BYOK·i18n 딕셔너리·테스트. 기존 Home의 다른 레이아웃 요소는 ShellPrompt 교체 외 무변경.
+
+---
+
+### 4.13 라이브 프롬프트 polish — ShellPrompt a11y · 공유 util · 파생 커맨드 반영 (2026-06-20)
+
+§4.12에서 추출한 `ShellPrompt`에 대한 접근성 수정, 공유 순수 유틸 도입, 그리고 개별 화면의 커맨드 문자열을 현재 폼 상태로부터 파생시키는 후속 polish 작업이다. 라우팅·스토어·API 계약·백엔드·테스트는 무변경이며 **순수 표현 계층** 변경이다.
+
+**ShellPrompt 접근성 수정 (`frontend/src/components/ShellPrompt.tsx`)**
+- 전체 프롬프트 행에 `aria-hidden="true"` + `role="presentation"`을 적용해, 스크린리더가 장식용 터미널 텍스트(`aidit@username > command ▌`)를 읽어내지 않도록 한다.
+- `aria-live` 영역은 의도적으로 **미사용**: 커맨드 문자열이 바뀔 때마다 스크린리더 알림이 발생하면 노이즈가 되므로, 전체 행을 보조 기술에서 감춘다. 이미 §4.12에서 커맨드는 동작 없는 순수 시각 요소로 확정했으므로, aria-live 제외는 그 결정의 일관된 연장이다.
+
+**공유 순수 유틸 `src/lib/shellArg.ts::formatPromptArg`**
+- 커맨드 문자열에 삽입할 동적 인수를 정규화하는 경량 순수 함수. 적용 순서:
+  1. 선행·후행·연속 공백을 단일 스페이스로 압축(whitespace-collapse).
+  2. 압축 후 ~32자를 초과하면 잘라내고 `…`(유니코드 말줄임표) 추가.
+  3. 커맨드 맥락에서 미관상 이질감을 주는 `"` → `\"`, `\`` → `\\\`` 이스케이프(shell 의미 처리가 아닌 표시용).
+- 단위 테스트 (`frontend/src/lib/shellArg.test.ts`): 빈 문자열, 공백만, 긴 문자열, 따옴표 포함, 복합 케이스 커버.
+- 이 함수는 앱 내 어디에서도 `import { formatPromptArg } from '../lib/shellArg'`로 side-effect 없이 재사용 가능하다.
+
+**`CreateCommunity` — 파생 slug 반영 (`frontend/src/pages/CreateCommunity.tsx`)**
+- ShellPrompt에 전달하는 커맨드를 고정 `new community` 대신 폼의 현재 `slug` 상태로부터 파생:
+  - slug가 있으면: `mkdir /c/<slug>` (slug를 `formatPromptArg`로 정규화).
+  - slug가 비어 있으면: `mkdir /c/new` (빈 상태 폴백).
+- 사용자가 커뮤니티 이름을 입력함에 따라 자동 추천된 slug가 커맨드에 실시간 반영된다.
+
+**`CreatePost` — 잘라내기·이스케이프된 title 반영 (`frontend/src/pages/CreatePost.tsx`)**
+- ShellPrompt 커맨드를 고정 `new post` 대신 현재 `title`과 `selectedCommunitySlug`로부터 파생:
+  - title이 있으면: `post --new r/<slug> "<title>"` (title을 `formatPromptArg`로 정규화; slug 없으면 `r/?`).
+  - title이 비어 있으면: `post --new r/<slug>`(또는 `post --new`) 기본 커맨드.
+- 긴 제목이 커맨드 행을 overflow하지 않도록 `formatPromptArg`의 32자 잘라내기가 작동한다.
+
+**`Thread` — AI-ask 모드 정적 스왑 (`frontend/src/pages/Thread.tsx`)**
+- ShellPrompt 커맨드를 `wantsAI` 불리언에 따라 정적으로 전환:
+  - 일반 모드: `tail -f /p/<postId>`
+  - AI-ask 모드(`wantsAI === true`): `ai --ask /p/<postId>`
+- `wantsAI` 상태는 `Composer` 내부(`aiModeStore` + 수동 `@AI` 감지)에서 결정되므로, Thread가 이를 알려면 콜백이 필요하다. `Composer`에 `onWantsAIChange?: (v: boolean) => void` prop을 추가하고, Thread에서 `useState<boolean>(false)`로 `wantsAI`를 리프트업해 ShellPrompt에 전달한다. Composer의 기존 전송 라우팅(`wantsAI = 토글 ON || 수동 @AI`)·`aiModeStore` 구조는 **불변**이다.
+- **라이브 댓글 텍스트 미러링 의도적 제외**: Composer 입력 텍스트(`draft`)는 커맨드에 반영하지 않는다. 타이핑할 때마다 커맨드가 바뀌면 시각적 노이즈가 크고, `aria-hidden` 행이므로 a11y 이득도 없다. `wantsAI` 토글처럼 **의미 있는 상태 전환**만 커맨드에 반영하는 것이 이 화면의 일관된 설계 원칙이다.
+
+**`Search` — 선례 화면으로 유지**
+- `Search` 화면의 `search --query` 커맨드는 검색어를 미러링하지 않고 고정 문자열로 유지한다. 이는 `CreateCommunity`·`CreatePost`·`Thread`의 파생 커맨드와 대비되는 의도적 선례(untouched precedent)이며, 향후 동일 패턴 적용 여부 판단의 기준이 된다.
+
+**커맨드 문자열 i18n 비적용 유지**
+- §4.12에서 확정한 대로, 커맨드 문자열은 `t(...)` i18n 대상이 아니다. 터미널 ASCII 관용어 특성상 언어 전환(KO↔EN)과 무관하게 영문 고정이 올바른 UX다.
+
+**변경 파일**: `frontend/src/components/ShellPrompt.tsx`, `frontend/src/lib/shellArg.ts`(신규), `frontend/src/lib/shellArg.test.ts`(신규), `frontend/src/pages/{CreateCommunity,CreatePost,Thread}.tsx`, `frontend/src/components/Composer.tsx`(`onWantsAIChange` prop 추가).
+
+**불변(회귀 금지)**: 라우팅·스토어·API 계약·SSE·BYOK·i18n·기존 테스트. `aiModeStore` 구조 및 Composer 전송 라우팅 로직. `Search`·`Home`·`Community`·`Profile`·`Login` ShellPrompt 커맨드(이미 확정 또는 파생 불필요).
 
 ---
 

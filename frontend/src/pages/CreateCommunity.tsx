@@ -10,6 +10,7 @@ import {
 } from '../api/rest';
 import PersonaEditor from '../components/PersonaEditor';
 import ShellPrompt from '../components/ShellPrompt';
+import { formatPromptArg } from '../lib/shellArg';
 import { useT } from '../i18n/useT';
 
 /**
@@ -166,7 +167,7 @@ export default function CreateCommunity() {
 
   return (
     <div className="mx-auto max-w-app py-6 font-mono">
-      <ShellPrompt command="mkdir /c/new" className="mb-3" />
+      <ShellPrompt command={slug ? `mkdir /c/${formatPromptArg(slug, { max: 30 })}` : 'mkdir /c/new'} className="mb-3" />
       <h1 className="mb-1 text-xl font-bold text-term-title glow">
         {isEdit ? t('community.editPageTitle') : t('community.createPageTitle')}
       </h1>

@@ -64,6 +64,10 @@ interface ComposerProps {
   postId: string;
   /** community persona prompt — passed to the engine for @AI replies. */
   communityPersonaPrompt?: string;
+  /** Surface ONLY the wantsAI boolean up to Thread (for the shell-prompt swap).
+   *  The live comment TEXT is intentionally NOT surfaced — mirroring it would
+   *  force a thread-wide re-render on every keystroke; only the boolean is. */
+  onWantsAIChange?: (v: boolean) => void;
 }
 
 // Manual one-off @AI shortcut: a leading or whitespace-preceded '@AI' token.
@@ -76,7 +80,7 @@ function tempSeq(): number {
   return Number.MAX_SAFE_INTEGER - Math.floor(Math.random() * 1_000_000);
 }
 
-export default function Composer({ postId, communityPersonaPrompt }: ComposerProps) {
+export default function Composer({ postId, communityPersonaPrompt, onWantsAIChange }: ComposerProps) {
   const navigate = useNavigate();
   const { t } = useT();
   const userId = useAuthStore((s) => s.userId);
@@ -104,6 +108,13 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
   // the user manually typed an '@AI' token (one-off shortcut). A single source
   // of truth so we never double-trigger when both are true.
   const wantsAI = aiMode || hasMention;
+
+  // Surface ONLY the wantsAI boolean up to Thread (drives its shell-prompt swap).
+  // The live comment TEXT is intentionally NOT surfaced — mirroring it would
+  // force a thread-wide re-render on every keystroke; only this boolean is.
+  useEffect(() => {
+    onWantsAIChange?.(wantsAI);
+  }, [wantsAI, onWantsAIChange]);
   // Text becomes optional when an image is attached (image-only sends allowed).
   const canSend = (trimmed.length > 0 || imageFile != null) && !sending;
 
