@@ -14,22 +14,26 @@ import SummaryBubble from './SummaryBubble';
 import SafeMarkdown from '../lib/SafeMarkdown';
 import Avatar from './Avatar';
 import { assetUrl } from '../config/api';
+import { useT } from '../i18n/useT';
+import { tn } from '../i18n/tn';
+import { useLangStore } from '../stores/langStore';
 
-/** Compact relative time in Korean (방금 / N분 / N시간 / N일 / N주, else date). */
+/** Compact relative time (방금/just now, Nm/Nh/Nd/Nw, else locale date). */
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '';
   const diffSec = Math.floor((Date.now() - then) / 1000);
-  if (diffSec < 60) return '방금';
+  if (diffSec < 60) return tn('thread.justNow');
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}분`;
+  if (diffMin < 60) return `${diffMin}${tn('thread.minuteUnit')}`;
   const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}시간`;
+  if (diffHr < 24) return `${diffHr}${tn('thread.hourUnit')}`;
   const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 7) return `${diffDay}일`;
+  if (diffDay < 7) return `${diffDay}${tn('thread.dayUnit')}`;
   const diffWk = Math.floor(diffDay / 7);
-  if (diffWk < 5) return `${diffWk}주`;
-  return new Date(then).toLocaleDateString('ko-KR', {
+  if (diffWk < 5) return `${diffWk}${tn('thread.weekUnit')}`;
+  const locale = useLangStore.getState().lang === 'en' ? 'en-US' : 'ko-KR';
+  return new Date(then).toLocaleDateString(locale, {
     year: 'numeric',
     month: 'numeric',
     day: 'numeric',
@@ -72,27 +76,28 @@ function SparkleIcon() {
 }
 
 /**
- * PENDING typing indicator. AI uses a sparkle + "답변을 작성하고 있어요…" label
- * (§6.3 E.3); human keeps the existing "입력 중…" label. Both share the dots.
+ * PENDING typing indicator. AI uses a sparkle + typing label (§6.3 E.3);
+ * human keeps the existing typing label. Both share the dots.
  */
 function TypingDots({ isAi }: { isAi: boolean }) {
+  const { t } = useT();
   if (isAi) {
     return (
       <span
         className="inline-flex items-center gap-1.5"
-        aria-label="AI가 답변을 작성하고 있어요"
+        aria-label={t('thread.aiTypingAria')}
       >
         <span className="inline-flex items-center gap-1 text-xs opacity-70">
-          <SparkleIcon /> AI가 답변을 작성하고 있어요…
+          <SparkleIcon /> {t('thread.aiTypingText')}
         </span>
         <BouncingDots />
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5" aria-label="입력 중">
+    <span className="inline-flex items-center gap-1.5" aria-label={t('thread.humanTypingAria')}>
       <BouncingDots />
-      <span className="text-xs opacity-70">입력 중…</span>
+      <span className="text-xs opacity-70">{t('thread.humanTypingText')}</span>
     </span>
   );
 }
@@ -104,6 +109,7 @@ export default function ChatBubble({
   onRetry,
 }: ChatBubbleProps) {
   const me = useAuthStore((s) => s.userId);
+  const { t } = useT();
 
   const isAi = comment.authorId === null;
   const isSummary = comment.type === 'AI_SUMMARY';
@@ -128,7 +134,7 @@ export default function ChatBubble({
   }
 
   const personaLabel =
-    personaName && personaName.trim() ? personaName : 'AI 페르소나';
+    personaName && personaName.trim() ? personaName : t('thread.aiPersonaFallback');
 
   // Avatar kind: AI -> robot glyph, own -> 'me', everyone else -> 'user'.
   const avatarKind: 'user' | 'me' | 'ai' = isAi
@@ -185,7 +191,7 @@ export default function ChatBubble({
               </span>
             ) : (
               <span className="font-medium text-term-dim">
-                {comment.authorUsername ?? '익명'} &gt;
+                {comment.authorUsername ?? t('thread.anonymous')} &gt;
               </span>
             )}
           </div>
@@ -201,7 +207,7 @@ export default function ChatBubble({
               {comment.imageUrl && (
                 <img
                   src={assetUrl(comment.imageUrl)}
-                  alt="첨부 이미지"
+                  alt={t('thread.attachedImage')}
                   className="mb-1 max-h-60 rounded-[2px] object-contain"
                   loading="lazy"
                 />
@@ -237,7 +243,7 @@ export default function ChatBubble({
               onClick={() => onRetry?.(comment)}
               className="inline-flex min-h-[44px] items-center gap-0.5 font-medium text-term-danger active:opacity-70"
             >
-              <span aria-hidden>↻</span> 재시도
+              <span aria-hidden>↻</span> {t('thread.retryLabel')}
             </button>
           )}
         </div>

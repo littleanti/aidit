@@ -11,6 +11,7 @@
 // ============================================================================
 
 import { GeminiError, type GenerationConfig } from '../api/gemini';
+import { tn } from '../i18n/tn';
 // status-tracked wrapper (records connectivity for the header badge).
 import { generateContent } from './geminiStatus';
 import { getContext, patchComment } from '../api/rest';
@@ -64,7 +65,7 @@ export async function retryAiBubble(
       ...(generationConfig ? { generationConfig } : {}),
     });
   } catch (err) {
-    const msg = 'AI 응답 실패 — 컨텍스트를 불러오지 못했습니다';
+    const msg = tn('misc.ai_fail_context');
     try {
       await patchComment(aiCommentId, {
         status: 'FAILED',
@@ -99,7 +100,7 @@ export async function retryAiBubble(
     const ge =
       err instanceof GeminiError
         ? err
-        : new GeminiError('unknown', 'AI 응답 실패 — 잠시 후 재시도', {
+        : new GeminiError('unknown', tn('misc.ai_fail_retry'), {
             cause: err,
           });
     try {

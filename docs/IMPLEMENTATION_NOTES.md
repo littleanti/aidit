@@ -1,7 +1,7 @@
 # Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
 
 > 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
-> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-18 (디자인 시스템 v0.3 전 화면 전파)
+> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-20 (KO/EN i18n)
 > 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
 
 ---
@@ -14,6 +14,7 @@
 - **[feat]** **회원가입 비밀번호 확인 필드 + 좀비 세션 보강**:
   - **비밀번호 확인(UX)**: `LoginForm`의 회원가입 모드에 **`비밀번호 확인`** 필드 추가. 입력 중 불일치하면 인라인 빨간 힌트(`aria-invalid` + 빨간 테두리), 제출 시 `password !== confirmPassword`면 `'비밀번호가 일치하지 않습니다.'`로 가입 차단(서버 호출 전). 로그인 모드에는 미표시. 모드 토글 시 확인값 초기화.
   - **좀비 세션 보강**: JWT 게이트 이전 세션(또는 시크릿 교체/토큰 만료)으로 `username`은 있는데 유효 토큰이 없어 "로그인된 듯 보이나 모든 쓰기가 401"이던 상태를 제거. ① **로드 시**: `authStore` 모듈-init이 `userId`는 있고 `token`이 없으면 `clearSession()`으로 세션 정리(Gemini 키는 보존). ② **런타임**: `rest.request`가 **토큰을 첨부한 요청이 401**이면 신규 leaf `lib/authEvents.ts`의 `notifyAuthExpired()` 호출 → `AppLayout`이 등록한 핸들러가 `clearSession()` + 로그인 모달 오픈(login/register의 무토큰 401은 `tok` 가드로 제외). 신규 `clearSession` 액션은 신원/토큰만 비우고 `googleApiKey`는 유지(만료로 BYOK 키를 잃지 않게). 순환참조 회피: rest→authEvents(leaf)→AppLayout 등록 구조. tsc 클린 + 프론트 30 테스트 green.
+- **[feat]** **KO/EN 양국어 UI (i18n)**: `langStore`(persist `aidit-lang`, 브라우저 기본값 초기화, `<html lang>` 동기화), `src/i18n`(`dicts/ko|en` + `useT` 훅 + `tn` 복수형 헬퍼), `LangToggle` 컴포넌트(헤더 + 프로필 화면). 전 네임스페이스(앱 셸·피드·스레드·작성·검색·프로필·인증·AI 메시지·에러) 문자열 마이그레이션 완료. AI 언어 배선: `systemInstruction` 디렉티브 + 언어-aware `SUMMARY_DIRECTIVE` + 언어-aware Gemini 에러 메시지 맵. UGC(사용자 작성 제목·본문·댓글)는 번역하지 않으며, URL 변경 없음. (§4.11)
 - **[chore]** **로컬 `.env` 로드 + 실 `JWT_SECRET` 설정**: 기존엔 Prisma만 `.env`를 자동 로드해 앱 자체 변수(`JWT_SECRET`/`HOST`/`PORT`)는 `.env`에 넣어도 무시되고 dev 폴백을 썼다. `backend/src/config.ts` 최상단에서 Node 내장 `process.loadEnvFile()`로 `.env`를 먼저 로드(파일 없으면 try/catch로 무시 → 프로덕션은 플랫폼 주입 env 사용). 로컬 `backend/.env`(git 미추적)에 무작위 `JWT_SECRET`(48바이트 base64) + `HOST=127.0.0.1`(백엔드 비공개 바인드) 기록. 재기동 후 `[auth] WARNING` 사라짐 + `127.0.0.1:3001` 단독 바인딩으로 확인. (시크릿 회전이므로 이전 dev-폴백 토큰은 무효 → 재로그인 필요)
 
 ### 2026-06-19 (M15 — 실인증 JWT)
@@ -372,6 +373,50 @@ OA-6 커뮤니티 편집 패턴을 글에 적용. 작성자는 `Thread` 헤더�
   - 클릭하면 Thread로 진입(PostCard 기존 동작).
 - **검증**: 서버 build + test 22개 green. 프론트 build + test 30개 green. 브라우저 — Thread 헤더 🔖 토글 → POST/DELETE 호출 확인, Profile 북마크한 글 목록 표시·빈상태 확인, 로그아웃 후 북마크 폼은 인증 게이트 동작.
 - **불변(회귀 금지)**: SSE(북마크 이벤트 없음)·BYOK·컨텍스트·요약·댓글 흐름. 북마크는 글별 사용자 프라이빗 상태이며 다른 사용자의 북마크 여부는 미노출.
+
+### 4.11 KO/EN 양국어 UI (i18n, 2026-06-20)
+
+UI 언어를 한국어(기본)/영어로 전환하는 경량 상태 기반 i18n을 구현한다. 외부 라이브러리 없이 자체 제작했으며, URL 변경 없음(라우팅·슬러그·API 계약 불변).
+
+**`langStore` (`frontend/src/stores/langStore.ts`)**
+- `Lang = 'ko' | 'en'`. zustand + persist(`aidit-lang` localStorage 키).
+- 초기화: 저장값이 없으면 `navigator.language`의 첫 두 글자로 기본값 결정(`'en'`이면 영어, 나머지는 모두 한국어).
+- `setLang(lang)` 호출 시 상태 갱신 + `document.documentElement.lang` 동기화 → SEO·스크린리더 정합. 앱 마운트 시에도 동일하게 `<html lang>`을 초기 언어로 설정.
+
+**`src/i18n` 모듈 (`frontend/src/i18n/`)**
+- `dicts/ko.ts` / `dicts/en.ts` — 중첩 키 객체(네임스페이스 = 최상위 키). 두 파일은 동일 구조를 유지해야 하며(누락 키는 빌드 타임 TypeScript로 감지 가능).
+- `useT()` 훅 — `langStore`를 구독하고 현재 언어의 dict를 반환. 컴포넌트에서 `const t = useT(); t('feed.empty')` 형태로 사용.
+- `tn(key, n)` 헬퍼 — 복수형 분기(`n === 1`이면 단수형, 나머지 복수형). 영어 명사 복수에 사용(`'comment'` / `'comments'`). 한국어는 단/복수 동형이므로 실질적으로 영어 전용.
+
+**`LangToggle` 컴포넌트 (`frontend/src/components/LangToggle.tsx`)**
+- `[KO]` / `[EN]` 텍스트 버튼(현재 선택 언어는 `text-term-bright`, 비선택은 `text-term-dim`). 레트로 터미널 토큰 사용.
+- 배치: **헤더 우측**(`AppLayout.tsx` — 로그인/유저명 버튼 옆), **프로필 화면**(`Profile.tsx` — 계정 설정 섹션 내).
+
+**네임스페이스별 문자열 마이그레이션**
+모든 하드코딩 한국어 UI 문자열을 `t(...)` 호출로 교체했다. 대상 네임스페이스:
+- `app` — 앱 셸(헤더·하단 탭·사이드바 라벨·오프라인 배너)
+- `auth` — 로그인 모달·폼·에러
+- `feed` — 홈 피드·빈상태·커서 버튼
+- `post` — 글 작성·편집 폼·이미지 첨부·AI 1차 답변 토글
+- `community` — 커뮤니티 상세·생성·편집·PersonaEditor
+- `thread` — 스레드 헤더·핀 카드·Composer·재시도·북마크
+- `search` — 검색 입력·결과·빈상태
+- `profile` — 프로필 헤더·키 입력·내 글/커뮤니티/북마크 섹션
+- `error` — 공유 ErrorState·EmptyState 메시지
+
+UGC(사용자가 입력한 글 제목·본문·댓글·커뮤니티 이름/설명/페르소나 프롬프트)는 번역 대상이 아니며 그대로 표시된다.
+
+**AI 언어 배선 (`frontend/src/engine/contextEngine.ts` 외)**
+- `systemInstruction` 디렉티브 — AI 페르소나 프롬프트에 "Respond in the same language as the UI: `<lang>`" 지시문을 동적으로 앞붙임. `langStore.getState().lang`을 조립 시점에 읽어 `'ko'`/`'en'`을 주입.
+- `SUMMARY_DIRECTIVE` — 요약 프롬프트(`ensureSummary`)가 사용하는 지시문을 언어별로 분기(한국어: 기존 문구, 영어: 동의어 영문 문구). 컨텍스트 조립 시 현재 언어 기준으로 선택.
+- Gemini 에러 메시지 맵 (`frontend/src/api/gemini.ts`) — `GeminiError` kind별 사용자 노출 문자열을 `{ ko, en }` 맵으로 전환하고, 표시 시점에 `langStore.getState().lang`으로 언어를 선택해 반환.
+- **BYOK·API 키·서버 호출은 무변경**: 언어 설정은 클라이언트 상태 전용이며, 어떤 헤더/바디에도 포함되지 않는다.
+
+**스펙 이탈 / 명시적 비적용**
+- URL 변경 없음(`/posts/:id` 등 라우트 불변; lang prefix 없음).
+- UGC 미번역(설계 의도).
+- 서버·API 계약·테스트 무변경(순수 프론트엔드 변경).
+- 세 가지 이상의 언어는 dict 파일과 `Lang` 타입 확장으로 추가 가능하나 현재는 `ko`/`en` 두 값만 유효.
 
 ---
 

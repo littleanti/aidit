@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { ApiError } from '../api/rest';
+import { useT } from '../i18n/useT';
 
 interface LoginFormProps {
   /** called after login() or register() resolves successfully. */
@@ -15,6 +16,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
   const login = useAuthStore((s) => s.login);
   const register = useAuthStore((s) => s.register);
   const updateKey = useAuthStore((s) => s.updateKey);
+  const { t } = useT();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
@@ -42,16 +44,16 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     setError(null);
   }
 
-  function koreanError(err: unknown): string {
-    if (!(err instanceof ApiError)) return '오류가 발생했습니다. 다시 시도해 주세요.';
-    if (err.status === 401) return '아이디 또는 비밀번호가 올바르지 않습니다.';
-    if (err.status === 409) return '이미 사용 중인 아이디입니다.';
+  function localizedError(err: unknown): string {
+    if (!(err instanceof ApiError)) return t('auth.errorGeneric');
+    if (err.status === 401) return t('auth.errorWrongCredentials');
+    if (err.status === 409) return t('auth.errorUsernameTaken');
     if (err.status === 400) {
       // Surface server's validation message; fall back to password length hint.
       if (typeof err.message === 'string' && err.message) return err.message;
-      return '비밀번호는 8자 이상이어야 합니다.';
+      return t('auth.errorPasswordTooShort');
     }
-    return err.message || '오류가 발생했습니다. 다시 시도해 주세요.';
+    return err.message || t('auth.errorGeneric');
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -60,11 +62,11 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
 
     if (mode === 'register') {
       if (password.length < 8) {
-        setError('비밀번호는 8자 이상이어야 합니다.');
+        setError(t('auth.errorPasswordTooShort'));
         return;
       }
       if (password !== confirmPassword) {
-        setError('비밀번호가 일치하지 않습니다.');
+        setError(t('auth.errorPasswordMismatch'));
         return;
       }
     }
@@ -81,7 +83,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       if (apiKey.trim()) updateKey(apiKey.trim());
       onSuccess?.();
     } catch (err) {
-      setError(koreanError(err));
+      setError(localizedError(err));
     } finally {
       setSubmitting(false);
     }
@@ -96,7 +98,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           htmlFor="username"
           className="mb-1 block text-sm font-medium text-term-dim"
         >
-          사용자 이름
+          {t('auth.usernameLabel')}
         </label>
         <input
           id="username"
@@ -105,7 +107,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           className="w-full rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 text-sm text-term-bright caret-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright"
-          placeholder="닉네임"
+          placeholder={t('auth.usernamePlaceholder')}
         />
       </div>
 
@@ -114,7 +116,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           htmlFor="password"
           className="mb-1 block text-sm font-medium text-term-dim"
         >
-          비밀번호{mode === 'register' && ' (8자 이상)'}
+          {mode === 'register' ? t('auth.passwordLabelWithHint') : t('auth.passwordLabel')}
         </label>
         <input
           id="password"
@@ -133,7 +135,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
             htmlFor="confirmPassword"
             className="mb-1 block text-sm font-medium text-term-dim"
           >
-            비밀번호 확인
+            {t('auth.passwordConfirmLabel')}
           </label>
           <input
             id="confirmPassword"
@@ -147,11 +149,11 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
                 ? 'border-term-danger focus:border-term-danger focus:ring-term-danger'
                 : 'border-term-border focus:border-term-bright focus:ring-term-bright'
             }`}
-            placeholder="비밀번호 재입력"
+            placeholder={t('auth.passwordConfirmPlaceholder')}
           />
           {passwordsMismatch && (
             <p className="mt-1 text-xs text-term-danger">
-              비밀번호가 일치하지 않습니다.
+              {t('auth.errorPasswordMismatch')}
             </p>
           )}
         </div>
@@ -162,7 +164,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           htmlFor="apiKey"
           className="mb-1 block text-sm font-medium text-term-dim"
         >
-          Google AI Studio API 키 <span className="text-term-faint">(선택)</span>
+          {t('auth.apiKeyLabel')} <span className="text-term-faint">{t('auth.apiKeyOptional')}</span>
         </label>
         <input
           id="apiKey"
@@ -174,7 +176,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           placeholder="AIza..."
         />
         <p className="mt-2 rounded-[2px] border border-term-amber bg-term-info px-3 py-2 text-xs leading-relaxed text-term-amber">
-          키는 이 기기(localStorage)에만 저장되며 서버로 전송되지 않습니다.
+          {t('auth.apiKeyNote')}
         </p>
         <a
           href="https://aistudio.google.com/app/apikey"
@@ -182,7 +184,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           rel="noopener noreferrer"
           className="mt-2 inline-block text-xs text-term-bright underline"
         >
-          aistudio.google.com에서 키 발급받기
+          {t('auth.apiKeyLink')}
         </a>
       </div>
 
@@ -194,20 +196,20 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         className="min-h-[44px] w-full rounded-[2px] border border-term-cta bg-term-cta py-2.5 text-sm font-bold text-term-bright shadow-glow-cta transition hover:border-term-bright disabled:cursor-not-allowed disabled:opacity-40"
       >
         {submitting
-          ? '[ 처리 중… ]'
+          ? t('auth.submitting')
           : isLogin
-            ? '[ 로그인 ]'
-            : '[ 회원가입 ]'}
+            ? t('auth.loginBtn')
+            : t('auth.registerBtn')}
       </button>
 
       <p className="text-center text-xs text-term-dim">
-        {isLogin ? '처음이신가요?' : '이미 계정이 있으신가요?'}{' '}
+        {isLogin ? t('auth.switchToRegister') : t('auth.switchToLogin')}{' '}
         <button
           type="button"
           onClick={toggleMode}
           className="text-term-bright underline"
         >
-          {isLogin ? '회원가입' : '로그인'}
+          {isLogin ? t('auth.switchToRegisterLink') : t('auth.switchToLoginLink')}
         </button>
       </p>
     </form>

@@ -4,9 +4,11 @@
 // is degraded. Driven purely by props so it stays presentational — the Thread
 // page maps SSE stream status + window online/offline into the two inputs:
 //   show  — whether to render at all (not "open")
-//   label — the message (e.g. "오프라인 — 재연결 중…")
+//   label — the message shown while degraded
 //
 // Returns null when `show` is false so the live state is visually clean.
+
+import { useT } from '../../i18n/useT';
 
 interface OfflineBannerProps {
   /** Whether the degraded banner should be visible. */
@@ -18,9 +20,11 @@ interface OfflineBannerProps {
 
 export default function OfflineBanner({
   show,
-  label = '오프라인 — 재연결 중…',
+  label,
   className = '',
 }: OfflineBannerProps) {
+  const { t } = useT();
+  const resolvedLabel = label ?? t('states.offline');
   if (!show) return null;
   return (
     <div
@@ -32,7 +36,7 @@ export default function OfflineBanner({
         aria-hidden
         className="h-1.5 w-1.5 animate-pulse rounded-full bg-term-amber"
       />
-      <span>{label}</span>
+      <span>{resolvedLabel}</span>
     </div>
   );
 }

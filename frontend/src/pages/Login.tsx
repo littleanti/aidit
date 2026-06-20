@@ -1,9 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import Logo from '../components/Logo';
 import LoginForm from '../components/LoginForm';
+import { useT } from '../i18n/useT';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { t } = useT();
 
   return (
     <div className="mx-auto max-w-sm py-8 font-mono">
@@ -12,7 +14,7 @@ export default function Login() {
           <Logo size="lg" />
         </div>
         <p className="mb-6 text-sm text-term-dim">
-          커뮤니티에서 함께 만드는 AI 대화
+          {t('auth.tagline')}
         </p>
 
         <LoginForm onSuccess={() => navigate('/')} />

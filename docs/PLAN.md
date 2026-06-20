@@ -661,3 +661,30 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 - [ ] **DEP-7 · 검증**: `fly deploy` 후 register/login·글/댓글·SSE 실시간·추천/북마크·이미지(휘발) 동작 확인. 단일 오리진이므로 CORS 불필요 확인.
 
 **재개 방법**: PRE-1~3 완료를 알려주면 DEP-1~7을 workflow로 진행(자산 생성→푸시→`fly launch`/`secrets`/`deploy` 명령 안내).
+
+---
+
+## 19. M17 — 다국어(i18n) KO/EN + AI 언어 연동 (v1.1, 2026-06-20)
+
+> 출처: 설계 사양(i18n 상세 설계, 2026-06-20). SoT 문서: [PRD.md §FR-10](./PRD.md), [TRD.md §10](./TRD.md), [WIREFRAME.md §9](./WIREFRAME.md).
+> **UI 상태 기반(state-based) 방식 — URL/라우트 변경 없음.** AI는 활성 UI 언어로 답변·요약.
+> UGC(게시글·댓글·커뮤니티명·username)는 번역 대상이 아님 — UI 크롬 + AI 지시어만.
+> 완료 게이트: `npm run typecheck` · `npm run test` · `npm run build` 전부 green + 브라우저 시각 검증(KO↔EN 전환 + AI 답변 언어 확인).
+
+### 작업 패키지 (WP)
+
+- [x] **I18N-1 · langStore**: 신규 `frontend/src/stores/langStore.ts`. zustand + persist(`localStorage` 키 `'aidit-lang'`). shape: `{ lang: 'ko'|'en', setLang(l), toggle() }`. 초기값: `navigator.language` 가 `'ko'`로 시작하면 `'ko'`, 아니면 `'en'`; 명시적 선택은 브라우저 기본값을 영구 우선. `onRehydrateStorage` / persist 패턴은 `src/stores/authStore.ts`의 기존 패턴 그대로 따름. 마운트 시 및 `setLang` 호출 시 `document.documentElement.lang = lang` 설정.
+- [x] **I18N-2 · 딕셔너리 인프라**: 신규 디렉터리 `frontend/src/i18n/`. `dicts/<namespace>.ts` 파일 각각: `export const <ns> = { ko: {...}, en: {...} } as const;`. 플레이스홀더 보간 형식 `{name}`, `{count}`. 네임스페이스는 화면/기능 단위(예: `common`, `auth`, `home`, `thread`, `community`, `post`, `profile`, `errors`). `src/i18n/index.ts`: 모든 네임스페이스를 임포트하고 `export const DICTS = { ...all } as const;`, `export type Lang = 'ko'|'en';` 내보내기.
+- [x] **I18N-3 · useT 훅**: 신규 `frontend/src/i18n/useT.ts`. `export function useT()` — langStore를 구독하고 `t(key, vars?)` 함수를 반환. `key` 형식은 `'ns.subkey'`(첫 `.` 기준 분리). 해석 우선순위: `DICTS[ns][lang][sub]` → `DICTS[ns].ko[sub]` fallback → raw key fallback. `{x}` 토큰을 `vars`로 치환. `import.meta.env.DEV` 환경에서 키 누락 시 `console.warn`. 반환값은 항상 `string`.
+- [x] **I18N-4 · tn 유틸(비-React)**: 신규 `frontend/src/i18n/tn.ts`. `export function tn(key, vars?)` — I18N-3와 동일한 해석 로직이되 `useLangStore.getState().lang`으로 React 훅 없이 호출. `stores/`, `engine/`, `lib/` 내부 비-React 모듈에서 사용.
+- [x] **I18N-5 · LangToggle 컴포넌트**: 신규 `frontend/src/components/LangToggle.tsx`. `[ KO | EN ]` 세그먼트 컨트롤. 활성 언어: `text-term-amber`; 비활성: `text-term-dim hover:text-term-bright`. 기존 AppLayout 버튼 스타일링과 일치. 선택적 prop `variant: 'header' | 'setting'`(기본 `'header'`).
+- [x] **I18N-6 · 헤더 LangToggle 배선**: `AppLayout` 상단바에 LangToggle(`variant='header'`) 마운트. 기존 `GeminiStatusBadge`·`[ username ]` 레이아웃과 정합.
+- [x] **I18N-7 · 프로필/설정 화면 LangToggle 배선**: `Profile.tsx`(설정 화면) "언어 / Language" 행 추가. LangToggle(`variant='setting'`). WIREFRAME §9 설정 화면 행 패턴과 정합.
+- [x] **I18N-8 · 문자열 마이그레이션 — UI 크롬 (~29개 파일)**: 각 화면/컴포넌트의 정적 한국어 문자열을 딕셔너리로 이전하고 `t(...)` 호출로 교체. 대상: `AppLayout`, `Login/LoginModal`, `Home`, `Search`, `Community`, `CreatePost`, `CreateCommunity`, `Thread`, `Composer`, `ChatBubble/SummaryBubble`, `Profile`, `상태 컴포넌트(Empty/Error/Loading/Offline)`, `PostCard`, `PersonaEditor`, `Avatar`. UGC(게시글 제목·본문·댓글·커뮤니티명·username)는 번역하지 않음.
+- [x] **I18N-9 · AI 언어 지시어 — contextEngine.ts**: `buildGeminiRequest`(또는 systemInstruction 조립 지점)에서 `useLangStore.getState().lang`을 읽어 언어 지시어를 `systemInstruction`에 추가. `lang==='en'`이면 `'Respond in English.'`, `lang==='ko'`이면 한국어 동등 문장. systemInstruction 조립: `[persona.trim(), directive].filter(Boolean).join('\n\n')`, persona가 없으면 directive만. **XC-4(프롬프트 인젝션 가드) 불변** — 페르소나 + 앱 통제 지시어만 systemInstruction에 들어가고 사용자·댓글 내용은 data turn 유지.
+- [x] **I18N-10 · SUMMARY_DIRECTIVE 언어화**: `contextEngine.ts`의 `SUMMARY_DIRECTIVE` 상수를 `{ ko: '<기존 한국어 요약 지시>', en: '<동등 영문 요약 지시>' }` 객체로 교체. `ensureSummary`에서 `SUMMARY_DIRECTIVE[lang]` 선택.
+- [x] **I18N-11 · 오류 문자열 언어화**: `gemini.ts`의 `USER_MESSAGES`(오류 코드 → 사용자 표시 문자열 레코드)를 `{ ko: {...}, en: {...} }` 구조로 교체하고, 현재 lang을 읽는 헬퍼로 선택. `contextEngine.ts` 내 하드코딩된 AI 실패 문자열도 동일하게 `tn()`으로 교체.
+- [x] **I18N-12 · Intl 날짜/숫자 포맷**: 날짜·숫자가 렌더되는 모든 위치에서 `new Intl.DateTimeFormat(lang, ...)` / `new Intl.NumberFormat(lang, ...)` 적용.
+- [x] **I18N-13 · 검증**: `typecheck` + `test` + `build` green. 브라우저 — KO↔EN 토글 시 전체 UI 크롬 언어 전환 확인; AI 답변·요약 언어가 UI 언어를 따르는지 실 키로 확인; 새로고침 후 선택 언어 유지 확인.
+
+**M17 종료 기준**: `langStore`가 `localStorage`에 영속되고 `document.documentElement.lang`을 갱신함; `LangToggle`이 헤더·프로필 설정 양쪽에 존재하고 KO/EN을 즉시 전환함; 모든 UI 크롬 문자열이 딕셔너리로 이전되어 선택 언어로 표시됨(UGC는 원문 유지); AI가 `systemInstruction` 언어 지시어를 통해 UI 언어로 답변·요약함; `SUMMARY_DIRECTIVE`·`USER_MESSAGES`·AI 실패 문자열이 lang-aware임; typecheck · test · build 전부 green.

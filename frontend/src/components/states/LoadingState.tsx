@@ -4,6 +4,8 @@
 // UX is consistent across the app. Defaults to a lightweight spinner; pass
 // `variant="skeleton"` to render shimmering card placeholders for list views.
 
+import { useT } from '../../i18n/useT';
+
 interface LoadingStateProps {
   /** Optional label shown under the spinner. */
   label?: string;
@@ -15,11 +17,13 @@ interface LoadingStateProps {
 }
 
 export default function LoadingState({
-  label = '불러오는 중…',
+  label,
   variant = 'spinner',
   rows = 4,
   className = '',
 }: LoadingStateProps) {
+  const { t } = useT();
+  const resolvedLabel = label ?? t('states.loading');
   if (variant === 'skeleton') {
     return (
       <div
@@ -38,7 +42,7 @@ export default function LoadingState({
             <div className="mt-1 h-3 w-1/3 rounded-[2px] bg-term-hover" />
           </div>
         ))}
-        <span className="sr-only">{label}</span>
+        <span className="sr-only">{resolvedLabel}</span>
       </div>
     );
   }
@@ -54,7 +58,7 @@ export default function LoadingState({
         aria-hidden
         className="h-6 w-6 animate-spin rounded-full border-2 border-term-border border-t-term-bright"
       />
-      <p className="text-sm text-term-faint">{label}</p>
+      <p className="text-sm text-term-faint">{resolvedLabel}</p>
     </div>
   );
 }

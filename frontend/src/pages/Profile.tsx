@@ -7,6 +7,8 @@ import { EmptyState, ErrorState, LoadingState } from '../components/states';
 import PostCard from '../components/PostCard';
 import PersonaBadge from '../components/PersonaBadge';
 import Avatar from '../components/Avatar';
+import { useT } from '../i18n/useT';
+import LangToggle from '../components/LangToggle';
 
 // FE: 👤 나 — profile page (WIREFRAME §9).
 // L1: googleApiKey is LOCAL ONLY. It is shown MASKED here and never logged,
@@ -23,6 +25,7 @@ function maskKey(key: string): string {
 }
 
 export default function Profile() {
+  const { t } = useT();
   const navigate = useNavigate();
   const userId = useAuthStore((s) => s.userId);
   const username = useAuthStore((s) => s.username);
@@ -60,7 +63,7 @@ export default function Profile() {
         const msg =
           err instanceof ApiError
             ? err.message
-            : '내 활동을 불러오지 못했습니다.';
+            : t('profile.loadError');
         setError(msg);
         setState('error');
       });
@@ -85,14 +88,14 @@ export default function Profile() {
               <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.42 0-8 2.69-8 6v1a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1c0-3.31-3.58-6-8-6Z" />
             </svg>
           }
-          title="로그인이 필요합니다."
-          hint="로그인하면 내 글과 커뮤니티를 볼 수 있어요."
+          title={t('profile.loginRequired')}
+          hint={t('profile.loginHint')}
           action={
             <Link
               to="/login"
               className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-5 text-sm font-bold text-term-bright shadow-glow-cta transition hover:border-term-bright"
             >
-              [ 로그인 ]
+              {t('profile.loginBtn')}
             </Link>
           }
         />
@@ -151,20 +154,20 @@ export default function Profile() {
             <circle cx="8" cy="8" r="4" />
             <path d="M11 11l8 8M16 16l2-2M19 19l2-2" />
           </svg>
-          API 키
+          {t('profile.apiKeyHeading')}
         </h2>
 
         {!editingKey ? (
           <div className="mt-3 flex items-center justify-between gap-3">
             <span className="min-w-0 flex-1 truncate text-sm text-term-dim">
-              {googleApiKey ? maskKey(googleApiKey) : '키가 설정되지 않았습니다.'}
+              {googleApiKey ? maskKey(googleApiKey) : t('profile.keyNotSet')}
             </span>
             <button
               type="button"
               onClick={startEditKey}
               className="inline-flex min-h-[44px] shrink-0 items-center rounded-[2px] border border-term-border px-4 text-sm font-semibold text-term-bright transition hover:border-term-bright hover:bg-term-hover"
             >
-              [ 변경 ]
+              {t('profile.keyChangeBtn')}
             </button>
           </div>
         ) : (
@@ -184,22 +187,32 @@ export default function Profile() {
                 disabled={!keyDraft.trim()}
                 className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-4 text-sm font-bold text-term-bright shadow-glow-cta transition hover:border-term-bright disabled:cursor-not-allowed disabled:opacity-40"
               >
-                [ 저장 ]
+                {t('profile.keySaveBtn')}
               </button>
               <button
                 type="button"
                 onClick={cancelEditKey}
                 className="inline-flex min-h-[44px] items-center justify-center rounded-[2px] border border-term-border px-4 text-sm font-semibold text-term-bright transition hover:border-term-bright hover:bg-term-hover"
               >
-                [ 숨김 ]
+                {t('profile.keyCancelBtn')}
               </button>
             </div>
           </div>
         )}
 
         <p className="mt-3 rounded-[2px] bg-term-info px-3 py-2 text-xs leading-relaxed text-term-amber">
-          키는 이 기기(localStorage)에만 저장됩니다.
+          {t('profile.keyStorageNote')}
         </p>
+      </section>
+
+      {/* Language setting (FR: secondary LangToggle in settings panel) */}
+      <section className="rounded-[2px] border border-term-border bg-term-card p-4 shadow-term-glow">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm font-semibold text-term-bright">
+            {t('profile.languageSettingLabel')}
+          </span>
+          <LangToggle variant="setting" />
+        </div>
       </section>
 
       {/* 로그아웃 (FR-2.4) */}
@@ -209,16 +222,16 @@ export default function Profile() {
           onClick={handleLogout}
           className="inline-flex min-h-[44px] w-full items-center justify-center rounded-[2px] border border-term-danger px-4 text-sm font-semibold text-term-danger transition hover:bg-term-hover"
         >
-          [ 로그아웃 ]
+          {t('profile.logoutBtn')}
         </button>
       </section>
 
       {/* 내가 만든 커뮤니티 + 내 글 */}
-      {state === 'loading' && <LoadingState label="내 활동을 불러오는 중…" />}
+      {state === 'loading' && <LoadingState label={t('profile.loadingActivity')} />}
 
       {state === 'error' && (
         <ErrorState
-          message={error ?? '내 활동을 불러오지 못했습니다.'}
+          message={error ?? t('profile.loadError')}
           onRetry={() => {
             // re-trigger the effect by toggling state; simplest is a reload of
             // the same userId-bound fetch.
@@ -235,7 +248,7 @@ export default function Profile() {
                 const msg =
                   err instanceof ApiError
                     ? err.message
-                    : '내 활동을 불러오지 못했습니다.';
+                    : t('profile.loadError');
                 setError(msg);
                 setState('error');
               });
@@ -247,19 +260,19 @@ export default function Profile() {
         <>
           <section>
             <h2 className="mb-3 text-sm font-semibold text-term-faint">
-              // 내가 만든 커뮤니티
+              {t('profile.communitiesHeading')}
             </h2>
             {communities.length === 0 ? (
               <div className="rounded-[2px] border border-dashed border-term-border bg-term-card/40 py-2">
                 <EmptyState
-                  title="아직 만든 커뮤니티가 없어요."
-                  hint="새 커뮤니티를 만들어 대화를 시작해 보세요."
+                  title={t('profile.noCommunityTitle')}
+                  hint={t('profile.noCommunityHint')}
                   action={
                     <Link
                       to="/create-community"
                       className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-border px-4 text-sm font-semibold text-term-bright transition hover:border-term-bright hover:bg-term-hover"
                     >
-                      [ 커뮤니티 만들기 ]
+                      {t('profile.createCommunityBtn')}
                     </Link>
                   }
                 />
@@ -290,13 +303,13 @@ export default function Profile() {
 
           <section>
             <h2 className="mb-3 text-sm font-semibold text-term-faint">
-              // 내 글
+              {t('profile.postsHeading')}
             </h2>
             {posts.length === 0 ? (
               <div className="rounded-[2px] border border-dashed border-term-border bg-term-card/40 py-2">
                 <EmptyState
-                  title="아직 작성한 글이 없어요."
-                  hint="커뮤니티에서 첫 글을 남겨 보세요."
+                  title={t('profile.noPostTitle')}
+                  hint={t('profile.noPostHint')}
                 />
               </div>
             ) : (
@@ -310,13 +323,13 @@ export default function Profile() {
 
           <section>
             <h2 className="mb-3 text-sm font-semibold text-term-faint">
-              // 북마크한 글
+              {t('profile.bookmarksHeading')}
             </h2>
             {bookmarks.length === 0 ? (
               <div className="rounded-[2px] border border-dashed border-term-border bg-term-card/40 py-2">
                 <EmptyState
-                  title="아직 북마크한 글이 없어요."
-                  hint="글 상단의 🔖 로 저장한 글이 여기 모여요."
+                  title={t('profile.noBookmarkTitle')}
+                  hint={t('profile.noBookmarkHint')}
                 />
               </div>
             ) : (

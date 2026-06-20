@@ -5,17 +5,19 @@ import type { PostListItem } from '../api/types';
 import PostCard from '../components/PostCard';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
 import { useAuthStore } from '../stores/authStore';
+import { useT } from '../i18n/useT';
 
 type Tab = Extract<PostSort, 'hot' | 'new'>;
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'hot', label: '인기' },
-  { key: 'new', label: '최신' },
-];
-
 export default function Home() {
+  const { t } = useT();
   const myUserId = useAuthStore((s) => s.userId);
   const [sort, setSort] = useState<Tab>('hot');
+
+  const TABS: { key: Tab; label: string }[] = [
+    { key: 'hot', label: t('home.tabHot') },
+    { key: 'new', label: t('home.tabNew') },
+  ];
   const [posts, setPosts] = useState<PostListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export default function Home() {
         setError(
           err instanceof ApiError
             ? err.message
-            : '글을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+            : t('home.loadError'),
         );
       } finally {
         if (reqRef.current === reqId) {
@@ -90,13 +92,13 @@ export default function Home() {
       {/* tabs */}
       <div className="sticky top-0 z-10 -mx-4 mb-3 border-b border-term-border bg-term-screen px-4">
         <div className="flex">
-          {TABS.map((t) => {
-            const active = sort === t.key;
+          {TABS.map((tab) => {
+            const active = sort === tab.key;
             return (
               <button
-                key={t.key}
+                key={tab.key}
                 type="button"
-                onClick={() => setSort(t.key)}
+                onClick={() => setSort(tab.key)}
                 aria-pressed={active}
                 className={`min-h-[44px] flex-1 border-b-2 text-sm font-semibold transition ${
                   active
@@ -104,7 +106,7 @@ export default function Home() {
                     : 'border-transparent text-term-dim hover:text-term-bright'
                 }`}
               >
-                {t.label}
+                {tab.label}
               </button>
             );
           })}
@@ -133,13 +135,13 @@ export default function Home() {
 
       {isEmpty && (
         <EmptyState
-          title={sort === 'hot' ? '아직 인기글이 없어요.' : '아직 글이 없어요.'}
+          title={sort === 'hot' ? t('home.emptyHot') : t('home.emptyNew')}
           action={
             <Link
               to="/create-post"
               className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-4 text-sm font-bold text-term-title glow-lg shadow-glow-cta transition"
             >
-              + 첫 글 쓰기
+              {t('home.writeFirst')}
             </Link>
           }
         />
@@ -160,9 +162,9 @@ export default function Home() {
           className="flex justify-center py-6 text-xs text-term-faint"
         >
           {loading && posts.length > 0
-            ? '불러오는 중…'
+            ? t('home.loading')
             : done && posts.length > 0
-              ? '— EOF · 마지막 글이에요 —'
+              ? t('home.eof')
               : ''}
         </div>
       )}

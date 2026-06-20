@@ -129,6 +129,12 @@ woff2(`tokens/fonts.css`)로 링크하지만, **프로덕션 프론트엔드는 
   - 수치·시간·ID: 고정폭이 기본이므로 자연히 `tabular`. 필요 시 `tabular-nums`.
 - 스케일(px): 헤딩 22~24 / 화면 제목 18~20 / 카드 제목 15~17 / 본문 13~14 / 메타 11~12 / 배지 9~10.
 
+> **i18n 주의 (M17):** 대문자 + 넓은 자간(`tracking-[0.1em~0.15em]`) 관용구는 **라틴 문자 라벨에만** 적용한다.
+> 한글 키커/배지에는 `tracking-normal` 이하로 유지한다(KO 글리프에서 넓은 자간은 가독성을 해침).
+> 현재 지원 로케일은 **한국어(KO) + 영어(EN)** 두 가지이며, 폰트 스택 끝의 `'Noto Sans KR'`이 KO 폴백을 담당한다.
+> 향후 일본어·중국어 등 추가 CJK 로케일을 지원할 경우 `'Noto Sans JP'`/`'Noto Sans SC'`를 스택에
+> 추가하고, 해당 로케일에서도 자간·대문자 규칙이 라틴 전용임을 재확인한다.
+
 ---
 
 ## 3. CRT 트리트먼트 (스캔라인 · 비네팅 · 글로우 · 커서)
@@ -175,6 +181,7 @@ CRT 질감은 **앱 셸(디바이스 프레임) 최상위에 2겹 오버레이**
 | **요약/AI 안내**(`SummaryBubble`) | 앰버 틴트 패널 + `term-amber` 라벨. AI 로딩은 점/스파클 대신 터미널풍 인디케이터. |
 | **로그인 모달** | `bg-term-modal` + `border-term-active` + 강한 box-shadow 글로우. 로고 락업 + `[ 시작하기 ]` CTA. `[x]` 닫기. 키 경고 = 앰버 박스. |
 | **이모지 → SVG** | 모든 장식 이모지(🏠🔍＋👤🤖🍳📌✨ 등)는 **인라인 라인 SVG**(currentColor, stroke 1.5~1.7)로 교체. 텍스트 글리프(`▲`·`✓`·`▾`·`‹`·`⋯`·`[x]`·`>`)는 모노폰트로 그대로 사용 가능. |
+| **`LangToggle`** (언어 전환) | `[ KO \| EN ]` 세그먼트 컨트롤. 활성 세그먼트 = `text-term-amber`(앰버, §1.4), 비활성 = `text-term-dim` + hover `text-term-bright`. 브래킷·구분자(`[`, `\|`, `]`)는 `term-faint`로 담아 터미널 관용구 유지. 기존 `AppLayout` 2차 버튼(`border-term-border`, `bg-term-panel`, radius 2px)과 동일한 표면 스타일. `variant='header'`는 헤더 우측 `[ {user} ]` 영역 옆에 삽입, `variant='setting'`은 프로필/설정 화면 "언어 / Language" 행에 삽입(WIREFRAME.md §9 참조). 버튼 전체 터치 타깃 ≥ 44px. |
 | **테마/메타** | `index.html` `theme-color` + manifest `theme_color` → `#04130b`(터미널 배경). |
 
 ---
@@ -190,6 +197,11 @@ CRT 질감은 **앱 셸(디바이스 프레임) 최상위에 2겹 오버레이**
   에서 정지. 스캔라인/비네팅/글로우는 **정적**이라 모션 우려 없음.
 - **대비**: 본문은 어두운 패널 위 `term-fg`(`#36c46f`) 이상, 강조는 `term-fg-bright`/`term-glow`로
   충분한 명도 차 확보. 가장 약한 `term-faint`는 placeholder·장식 메타 등 비필수 텍스트에만 사용.
+- **로케일 텍스트 오버플로**: EN 문자열은 KO 대비 최대 40 % 길어질 수 있다. 버튼·배지·카드 제목 등
+  고정 폭 컨테이너는 `overflow-hidden text-ellipsis whitespace-nowrap`(한 줄) 또는 `line-clamp-*`(복수 줄)로
+  처리한다. "가로 스크롤 금지" 규칙은 로케일과 무관하게 적용된다.
+- **날짜·숫자 포맷**: 렌더링 시 `new Intl.DateTimeFormat(lang)` / `new Intl.NumberFormat(lang)` 을 사용한다.
+  하드코딩된 `'YYYY.MM.DD'` / `'1,234'` 형식 문자열은 허용하지 않는다.
 - **회귀 금지**: 기존 정렬 보정(`UI-ALIGNMENT-AUDIT.md`)과 라우팅·폼 검증·BYOK·SSE·요약 로직은 불변.
   **표현 계층(클래스/마크업/이모지→SVG)만** 변경한다.
 </content>

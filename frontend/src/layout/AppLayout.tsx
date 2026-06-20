@@ -8,6 +8,8 @@ import BottomTabBar from './BottomTabBar';
 import Logo from '../components/Logo';
 import LoginModal from '../components/LoginModal';
 import GeminiStatusBadge from '../components/GeminiStatusBadge';
+import LangToggle from '../components/LangToggle';
+import { useT } from '../i18n/useT';
 
 // Mobile-first shell.
 //  <768px : single column + bottom tab bar.
@@ -62,6 +64,7 @@ export default function AppLayout() {
   const googleApiKey = useAuthStore((s) => s.googleApiKey);
   const clearSession = useAuthStore((s) => s.clearSession);
   const openLogin = useUiStore((s) => s.openLogin);
+  const { t } = useT();
 
   // Zombie-session guard: when a write gets 401 (token expired / secret rotated),
   // rest.ts fires notifyAuthExpired → clear the dead session (keep the Gemini
@@ -96,11 +99,12 @@ export default function AppLayout() {
           <div className="flex items-center gap-2 text-sm">
             {/* Gemini 연결 표식: 로그인(BYOK) 상태에서 아이디 바로 좌측에 표시. */}
             {username && <GeminiStatusBadge />}
+            <LangToggle variant="header" />
             {username ? (
               <Link
                 to="/me"
                 className="text-term-dim transition hover:text-term-bright"
-                aria-label="내 프로필로 이동"
+                aria-label={t('nav.profileAria')}
               >
                 [ {username} ]
               </Link>
@@ -110,7 +114,7 @@ export default function AppLayout() {
                 onClick={openLogin}
                 className="text-term-amber"
               >
-                [ Login ]
+                [ {t('common.login')} ]
               </button>
             )}
           </div>
@@ -123,19 +127,19 @@ export default function AppLayout() {
           <nav className="sticky top-16 space-y-1 text-sm">
             <NavLink to="/" end className={sidebarLinkClass}>
               <IconHome />
-              홈
+              {t('nav.home')}
             </NavLink>
             <NavLink to="/search" className={sidebarLinkClass}>
               <IconSearch />
-              검색
+              {t('nav.search')}
             </NavLink>
             <NavLink to="/create-post" className={sidebarLinkClass}>
               <IconWrite />
-              작성
+              {t('nav.write')}
             </NavLink>
             <NavLink to="/me" className={sidebarLinkClass}>
               <IconProfile />
-              나
+              {t('nav.me')}
             </NavLink>
           </nav>
         </aside>

@@ -30,8 +30,10 @@ Login(모달) ─▶ Home ──┬──▶ Search ──┬──▶ Community
                       └──▶ CreatePost  ──▶ Thread (게시 후)
 
 하단 탭바(모바일):  [🏠 홈]  [🔍 검색]  [＋ 작성]  [👤 나]
-상단바 우측:  ● GEMINI  [ {username} ] ─▶ /me (나)   ·   비로그인 시 [ Login ] ─▶ 로그인 모달
+상단바 우측:  ● GEMINI  [ {username} ] ─▶ /me (나)  ·  [ KO | EN ]  ·   비로그인 시 [ Login ] ─▶ 로그인 모달
 ```
+> **2026-06-20 — i18n 언어 토글 (M17)** — 상단바 우측에 `[ KO | EN ]` 세그먼트 컨트롤(`LangToggle variant="header"`)을 추가한다. 활성 언어는 `text-term-amber`, 비활성은 `text-term-dim hover:text-term-bright`(터미널 앰버 브래킷 미감). 선택은 `langStore`(zustand persist, `localStorage` 키 `'aidit-lang'`)에 저장되며, 명시적 선택이 브라우저 기본값을 항상 덮어쓴다. 언어 변경 시 AI 페르소나 답변과 요약도 선택된 언어로 출력된다(UGC는 번역하지 않음). 모바일에서는 공간 절약을 위해 레이블 없이 `KO`/`EN` 두 글자만 표시한다.
+
 > **상단바 username 진입점(2026-06-19)** — 로그인 상태에서 상단바 우측의 `[ {username} ]`은 **`/me`(나) 페이지로 이동하는 링크**다(`hover:text-term-bright`). 비로그인 시에는 같은 자리에 `[ Login ]`(`openLogin()`)이 표시된다.
 > **Gemini 연결 표식(2026-06-19)** — 로그인 상태에서 `[ {username} ]` **바로 좌측**에 LED 점 + `GEMINI` 라벨 배지(`GeminiStatusBadge`)를 표시한다. **가장 최근 실제 LLM 쿼리**(`gemini.generateContent`) 결과를 반영: 성공=`● 연결됨`(초록 인광 `glow`), 실패(`GeminiError`)=`● 끊김`(`text-term-danger`, `animate-pulse`), 아직 호출 없음=`○ 미확인`(`text-term-faint`). hover 시 한국어 툴팁. 세션 한정(하드 리로드 시 `미확인` 초기화). **로그인/키 설정 시 키당 1회 연결 테스트**(`pingGemini` = `countTokens`, 생성 비용 0)를 돌려 첫 `@AI` 호출 전에도 배지가 즉시 연결/끊김을 표시. §9 참조.
 > **Option A 동선(2026-06-19)** — **'작성' 탭(＋)은 글 작성(`/create-post`)으로 직결**한다(예전 `/create-community` 진입 폐기). **커뮤니티 만들기는 검색 화면에서만** 진입한다(상시 `[+ 커뮤니티 만들기]` 버튼 + 무결과 인라인 CTA). 데스크톱 사이드바도 "커뮤니티 만들기" 대신 **"작성"(`/create-post`, IconWrite)** 을 두며 순서는 **홈 / 검색 / 작성 / 나**. `/create-post`·`/create-community` 라우트는 **둘 다 유지**(만들기는 검색·커뮤니티 편집에서 계속 사용). **로그인은 별도 페이지가 아니라 모달 오버레이**(§1)로 어디서든 열린다(`/login` 직접 접근/딥링크는 호환 유지).
@@ -419,11 +421,14 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 │ (빈상태: "북마크한 글이 없어요") │
 │ ──────────────────────────  │
 │ 🔑 API Key  ( ••••  )[변경]  │  ← localStorage 갱신
+│ 언어 / Language  [ KO | EN ] │  ← LangToggle variant="setting"
 │ [로그아웃] (username+key 삭제) │
 └────────────────────────────┘
 ```
 
-**2026-06-19 업데이트**: "북마크한 글" 섹션 추가. `GET /users/:id/bookmarks`로 사용자의 북마크 목록 로드(최신 북마크순). PostCard 형식으로 표시, 빈상태 안내 포함.
+**2026-06-19 업데이트**: "북마크한 글" 섹션 추가.
+
+**2026-06-20 업데이트 (M17)**: "언어 / Language `[ KO | EN ]`" 행 추가(`LangToggle variant="setting"`). 활성 언어는 `text-term-amber`, 비활성은 `text-term-dim`. 선택 즉시 `langStore.setLang()` 호출 → `localStorage` 저장 → `document.documentElement.lang` 갱신. 재방문 시 저장된 값을 복원(없으면 `navigator.language` 기반 기본값). AI 답변·요약도 선택 언어를 따름. `GET /users/:id/bookmarks`로 사용자의 북마크 목록 로드(최신 북마크순). PostCard 형식으로 표시, 빈상태 안내 포함.
 
 ---
 
@@ -442,6 +447,7 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 | `SummaryBubble` | Thread | FR-7 |
 | `useThreadStream`(SSE) | Thread | FR-5.4 |
 | `contextEngine`(128K·요약·답변) | Thread | FR-6, FR-7 |
+| `LangToggle`(header/setting variant) | AppLayout 상단바, Profile(/me) | FR-10 |
 
 ---
 

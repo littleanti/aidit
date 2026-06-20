@@ -1,12 +1,14 @@
 import { useUiStore } from '../stores/uiStore';
 import Logo from './Logo';
 import LoginForm from './LoginForm';
+import { useT } from '../i18n/useT';
 
 // Login overlay (dc.html LOGIN MODAL look). Rendered by AppLayout above the app.
 // Backdrop / [x] close; card click is stopPropagation so it stays open.
 export default function LoginModal() {
   const loginOpen = useUiStore((s) => s.loginOpen);
   const closeLogin = useUiStore((s) => s.closeLogin);
+  const { t } = useT();
 
   if (!loginOpen) return null;
 
@@ -24,7 +26,7 @@ export default function LoginModal() {
         <button
           type="button"
           onClick={closeLogin}
-          aria-label="닫기"
+          aria-label={t('auth.closeAria')}
           className="absolute right-3.5 top-3 text-sm tracking-[1px] text-term-cta hover:text-term-bright"
         >
           [x]
@@ -34,7 +36,7 @@ export default function LoginModal() {
           <Logo size="lg" />
         </div>
         <p className="mb-6 text-sm text-term-dim">
-          커뮤니티에서 함께 만드는 AI 대화
+          {t('auth.tagline')}
         </p>
 
         <LoginForm onSuccess={closeLogin} />

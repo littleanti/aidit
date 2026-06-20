@@ -5,22 +5,26 @@ import { upvotePost, removeUpvote } from '../api/rest';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
 import { assetUrl } from '../config/api';
+import { useT } from '../i18n/useT';
+import { useLangStore } from '../stores/langStore';
 
-/** Compact relative time in Korean (방금 / N분 / N시간 / N일 / N주, else date). */
-function relativeTime(iso: string): string {
+type TFn = (key: string, vars?: Record<string, string | number>) => string;
+
+/** Compact relative time, labels supplied by the caller's t() for i18n. */
+function relativeTime(iso: string, lang: string, t: TFn): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '';
   const diffSec = Math.floor((Date.now() - then) / 1000);
-  if (diffSec < 60) return '방금';
+  if (diffSec < 60) return t('post.time_just_now');
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}분`;
+  if (diffMin < 60) return t('post.time_minutes', { n: diffMin });
   const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}시간`;
+  if (diffHr < 24) return t('post.time_hours', { n: diffHr });
   const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 7) return `${diffDay}일`;
+  if (diffDay < 7) return t('post.time_days', { n: diffDay });
   const diffWk = Math.floor(diffDay / 7);
-  if (diffWk < 5) return `${diffWk}주`;
-  return new Date(then).toLocaleDateString('ko-KR', {
+  if (diffWk < 5) return t('post.time_weeks', { n: diffWk });
+  return new Date(then).toLocaleDateString(lang === 'en' ? 'en-US' : 'ko-KR', {
     year: 'numeric',
     month: 'numeric',
     day: 'numeric',
@@ -35,6 +39,8 @@ export default function PostCard({ post }: PostCardProps) {
   const navigate = useNavigate();
   const myUserId = useAuthStore((s) => s.userId);
   const openLogin = useUiStore((s) => s.openLogin);
+  const { t } = useT();
+  const lang = useLangStore((s) => s.lang);
 
   const [score, setScore] = useState(post.score);
   const [voted, setVoted] = useState(Boolean(post.voted));
@@ -112,7 +118,7 @@ export default function PostCard({ post }: PostCardProps) {
       {post.imageUrl && (
         <img
           src={assetUrl(post.imageUrl)}
-          alt="첨부 이미지"
+          alt={t('post.attached_image_alt')}
           className="mt-2 h-32 w-full rounded-[2px] border border-term-border object-cover"
           loading="lazy"
         />
@@ -122,7 +128,7 @@ export default function PostCard({ post }: PostCardProps) {
       <div className="mt-2 flex items-center gap-3 text-xs text-term-dim">
         <button
           type="button"
-          aria-label={voted ? '추천 취소' : '추천'}
+          aria-label={voted ? t('post.unvote_aria') : t('post.upvote_aria')}
           aria-pressed={voted}
           onClick={handleUpvote}
           className={`inline-flex items-center gap-0.5 rounded-[2px] transition hover:text-term-amber ${
@@ -132,7 +138,7 @@ export default function PostCard({ post }: PostCardProps) {
           <span aria-hidden>▲</span>
           {score}
         </button>
-        <span className="inline-flex items-center gap-0.5" aria-label="댓글 수">
+        <span className="inline-flex items-center gap-0.5" aria-label={t('post.comment_count_aria')}>
           <svg
             aria-hidden
             viewBox="0 0 16 16"
@@ -150,7 +156,7 @@ export default function PostCard({ post }: PostCardProps) {
         <span aria-hidden className="text-term-faint">
           ·
         </span>
-        <time dateTime={post.createdAt}>{relativeTime(post.createdAt)}</time>
+        <time dateTime={post.createdAt}>{relativeTime(post.createdAt, lang, t)}</time>
       </div>
     </article>
   );

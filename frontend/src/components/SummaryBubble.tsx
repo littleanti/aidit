@@ -12,6 +12,7 @@
 
 import type { Comment } from '../api/types';
 import SafeMarkdown from '../lib/SafeMarkdown';
+import { useT } from '../i18n/useT';
 
 const DEFAULT_PERSONA_ICON = '🟣';
 
@@ -25,14 +26,15 @@ interface SummaryBubbleProps {
 
 /** PENDING typing indicator while the summary is still being generated. */
 function SummaryTyping() {
+  const { t } = useT();
   return (
-    <span className="inline-flex items-center gap-1.5" aria-label="요약 정리 중">
+    <span className="inline-flex items-center gap-1.5" aria-label={t('thread.summaryTypingAria')}>
       <span className="inline-flex gap-0.5" aria-hidden>
         <span className="h-1.5 w-1.5 animate-bounce rounded-[1px] bg-term-amber [animation-delay:-0.3s]" />
         <span className="h-1.5 w-1.5 animate-bounce rounded-[1px] bg-term-amber [animation-delay:-0.15s]" />
         <span className="h-1.5 w-1.5 animate-bounce rounded-[1px] bg-term-amber" />
       </span>
-      <span className="font-mono text-xs font-medium text-term-amber">요약 정리 중…</span>
+      <span className="font-mono text-xs font-medium text-term-amber">{t('thread.summaryTypingText')}</span>
     </span>
   );
 }
@@ -42,11 +44,12 @@ export default function SummaryBubble({
   personaName,
   personaIcon,
 }: SummaryBubbleProps) {
+  const { t } = useT();
   const isPending = comment.status === 'PENDING';
   const isFailed = comment.status === 'FAILED';
 
   const personaLabel =
-    personaName && personaName.trim() ? personaName : 'AI 페르소나';
+    personaName && personaName.trim() ? personaName : t('thread.aiPersonaFallback');
   const personaEmoji =
     personaIcon && personaIcon.trim() ? personaIcon : DEFAULT_PERSONA_ICON;
 
@@ -54,7 +57,7 @@ export default function SummaryBubble({
     <div
       className="my-3 w-full px-1"
       role="separator"
-      aria-label="대화 요약 경계"
+      aria-label={t('thread.summaryBoundaryAria')}
     >
       {/* full-width band: warm amber tint marks the segment boundary */}
       <div
@@ -65,7 +68,7 @@ export default function SummaryBubble({
         {/* label row */}
         <div className="mb-1.5 flex items-center gap-1.5 font-mono text-xs font-semibold text-term-amber">
           <span aria-hidden>≈</span>
-          <span>AI 요약 (여기까지)</span>
+          <span>{t('thread.summaryLabel')}</span>
           <span aria-hidden className="text-sm leading-none">
             {personaEmoji}
           </span>
@@ -88,7 +91,7 @@ export default function SummaryBubble({
             />
           ) : (
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-term-danger">
-              요약 생성에 실패했습니다.
+              {t('thread.summaryFailed')}
             </p>
           )
         ) : (
@@ -103,7 +106,7 @@ export default function SummaryBubble({
           the summary above. Rendered as a centered divider line. */}
       <div className="mt-1.5 flex items-center gap-2 px-2 font-mono text-[11px] font-medium text-term-faint">
         <span className="h-px flex-1 bg-term-border" />
-        <span>이후 대화는 위 요약 기준</span>
+        <span>{t('thread.summaryBoundaryMicrocopy')}</span>
         <span className="h-px flex-1 bg-term-border" />
       </div>
     </div>

@@ -6,12 +6,14 @@
 //   variant="banner" — compact inline strip for list views that may already
 //     show stale data above/below it (Home, Community search).
 //
-// `onRetry` renders a 다시 시도 button when provided.
+// `onRetry` renders a retry button when provided.
+
+import { useT } from '../../i18n/useT';
 
 interface ErrorStateProps {
   /** Human-readable message (already localized by the caller). */
   message: string;
-  /** Optional retry handler — renders a 다시 시도 button when present. */
+  /** Optional retry handler — renders a retry button when present. */
   onRetry?: () => void;
   variant?: 'block' | 'banner';
   className?: string;
@@ -23,6 +25,7 @@ export default function ErrorState({
   variant = 'block',
   className = '',
 }: ErrorStateProps) {
+  const { t } = useT();
   if (variant === 'banner') {
     return (
       <div
@@ -36,7 +39,7 @@ export default function ErrorState({
             onClick={onRetry}
             className="shrink-0 font-semibold underline"
           >
-            다시 시도
+            {t('states.retry')}
           </button>
         )}
       </div>
@@ -58,7 +61,7 @@ export default function ErrorState({
           onClick={onRetry}
           className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-border px-4 text-sm font-semibold text-term-dim transition hover:border-term-bright hover:text-term-bright"
         >
-          다시 시도
+          {t('states.retry')}
         </button>
       )}
     </div>

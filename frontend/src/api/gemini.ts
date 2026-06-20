@@ -8,6 +8,8 @@
 // ============================================================================
 
 import { GEMINI_BASE, GENERATION_CONFIG, MODEL } from '../config/model';
+import { useLangStore } from '../stores/langStore';
+import { ai as aiDict } from '../i18n/dicts/ai';
 
 // ---- Wire types (subset of the Gemini REST shapes we use) ----
 
@@ -59,12 +61,34 @@ export class GeminiError extends Error {
   }
 }
 
-const USER_MESSAGES: Record<GeminiErrorKind, string> = {
-  invalid_key: 'AI 응답 실패 — 키를 확인하세요',
-  quota: '호출 한도 — 잠시 후 재시도',
-  network: 'AI 응답 실패 — 네트워크 오류',
-  unknown: 'AI 응답 실패 — 잠시 후 재시도',
+// AI error messages are lang-aware: the UI-safe userMessage follows the active
+// UI language (i18n). Sourced from the 'ai' i18n dict so the strings live in one
+// place. The raw key is NEVER referenced in any of these (L1).
+const USER_MESSAGES: Record<'ko' | 'en', Record<GeminiErrorKind, string>> = {
+  ko: {
+    invalid_key: aiDict.ko.err_invalid_key,
+    quota: aiDict.ko.err_quota,
+    network: aiDict.ko.err_network,
+    unknown: aiDict.ko.err_unknown,
+  },
+  en: {
+    invalid_key: aiDict.en.err_invalid_key,
+    quota: aiDict.en.err_quota,
+    network: aiDict.en.err_network,
+    unknown: aiDict.en.err_unknown,
+  },
 };
+
+/** Current-language Gemini error message map (snapshot of langStore). Non-React:
+ *  reads useLangStore.getState() so callers in this module need no hook. */
+export function userMessages(): Record<GeminiErrorKind, string> {
+  return USER_MESSAGES[useLangStore.getState().lang];
+}
+
+/** Convenience: the current-language message for a single error kind. */
+export function userMessage(kind: GeminiErrorKind): string {
+  return userMessages()[kind];
+}
 
 /** Map an HTTP status to a typed GeminiError. Never includes the key. */
 function errorFromStatus(status: number): GeminiError {
@@ -72,7 +96,7 @@ function errorFromStatus(status: number): GeminiError {
   if (status === 401 || status === 403) kind = 'invalid_key';
   else if (status === 429) kind = 'quota';
   else kind = 'unknown';
-  return new GeminiError(kind, USER_MESSAGES[kind], { status });
+  return new GeminiError(kind, userMessage(kind), { status });
 }
 
 /**
@@ -98,7 +122,7 @@ async function postModel<T>(
     });
   } catch (cause) {
     // fetch rejects only on network-level failures (offline, DNS, CORS).
-    throw new GeminiError('network', USER_MESSAGES.network, { cause });
+    throw new GeminiError('network', userMessage('network'), { cause });
   }
 
   if (!res.ok) {
@@ -111,7 +135,7 @@ async function postModel<T>(
   try {
     return (await res.json()) as T;
   } catch (cause) {
-    throw new GeminiError('unknown', USER_MESSAGES.unknown, {
+    throw new GeminiError('unknown', userMessage('unknown'), {
       status: res.status,
       cause,
     });
@@ -161,7 +185,7 @@ export async function generateContent(
     .join('');
 
   if (!text) {
-    throw new GeminiError('unknown', USER_MESSAGES.unknown);
+    throw new GeminiError('unknown', userMessage('unknown'));
   }
   return text;
 }
@@ -211,7 +235,7 @@ export async function countTokens(args: CountTokensArgs): Promise<number> {
     body,
   );
   if (typeof data.totalTokens !== 'number') {
-    throw new GeminiError('unknown', USER_MESSAGES.unknown);
+    throw new GeminiError('unknown', userMessage('unknown'));
   }
   return data.totalTokens;
 }

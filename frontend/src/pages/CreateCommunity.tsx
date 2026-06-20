@@ -9,6 +9,7 @@ import {
   type CreateCommunityBody,
 } from '../api/rest';
 import PersonaEditor from '../components/PersonaEditor';
+import { useT } from '../i18n/useT';
 
 /**
  * Derive a URL-safe slug suggestion from the community name.
@@ -24,6 +25,7 @@ function slugify(name: string): string {
 }
 
 export default function CreateCommunity() {
+  const { t } = useT();
   const navigate = useNavigate();
   const location = useLocation();
   const userId = useAuthStore((s) => s.userId);
@@ -78,7 +80,7 @@ export default function CreateCommunity() {
           setError(
             err instanceof ApiError
               ? err.message
-              : '커뮤니티를 불러오지 못했습니다.',
+              : t('community.loadEditError'),
           );
         })
         .finally(() => {
@@ -151,8 +153,8 @@ export default function CreateCommunity() {
       }
     } catch (err) {
       const fallback = isEdit
-        ? '커뮤니티 수정에 실패했습니다. 다시 시도해 주세요.'
-        : '커뮤니티 생성에 실패했습니다. 다시 시도해 주세요.';
+        ? t('community.submitErrorEdit')
+        : t('community.submitErrorCreate');
       setError(err instanceof ApiError ? err.message : fallback);
     } finally {
       setSubmitting(false);
@@ -164,12 +166,12 @@ export default function CreateCommunity() {
   return (
     <div className="mx-auto max-w-app py-6 font-mono">
       <h1 className="mb-1 text-xl font-bold text-term-title glow">
-        {isEdit ? '커뮤니티 수정' : '커뮤니티 만들기'}
+        {isEdit ? t('community.editPageTitle') : t('community.createPageTitle')}
       </h1>
       <p className="mb-6 text-sm text-term-dim">
         {isEdit
-          ? '이 커뮤니티의 정보와 AI 페르소나를 수정하세요.'
-          : '주제를 정하고, 이 커뮤니티의 AI 페르소나를 설정하세요.'}
+          ? t('community.editPageSubtitle')
+          : t('community.createPageSubtitle')}
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -182,13 +184,13 @@ export default function CreateCommunity() {
           </div>
         )}
 
-        {/* 이름 */}
+        {/* name field */}
         <div>
           <label
             htmlFor="name"
             className="mb-1 block text-sm font-medium text-term-dim"
           >
-            이름
+            {t('community.fieldName')}
           </label>
           <input
             id="name"
@@ -196,17 +198,17 @@ export default function CreateCommunity() {
             value={name}
             onChange={(e) => handleNameChange(e.target.value)}
             className="w-full rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 text-sm text-term-bright caret-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright"
-            placeholder="예) 집밥 레시피"
+            placeholder={t('community.fieldNamePlaceholder')}
           />
         </div>
 
-        {/* 주소 */}
+        {/* slug field */}
         <div>
           <label
             htmlFor="slug"
             className="mb-1 block text-sm font-medium text-term-dim"
           >
-            주소
+            {t('community.fieldSlug')}
           </label>
           <div className="flex items-center rounded-[2px] border border-term-border bg-term-input focus-within:border-term-bright focus-within:ring-1 focus-within:ring-term-bright">
             <span className="select-none pl-3 pr-1 text-sm text-term-faint">
@@ -227,19 +229,19 @@ export default function CreateCommunity() {
           </div>
           <p className="mt-1 text-xs text-term-faint">
             {isEdit
-              ? '주소(slug)는 생성 후 변경할 수 없어요.'
-              : '커뮤니티의 고유 주소입니다. 이름에서 자동 추천되며, 직접 수정할 수 있습니다.'}
+              ? t('community.fieldSlugHintEdit')
+              : t('community.fieldSlugHintCreate')}
           </p>
         </div>
 
-        {/* 설명 (선택) */}
+        {/* description field (optional) */}
         <div>
           <label
             htmlFor="description"
             className="mb-1 block text-sm font-medium text-term-dim"
           >
-            설명{' '}
-            <span className="font-normal text-term-faint">(선택)</span>
+            {t('community.fieldDescription')}{' '}
+            <span className="font-normal text-term-faint">{t('community.fieldOptional')}</span>
           </label>
           <textarea
             id="description"
@@ -247,20 +249,20 @@ export default function CreateCommunity() {
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
             className="w-full resize-y rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 text-sm text-term-bright caret-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright"
-            placeholder="이 커뮤니티가 어떤 곳인지 한 줄로 소개해 보세요."
+            placeholder={t('community.fieldDescriptionPlaceholder')}
           />
         </div>
 
         <PersonaEditor value={personaPrompt} onChange={setPersonaPrompt} />
 
-        {/* AI 아이콘 (선택) */}
+        {/* AI icon field (optional) */}
         <div>
           <label
             htmlFor="personaIcon"
             className="mb-1 block text-sm font-medium text-term-dim"
           >
-            AI 아이콘{' '}
-            <span className="font-normal text-term-faint">(선택)</span>
+            {t('community.fieldPersonaIcon')}{' '}
+            <span className="font-normal text-term-faint">{t('community.fieldOptional')}</span>
           </label>
           <input
             id="personaIcon"
@@ -272,7 +274,7 @@ export default function CreateCommunity() {
             placeholder="🤖"
           />
           <p className="mt-1 text-xs text-term-faint">
-            AI 답변 옆에 표시될 이모지 또는 짧은 토큰입니다.
+            {t('community.fieldPersonaIconHint')}
           </p>
         </div>
 
@@ -284,11 +286,11 @@ export default function CreateCommunity() {
         >
           {submitting
             ? isEdit
-              ? '[ 수정 중… ]'
-              : '[ 만드는 중… ]'
+              ? t('community.submittingEdit')
+              : t('community.submittingCreate')
             : isEdit
-              ? '[ 수정하기 ]'
-              : '[ 커뮤니티 만들기 ]'}
+              ? t('community.submitEdit')
+              : t('community.submitCreate')}
         </button>
       </form>
     </div>

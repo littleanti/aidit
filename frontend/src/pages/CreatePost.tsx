@@ -5,6 +5,7 @@ import type { Community } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
 import { usePostIntentStore } from '../stores/postIntentStore';
 import { useUiStore } from '../stores/uiStore';
+import { useT } from '../i18n/useT';
 
 // FE-7: write a post (register-first, FR-4.2).
 // Flow: resolve target community -> POST /posts -> navigate immediately to the
@@ -25,6 +26,7 @@ export default function CreatePost() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useT();
 
   const userId = useAuthStore((s) => s.userId);
   const setFirstAiReply = usePostIntentStore((s) => s.setFirstAiReply);
@@ -76,7 +78,7 @@ export default function CreatePost() {
         if (post.imageUrl) {
           setImageUrl(post.imageUrl);
           setImageObjectUrl(post.imageUrl);
-          setImageName('첨부 이미지');
+          setImageName(t('post.image_attach_name'));
         }
         setEditCommunityName(post.community?.name ?? null);
         setSelectedCommunityId(post.communityId);
@@ -84,7 +86,7 @@ export default function CreatePost() {
       .catch((err) => {
         if (cancelled) return;
         setError(
-          err instanceof ApiError ? err.message : '글을 불러오지 못했습니다.',
+          err instanceof ApiError ? err.message : t('post.err_load_post'),
         );
       })
       .finally(() => {
@@ -109,7 +111,7 @@ export default function CreatePost() {
       .catch((e) => {
         if (cancelled) return;
         setError(
-          e instanceof ApiError ? e.message : '커뮤니티를 불러오지 못했습니다.',
+          e instanceof ApiError ? e.message : t('post.err_load_communities'),
         );
       })
       .finally(() => {
@@ -177,11 +179,11 @@ export default function CreatePost() {
     if (!file) return;
     setImageError(null);
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      setImageError('지원하지 않는 이미지 형식입니다 (PNG, JPEG, WebP, GIF).');
+      setImageError(t('post.image_type_error'));
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      setImageError('이미지가 너무 큽니다 (최대 5MB).');
+      setImageError(t('post.image_size_error'));
       return;
     }
     if (!userId) return;
@@ -198,7 +200,7 @@ export default function CreatePost() {
       })
       .catch((err) => {
         setImageError(
-          err instanceof ApiError ? err.message : '이미지 업로드에 실패했습니다.',
+          err instanceof ApiError ? err.message : t('post.image_upload_error'),
         );
         // Roll back the chip on failure.
         if (localUrl) URL.revokeObjectURL(localUrl);
@@ -254,8 +256,8 @@ export default function CreatePost() {
       }
     } catch (err) {
       const fallback = isEdit
-        ? '글 수정에 실패했습니다. 다시 시도해 주세요.'
-        : '글 작성에 실패했습니다.';
+        ? t('post.err_submit_edit')
+        : t('post.err_submit_create');
       setError(err instanceof ApiError ? err.message : fallback);
       setSubmitting(false);
     }
@@ -266,13 +268,13 @@ export default function CreatePost() {
   if (!userId) {
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center font-mono">
-        <p className="text-sm text-term-dim">로그인이 필요해요</p>
+        <p className="text-sm text-term-dim">{t('post.login_required')}</p>
         <button
           type="button"
           onClick={openLogin}
           className="min-h-[44px] rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-4 py-2.5 text-sm font-bold text-term-title glow-lg shadow-glow-cta transition"
         >
-          [ 로그인 ]
+          {t('post.login_btn')}
         </button>
       </div>
     );
@@ -281,21 +283,21 @@ export default function CreatePost() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 font-mono">
       <h1 className="text-lg font-semibold text-term-title glow">
-        {isEdit ? '글 편집' : '글 작성'}
+        {isEdit ? t('post.heading_edit') : t('post.heading_create')}
       </h1>
 
       {/* Community target */}
       {isEdit ? (
         // Edit mode: read-only community label (community is locked to the post).
         <div className="text-sm text-term-dim">
-          커뮤니티:{' '}
+          {t('post.community_prefix')}{' '}
           <span className="font-medium text-term-title">
             {editCommunityName ?? selectedCommunityId}
           </span>
         </div>
       ) : slug ? (
         <div className="text-sm text-term-dim">
-          커뮤니티:{' '}
+          {t('post.community_prefix')}{' '}
           <span className="font-medium text-term-title">
             {slugCommunity ? slugCommunity.name : slug}
           </span>
@@ -306,12 +308,12 @@ export default function CreatePost() {
           to="/search"
           className="text-sm font-medium text-term-amber hover:underline"
         >
-          ! 가입한 커뮤니티가 없어요 · 검색에서 만들기 →
+          {t('post.community_empty_link')}
         </Link>
       ) : (
         // 작업2: expandable community picker.
         <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-term-dim">커뮤니티</span>
+          <span className="text-sm font-medium text-term-dim">{t('post.community_label')}</span>
           <button
             type="button"
             onClick={() => setPickerOpen((v) => !v)}
@@ -326,12 +328,12 @@ export default function CreatePost() {
               }
             >
               {communitiesLoading
-                ? '불러오는 중…'
+                ? t('post.community_loading')
                 : selectedCommunity
                   ? selectedCommunity.name
-                  : '커뮤니티 선택'}
+                  : t('post.community_placeholder')}
             </span>
-            <span className="text-term-dim">▾ 변경</span>
+            <span className="text-term-dim">{t('post.community_change')}</span>
           </button>
 
           {pickerOpen && (
@@ -345,7 +347,7 @@ export default function CreatePost() {
                   type="text"
                   value={pickerQuery}
                   onChange={(e) => setPickerQuery(e.target.value)}
-                  placeholder="커뮤니티 검색"
+                  placeholder={t('post.community_search_placeholder')}
                   autoFocus
                   className="flex-1 bg-transparent text-sm text-term-bright outline-none placeholder:text-term-faint"
                 />
@@ -379,7 +381,7 @@ export default function CreatePost() {
               ) : (
                 // (c) no match
                 <p className="px-2 py-2 text-sm text-term-faint">
-                  일치하는 커뮤니티가 없어요.
+                  {t('post.community_no_match')}
                 </p>
               )}
             </div>
@@ -389,12 +391,12 @@ export default function CreatePost() {
 
       {/* Title */}
       <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-term-dim">제목</span>
+        <span className="text-sm font-medium text-term-dim">{t('post.title_label')}</span>
         <input
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="제목을 입력하세요"
+          placeholder={t('post.title_placeholder')}
           maxLength={300}
           disabled={submitting}
           className="bg-term-input border border-term-border rounded-[2px] px-3 py-2.5 text-sm text-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright"
@@ -403,11 +405,11 @@ export default function CreatePost() {
 
       {/* Body */}
       <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-term-dim">내용</span>
+        <span className="text-sm font-medium text-term-dim">{t('post.body_label')}</span>
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          placeholder="내용을 입력하세요"
+          placeholder={t('post.body_placeholder')}
           rows={8}
           disabled={submitting}
           className="resize-y bg-term-input border border-term-border rounded-[2px] px-3 py-2.5 text-sm text-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright"
@@ -416,7 +418,7 @@ export default function CreatePost() {
 
       {/* 작업4b: image attachment */}
       <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-term-dim">이미지</span>
+        <span className="text-sm font-medium text-term-dim">{t('post.image_label')}</span>
         <input
           ref={fileRef}
           type="file"
@@ -429,7 +431,7 @@ export default function CreatePost() {
           <div className="flex items-center gap-2 border border-term-border bg-term-card rounded-[2px] px-2.5 py-2">
             <img
               src={imageObjectUrl}
-              alt="첨부 미리보기"
+              alt={t('post.image_preview_alt')}
               className="h-10 w-10 rounded-[2px] border border-term-border object-cover"
             />
             <div className="flex min-w-0 flex-1 flex-col">
@@ -437,14 +439,14 @@ export default function CreatePost() {
                 {imageName}
               </span>
               <span className="text-xs text-term-dim">
-                {uploadingImage ? '이미지 · 업로드 중…' : '이미지 · 첨부됨'}
+                {uploadingImage ? t('post.image_uploading') : t('post.image_attached')}
               </span>
             </div>
             <button
               type="button"
               onClick={clearImage}
               disabled={submitting}
-              aria-label="이미지 제거"
+              aria-label={t('post.image_remove_aria')}
               className="shrink-0 select-none rounded-[2px] border border-term-border px-2 py-1 text-xs font-bold text-term-bright hover:bg-term-hover"
             >
               [x]
@@ -458,7 +460,7 @@ export default function CreatePost() {
             disabled={submitting}
             className="flex flex-col items-center justify-center gap-1 rounded-[2px] border border-dashed border-term-border px-3 py-6 text-sm text-term-dim hover:border-term-bright hover:text-term-bright disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <span className="font-bold">[+] 이미지 첨부</span>
+            <span className="font-bold">{t('post.image_attach_btn')}</span>
             <span className="text-xs text-term-faint">PNG · JPG</span>
           </button>
         )}
@@ -477,13 +479,13 @@ export default function CreatePost() {
             disabled={submitting}
             className="h-4 w-4 rounded-[2px] accent-[#3fa564]"
           />
-          <span>게시 후 AI 1차 답변 받기</span>
+          <span>{t('post.ai_first_reply')}</span>
         </label>
       )}
 
       {slugNotFound && (
         <p className="text-sm text-term-danger">
-          커뮤니티 "{slug}"를 찾을 수 없습니다.
+          {t('post.community_not_found', { slug: slug ?? '' })}
         </p>
       )}
       {error && <p className="text-sm text-term-danger">{error}</p>}
@@ -495,11 +497,11 @@ export default function CreatePost() {
       >
         {isEdit
           ? submitting
-            ? '[ 저장 중… ]'
-            : '[ 저장하기 ]'
+            ? t('post.btn_saving')
+            : t('post.btn_save')
           : submitting
-            ? '[ 게시 중… ]'
-            : '[ 게시하기 ]'}
+            ? t('post.btn_submitting')
+            : t('post.btn_submit')}
       </button>
     </form>
   );

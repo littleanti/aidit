@@ -3,6 +3,7 @@
 // L1: these never touch a key — they only encode image bytes.
 
 import { assetUrl } from '../config/api';
+import { tn } from '../i18n/tn';
 
 export interface InlineImage {
   mimeType: string;
@@ -20,11 +21,11 @@ function blobToInlineData(blob: Blob, mimeFallback: string): Promise<InlineImage
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () =>
-      reject(reader.error ?? new Error('이미지를 읽지 못했습니다.'));
+      reject(reader.error ?? new Error(tn('misc.image_read_error')));
     reader.onload = () => {
       const result = reader.result;
       if (typeof result !== 'string') {
-        reject(new Error('이미지를 읽지 못했습니다.'));
+        reject(new Error(tn('misc.image_read_error')));
         return;
       }
       resolve({ mimeType: blob.type || mimeFallback, data: stripDataUrlPrefix(result) });

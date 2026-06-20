@@ -38,7 +38,10 @@ import {
 import { generateContent } from './geminiStatus';
 import { getContext, postComment, patchComment, ApiError } from '../api/rest';
 import { useAuthStore } from '../stores/authStore';
+import { useLangStore } from '../stores/langStore';
 import { track } from '../lib/metrics';
+import { tn } from '../i18n/tn';
+import { ai as aiDict } from '../i18n/dicts/ai';
 
 /** Product threshold (A-2 / FR-7): active-segment token budget. Above this the
  *  next @AI caller must summarize first. Kept here so the engine's lazy-summary
@@ -48,9 +51,12 @@ export const SUMMARY_TOKEN_THRESHOLD = 128_000;
 
 /** Summary directive appended to the persona for the summarization call (AI-6).
  *  Faithfully preserves facts/decisions/open questions for use as the opening
- *  context turn of the next segment. */
-export const SUMMARY_DIRECTIVE =
-  '이 토론의 사실/결정/미해결 질문을 충실히 보존해 요약하라. 새 질문에 답하기 위한 컨텍스트로 쓰일 것.';
+ *  context turn of the next segment. Lang-aware: the summary is produced in the
+ *  active UI language. ensureSummary picks SUMMARY_DIRECTIVE[lang]. */
+export const SUMMARY_DIRECTIVE: Record<'ko' | 'en', string> = {
+  ko: aiDict.ko.summary_directive,
+  en: aiDict.en.summary_directive,
+};
 
 // ---------------------------------------------------------------------------
 // AI-4 + XC-4: buildGeminiRequest — the assembly chokepoint.
@@ -88,6 +94,16 @@ export interface GeminiRequest {
 /** Speaker prefix applied to HUMAN user turns (CONTEXT MAPPING). */
 function speakerPrefix(username: string, body: string): string {
   return `「${username}」: ${body}`;
+}
+
+/** App-controlled response-language directive for the active UI language. This
+ *  is the whole point of i18n's AI side: the model answers in the UI language.
+ *  XC-4: this is APP-controlled text (never user/comment content) appended to
+ *  systemInstruction. Reads a langStore snapshot (non-React). */
+function responseLanguageDirective(): string {
+  return useLangStore.getState().lang === 'en'
+    ? aiDict.en.response_directive
+    : aiDict.ko.response_directive;
 }
 
 /**
@@ -129,9 +145,15 @@ export function buildGeminiRequest(
     contents.push({ role: 'user', parts });
   }
 
-  const systemInstruction = personaPrompt.trim()
-    ? personaPrompt
-    : undefined;
+  // i18n AI side (XC-4-safe): append the app-controlled response-language
+  // directive so the model answers in the active UI language. systemInstruction
+  // = persona (trimmed) joined with the directive by two newlines, or undefined
+  // if BOTH are empty. Only persona + this app directive ever reach
+  // systemInstruction — NO user/comment content (XC-4).
+  const persona = personaPrompt.trim();
+  const directive = responseLanguageDirective().trim();
+  const systemInstruction =
+    [persona, directive].filter(Boolean).join('\n\n') || undefined;
 
   return {
     systemInstruction,
@@ -205,7 +227,7 @@ async function resolveAiBubble(args: {
     const ge =
       err instanceof GeminiError
         ? err
-        : new GeminiError('unknown', 'AI 응답 실패 — 잠시 후 재시도', {
+        : new GeminiError('unknown', tn('ai.fallback_retry'), {
             cause: err,
           });
 
@@ -271,7 +293,7 @@ export async function runPrimaryReply(
     return {
       ok: false,
       aiCommentId: null,
-      errorMessage: 'AI 응답 실패 — 컨텍스트를 불러오지 못했습니다',
+      errorMessage: tn('ai.fallback_context'),
       errorKind: 'unknown',
     };
   }
@@ -282,7 +304,7 @@ export async function runPrimaryReply(
   // multimodal. No image -> no appended turn (text-only, as before).
   const appended = image
     ? {
-        username: useAuthStore.getState().username ?? '작성자',
+        username: useAuthStore.getState().username ?? tn('ai.author_fallback'),
         body: '',
         image,
       }
@@ -319,7 +341,7 @@ export async function runPrimaryReply(
     return {
       ok: false,
       aiCommentId: null,
-      errorMessage: 'AI 응답 실패 — 잠시 후 재시도',
+      errorMessage: tn('ai.fallback_retry'),
       errorKind: 'unknown',
     };
   }
@@ -415,7 +437,9 @@ export async function ensureSummary(
 
   // (1) Generate the summary on the CALLER'S key. XC-4: persona + directive go
   // ONLY into systemInstruction; the discussion contents stay as data turns.
-  const systemInstruction = `${communityPersonaPrompt.trim()}\n\n${SUMMARY_DIRECTIVE}`.trim();
+  const lang = useLangStore.getState().lang;
+  const systemInstruction =
+    `${communityPersonaPrompt.trim()}\n\n${SUMMARY_DIRECTIVE[lang]}`.trim();
   const summaryContents: GeminiContent[] = currentContext.contents.map(
     (turn) => ({ role: turn.role, parts: [{ text: turn.text }] }),
   );
@@ -503,7 +527,7 @@ export async function runAtAiReply(
     return {
       ok: false,
       aiCommentId: null,
-      errorMessage: 'AI 응답 실패 — 컨텍스트를 불러오지 못했습니다',
+      errorMessage: tn('ai.fallback_context'),
       errorKind: 'unknown',
     };
   }
@@ -577,7 +601,7 @@ export async function runAtAiReply(
     return {
       ok: false,
       aiCommentId: null,
-      errorMessage: 'AI 응답 실패 — 잠시 후 재시도',
+      errorMessage: tn('ai.fallback_retry'),
       errorKind: 'unknown',
     };
   }

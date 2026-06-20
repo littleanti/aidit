@@ -344,14 +344,18 @@ ageDecay = -(epochHours(now - createdAt)) / 12     // 12h 반감 느낌
 ```
 src/
  ├─ stores/        authStore(username,key), threadStore(bubbles,segment)
+ │                 langStore.ts  ← NEW (§14)
  ├─ api/           rest.ts(서버), gemini.ts(BYOK 호출·countTokens·요약)
  ├─ engine/        contextEngine.ts (manager.py 포팅: 조립·128K 판정·요약 오케스트레이션)
  ├─ stream/        useThreadStream.ts (EventSource 구독·재생)
+ ├─ i18n/          dicts/<namespace>.ts, index.ts, useT.ts, tn.ts  ← NEW (§14)
  ├─ pages/         Home, Community, Thread, CreatePost, CreateCommunity, Login
  └─ components/    PostCard, ChatBubble(left/right/ai/summary), Composer, PersonaBadge
+                   LangToggle.tsx  ← NEW (§14)
 ```
 - `contextEngine.ts`가 §6 시퀀스를 오케스트레이션(서버 context 조회 → 임계 판정 → 요약 → 답변 → PATCH).
 - 낙관적 UI: 사람 댓글 즉시 우측 표시, AI 버블 PENDING placeholder → 도착 시 교체.
+- i18n 상세 설계(스토어·사전·훅·AI 언어 연동)는 **§14** 참조.
 
 ---
 
@@ -385,3 +389,297 @@ src/
 - ~~모델 ID 확정~~ → **`gemini-3.1-flash-lite` 로 확정(PoC).**
 - ~~라이선스 불일치~~ → **MIT 기준으로 확정.**
 - ~~localStorage 키 XSS~~ → **CSP `connect-src` Google 도메인 제한으로 exfiltration 차단, PoC 수용 리스크로 확정(§8).**
+- **로케일 기본값**: 첫 방문 시 `navigator.language`가 `'ko'`로 시작하면 한국어, 아니면 영어. 명시적 선택은 `localStorage('aidit-lang')`에 영구 저장, 브라우저 기본값을 덮어쓴다(§14).
+
+---
+
+## 14. 다국어 (i18n)
+
+> SoT: 이 섹션. 연관 PLAN 마일스톤: M17. 지원 로케일: **`ko`(한국어) · `en`(영어)**. 외부 i18n 라이브러리 없음 — 경량 커스텀 구현.
+> URL/라우트 변경 없음(state-based, option a). UGC(글·댓글·커뮤니티명·사용자명)는 번역 대상 아님 — UI 크롬과 AI 지시문만.
+
+### 14.1 언어 스토어 (`src/stores/langStore.ts`)
+
+`authStore.ts`의 `persist + onRehydrateStorage` 패턴을 그대로 따른다.
+
+```ts
+// src/stores/langStore.ts
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+export type Lang = 'ko' | 'en';
+
+interface LangState {
+  lang: Lang;
+  setLang: (l: Lang) => void;
+  toggle: () => void;
+}
+
+export const useLangStore = create<LangState>()(
+  persist(
+    (set, get) => ({
+      lang: navigator.language.startsWith('ko') ? 'ko' : 'en',
+      setLang: (l) => {
+        set({ lang: l });
+        document.documentElement.lang = l;
+      },
+      toggle: () => get().setLang(get().lang === 'ko' ? 'en' : 'ko'),
+    }),
+    {
+      name: 'aidit-lang',
+      onRehydrateStorage: () => (state) => {
+        if (state) document.documentElement.lang = state.lang;
+      },
+    }
+  )
+);
+```
+
+- **`name: 'aidit-lang'`** — localStorage 키. 리하이드레이션 즉시 `document.documentElement.lang` 동기화.
+- 명시적 선택(`setLang`)은 브라우저 기본값(`navigator.language`)을 영구 덮어쓴다.
+- 비 React 코드에서 현재 언어를 읽을 때는 `useLangStore.getState().lang` 사용(훅 호출 불가 환경).
+
+### 14.2 사전 구조 (`src/i18n/`)
+
+```
+src/i18n/
+ ├─ dicts/
+ │   ├─ common.ts      // 범용: 버튼, 레이블, 날짜 포맷 등
+ │   ├─ auth.ts        // 로그인/회원가입 화면
+ │   ├─ post.ts        // 글 작성·목록·상세
+ │   ├─ community.ts   // 커뮤니티 생성·검색
+ │   ├─ thread.ts      // 스레드 채팅 버블·컴포저
+ │   ├─ profile.ts     // 프로필·설정 화면
+ │   └─ errors.ts      // Gemini/네트워크 오류 메시지
+ ├─ index.ts           // DICTS 집계·재수출
+ ├─ useT.ts            // React 컴포넌트용 훅
+ └─ tn.ts              // 비 React 모듈용 함수
+```
+
+**네임스페이스 파일 형태** (예: `thread.ts`):
+
+```ts
+// src/i18n/dicts/thread.ts
+export const thread = {
+  ko: {
+    composerPlaceholder: '@AI 또는 댓글을 입력하세요…',
+    aiPending: 'AI가 답변 중…',
+    summaryLabel: '대화 요약',
+  },
+  en: {
+    composerPlaceholder: 'Type @AI or a comment…',
+    aiPending: 'AI is thinking…',
+    summaryLabel: 'Conversation summary',
+  },
+} as const;
+```
+
+- 플레이스홀더 보간은 `{name}` `{count}` 스타일. 예: `'게시물 {count}개'`.
+- 모든 네임스페이스 객체는 `as const`로 타입 추론 보장.
+
+**`src/i18n/index.ts`**:
+
+```ts
+import { common } from './dicts/common';
+import { auth } from './dicts/auth';
+import { post } from './dicts/post';
+import { community } from './dicts/community';
+import { thread } from './dicts/thread';
+import { profile } from './dicts/profile';
+import { errors } from './dicts/errors';
+
+export const DICTS = { common, auth, post, community, thread, profile, errors } as const;
+export type { Lang } from '../stores/langStore';
+```
+
+### 14.3 해석 함수
+
+#### `src/i18n/useT.ts` — React 컴포넌트용
+
+```ts
+// src/i18n/useT.ts
+import { useLangStore } from '../stores/langStore';
+import { DICTS, type Lang } from './index';
+
+export function useT() {
+  const lang = useLangStore((s) => s.lang);
+
+  return function t(key: string, vars?: Record<string, string | number>): string {
+    const [ns, sub] = key.split(/\.(.+)/);          // 첫 점에서만 분리
+    const dict = (DICTS as Record<string, Record<Lang, Record<string, string>>>)[ns];
+    const value = dict?.[lang]?.[sub] ?? dict?.['ko']?.[sub] ?? key;
+
+    if (import.meta.env.DEV && value === key) {
+      console.warn(`[i18n] missing key: "${key}" (lang=${lang})`);
+    }
+
+    if (!vars) return value;
+    return value.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? `{${k}}`));
+  };
+}
+```
+
+- 키 해석 순서: `DICTS[ns][lang][sub]` → `DICTS[ns].ko[sub]`(한국어 폴백) → 원시 키.
+- `t`는 항상 `string`을 반환한다(undefined 없음).
+- DEV 환경에서 누락 키 `console.warn`.
+
+#### `src/i18n/tn.ts` — 비 React 모듈용
+
+```ts
+// src/i18n/tn.ts
+import { useLangStore } from '../stores/langStore';
+import { DICTS, type Lang } from './index';
+
+export function tn(key: string, vars?: Record<string, string | number>): string {
+  const lang = useLangStore.getState().lang;   // 훅 없이 스토어 직접 읽기
+  const [ns, sub] = key.split(/\.(.+)/);
+  const dict = (DICTS as Record<string, Record<Lang, Record<string, string>>>)[ns];
+  const value = dict?.[lang]?.[sub] ?? dict?.['ko']?.[sub] ?? key;
+
+  if (import.meta.env.DEV && value === key) {
+    console.warn(`[i18n] missing key: "${key}" (lang=${lang})`);
+  }
+
+  if (!vars) return value;
+  return value.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? `{${k}}`));
+}
+```
+
+- `stores/`, `engine/`, `lib/` 등 React 훅을 호출할 수 없는 모듈에서 사용.
+- 해석 로직은 `useT` 내부 `t`와 동일하다.
+
+### 14.4 `LangToggle` 컴포넌트 (`src/components/LangToggle.tsx`)
+
+헤더와 프로필/설정 화면 양쪽에 배치 가능한 `[ KO | EN ]` 세그먼트 컨트롤.
+
+```ts
+// src/components/LangToggle.tsx
+import { useLangStore, type Lang } from '../stores/langStore';
+
+interface Props { variant?: 'header' | 'setting'; }
+
+export function LangToggle({ variant = 'header' }: Props) {
+  const { lang, setLang } = useLangStore();
+  const options: Lang[] = ['ko', 'en'];
+
+  return (
+    <span className={variant === 'header' ? 'flex items-center gap-0' : 'flex items-center gap-1'}>
+      {options.map((l, i) => (
+        <button
+          key={l}
+          onClick={() => setLang(l)}
+          className={[
+            'px-1.5 py-0.5 text-xs font-mono uppercase tracking-widest transition-colors',
+            lang === l
+              ? 'text-term-amber'
+              : 'text-term-dim hover:text-term-bright',
+          ].join(' ')}
+          aria-pressed={lang === l}
+        >
+          {i === 0 && <span className="text-term-dim mr-0.5">[</span>}
+          {l.toUpperCase()}
+          {i === options.length - 1 && <span className="text-term-dim ml-0.5">]</span>}
+          {i < options.length - 1 && <span className="text-term-dim mx-0.5">|</span>}
+        </button>
+      ))}
+    </span>
+  );
+}
+```
+
+- **활성 언어**: `text-term-amber`. **비활성**: `text-term-dim hover:text-term-bright`. 기존 AppLayout 버튼 스타일 준수.
+- `variant='header'`: 상단바 오른쪽 끝 배치. `variant='setting'`: 프로필 설정 행 안에 배치.
+- `aria-pressed`로 접근성 상태 표현.
+
+### 14.5 AI 언어 연동 (`src/engine/contextEngine.ts`)
+
+> **XC-4 불변 조건 유지**: `systemInstruction`에는 `personaPrompt`(커뮤니티 설정) + 아래 앱 제어 지시문만 들어간다. 사용자 댓글·UGC는 절대 `systemInstruction`으로 올라가지 않는다.
+
+#### 14.5.1 언어 지시문 삽입
+
+`buildGeminiRequest` 함수 안에서 최종 `systemInstruction`을 조립할 때:
+
+```ts
+const lang = useLangStore.getState().lang;
+const langDirective = lang === 'en'
+  ? 'Respond in English.'
+  : '반드시 한국어로 답변하세요.';
+
+// personaPrompt가 있을 때만 systemInstruction 구성
+const parts = [persona?.trim(), langDirective].filter(Boolean);
+systemInstruction = parts.length > 0
+  ? { parts: [{ text: parts.join('\n\n') }] }
+  : undefined;
+```
+
+- `persona` 빈 문자열이면 지시문 단독으로 `systemInstruction` 구성.
+- `persona`와 지시문 사이는 빈 줄 두 개(`\n\n`)로 구분.
+
+#### 14.5.2 `SUMMARY_DIRECTIVE` 언어 분기
+
+`contextEngine.ts` 상단의 `SUMMARY_DIRECTIVE` 상수를 언어별 맵으로 변환:
+
+```ts
+// 기존 단일 상수 → 언어별 맵
+const SUMMARY_DIRECTIVE: Record<Lang, string> = {
+  ko: '이 토론의 사실·결정·미해결 질문을 충실히 보존해 요약하세요. 새 질문에 답하기 위한 컨텍스트로 쓰일 것입니다.',
+  en: 'Summarise this discussion, faithfully preserving all facts, decisions, and open questions. The result will be used as context for answering new questions.',
+};
+```
+
+`ensureSummary` 호출 시:
+
+```ts
+const lang = useLangStore.getState().lang;
+const summaryPrompt = SUMMARY_DIRECTIVE[lang];
+```
+
+#### 14.5.3 오류 메시지 언어 분기 (`src/api/gemini.ts`)
+
+기존 `USER_MESSAGES` 레코드(고정 한국어 문자열)를 언어별 맵으로 전환:
+
+```ts
+// src/i18n/dicts/errors.ts 에 정의하고 tn()으로 참조
+export const errors = {
+  ko: {
+    invalidKey:   '키를 확인하세요. (401/403)',
+    quota:        '쿼터 초과 — 잠시 후 재시도하세요. (429)',
+    networkError: '네트워크 오류 — 재시도 중…',
+    aiFailed:     'AI 답변 생성에 실패했습니다.',
+  },
+  en: {
+    invalidKey:   'Check your API key. (401/403)',
+    quota:        'Quota exceeded — please retry in a moment. (429)',
+    networkError: 'Network error — retrying…',
+    aiFailed:     'Failed to generate AI response.',
+  },
+} as const;
+```
+
+`gemini.ts`와 `contextEngine.ts`의 하드코딩 한국어 오류 문자열을 `tn('errors.<key>')` 호출로 교체.
+
+### 14.6 날짜·숫자 로케일
+
+날짜와 숫자를 렌더링하는 모든 컴포넌트에서 `Intl` API를 사용한다:
+
+```ts
+// 날짜 예시
+new Intl.DateTimeFormat(lang === 'ko' ? 'ko-KR' : 'en-US', {
+  year: 'numeric', month: 'short', day: 'numeric'
+}).format(new Date(createdAt))
+```
+
+- `lang` 값은 `useLangStore`에서 구독.
+- 숫자(추천 수, 댓글 수)는 `Intl.NumberFormat(lang === 'ko' ? 'ko-KR' : 'en-US').format(n)`.
+
+### 14.7 설계 제약 및 비결정 사항
+
+| 항목 | 결정 |
+|------|------|
+| URL/라우트 변경 | **없음** — state-based(option a). `/en/` 라우트, `?lang=` 쿼리 파라미터 모두 미도입. |
+| 지원 로케일 | **`ko`, `en` 2개**로 고정(PoC). 3번째 로케일은 `DICTS` 타입 확장으로 대응 가능. |
+| UGC 번역 | **없음** — 글·댓글·커뮤니티명·사용자명은 입력 언어 그대로 표시. |
+| DB 모델 변경 | **없음** — 로케일 선택은 클라이언트 localStorage에만 저장. 서버·DB 스키마 무변경. |
+| 외부 i18n 라이브러리 | **미사용** — `react-i18next`, `lingui` 등 없음. 커스텀 경량 구현(§14.2–14.3). |
+| SSR/SEO | PoC는 CSR 전용 — `<html lang>` 동기화로 최소 접근성만 충족. |
+| XC-4 불변 조건 | `systemInstruction`에 UGC 미포함 원칙 유지. 언어 지시문은 앱 제어 텍스트이므로 허용. |

@@ -25,6 +25,8 @@ import { useAiModeStore } from '../stores/aiModeStore';
 import { postComment, uploadImage } from '../api/rest';
 import type { Comment } from '../api/types';
 import { runAtAiReply } from '../engine/contextEngine';
+import { useT } from '../i18n/useT';
+import { tn } from '../i18n/tn';
 
 // Single-image attach constraints (mirrored server-side for defense in depth).
 const ALLOWED_IMAGE_TYPES = [
@@ -42,11 +44,11 @@ function fileToInlineData(
 ): Promise<{ mimeType: string; data: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error('파일을 읽지 못했습니다.'));
+    reader.onerror = () => reject(reader.error ?? new Error(tn('thread.fileReadError')));
     reader.onload = () => {
       const result = reader.result;
       if (typeof result !== 'string') {
-        reject(new Error('파일을 읽지 못했습니다.'));
+        reject(new Error(tn('thread.fileReadError')));
         return;
       }
       // result is a data URL: "data:<mime>;base64,<data>". Strip the prefix.
@@ -76,6 +78,7 @@ function tempSeq(): number {
 
 export default function Composer({ postId, communityPersonaPrompt }: ComposerProps) {
   const navigate = useNavigate();
+  const { t } = useT();
   const userId = useAuthStore((s) => s.userId);
 
   const addOptimistic = useThreadStore((s) => s.addOptimistic);
@@ -115,11 +118,11 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
     e.target.value = '';
     if (!file) return;
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      showToast('지원하지 않는 이미지 형식입니다 (PNG, JPEG, WebP, GIF).');
+      showToast(t('thread.unsupportedImageFormat'));
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      showToast('이미지가 너무 큽니다 (최대 5MB).');
+      showToast(t('thread.imageTooLarge'));
       return;
     }
     // Replace any previous selection, revoking its object URL first.
@@ -158,7 +161,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
     const willInvokeAi = wantsAI;
     const apiKey = useAuthStore.getState().googleApiKey;
     if (willInvokeAi && !apiKey) {
-      showToast('AI 호출에는 Gemini 키가 필요합니다 — 로그인에서 키를 등록하세요.');
+      showToast(t('thread.aiNoKey'));
       navigate('/login');
       return;
     }
@@ -186,7 +189,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
       try {
         imagePart = await fileToInlineData(file);
       } catch {
-        showToast('이미지를 읽지 못했습니다 — 다시 시도해 주세요.');
+        showToast(t('thread.imageReadError'));
         return;
       }
     }
@@ -246,7 +249,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
       // mark/remove optimistic bubble + toast. Keep the file + object URL so the
       // user can retry without re-picking the image.
       upsertComment({ ...optimistic, status: 'FAILED' });
-      showToast('전송 실패 — 다시 시도해 주세요.');
+      showToast(t('thread.sendFailed'));
     } finally {
       setSending(false);
       taRef.current?.focus();
@@ -259,7 +262,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
     // The PENDING/FAILED AI bubble surfaces in the thread via SSE; we don't
     // need to touch the human bubble on AI failure (NFR-5).
     if (willInvokeAi && sendSucceeded && humanCommentId && apiKey) {
-      const callerUsername = useAuthStore.getState().username ?? '사용자';
+      const callerUsername = useAuthStore.getState().username ?? t('thread.userFallback');
       void runAtAiReply({
         postId,
         humanCommentId,
@@ -324,14 +327,14 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
               <circle cx="9" cy="13" r="1" fill="currentColor" stroke="none" />
               <circle cx="15" cy="13" r="1" fill="currentColor" stroke="none" />
             </svg>
-            AI에게 묻기
+            {t('thread.aiModeLabel')}
           </span>
         </label>
         <span
           className="text-[11px] text-term-dim"
-          title="AI에게 묻기가 켜져 있으면 보내는 메시지마다 내 Gemini 키로 호출됩니다(비용 발생)."
+          title={t('thread.costHintTooltip')}
         >
-          메시지마다 내 키로 호출됩니다
+          {t('thread.costHint')}
         </span>
       </div>
 
@@ -350,7 +353,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
             <circle cx="9" cy="13" r="1" fill="currentColor" stroke="none" />
             <circle cx="15" cy="13" r="1" fill="currentColor" stroke="none" />
           </svg>
-          @AI 멘션 포함 — AI가 응답합니다
+          {t('thread.mentionIndicator')}
         </div>
       )}
 
@@ -359,13 +362,13 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
           <div className="relative inline-block">
             <img
               src={objectUrl}
-              alt="첨부 미리보기"
+              alt={t('thread.attachPreviewAlt')}
               className="h-16 w-16 rounded-[2px] border border-term-border object-cover"
             />
             <button
               type="button"
               onClick={clearImage}
-              aria-label="이미지 제거"
+              aria-label={t('thread.removeImageAria')}
               className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-[2px] border border-term-border bg-term-bg text-xs font-bold text-term-bright active:scale-95"
             >
               <svg
@@ -395,7 +398,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
         />
         <button
           type="button"
-          aria-label="이미지 첨부"
+          aria-label={t('thread.attachImageAria')}
           onClick={() => fileRef.current?.click()}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[2px] border border-term-border text-term-bright hover:bg-term-border active:scale-95"
         >
@@ -420,7 +423,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
         >
           {aiMode && (
             <span
-              aria-label="AI에게 전송"
+              aria-label={t('thread.atAiChipAria')}
               className="shrink-0 select-none rounded-[2px] border border-term-amber px-2 py-0.5 text-xs font-bold text-term-amber"
             >
               @AI
@@ -432,8 +435,8 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
-            placeholder={aiMode ? 'AI에게 메시지 보내기…' : '메시지를 입력하세요…'}
-            aria-label="댓글 입력"
+            placeholder={aiMode ? t('thread.placeholderAi') : t('thread.placeholderHuman')}
+            aria-label={t('thread.commentInputAria')}
             className="max-h-28 flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed text-term-bright outline-none placeholder:text-term-dim"
           />
         </div>
@@ -441,7 +444,7 @@ export default function Composer({ postId, communityPersonaPrompt }: ComposerPro
           type="button"
           onClick={() => void handleSend()}
           disabled={!canSend}
-          aria-label="전송"
+          aria-label={t('thread.sendAria')}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] text-lg font-bold text-term-bright shadow-glow-cta transition active:scale-95 disabled:opacity-40"
         >
           <svg

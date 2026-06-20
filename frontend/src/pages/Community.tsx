@@ -10,6 +10,7 @@ import type { Community as CommunityDTO, PostListItem } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
 import Avatar from '../components/Avatar';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
+import { useT } from '../i18n/useT';
 
 // Robot persona tile (phosphor stroke line-art) — matches the canonical
 // retro screens. Honors a community's personaIcon when present, otherwise
@@ -61,6 +62,7 @@ export default function Community() {
 // ---------------------------------------------------------------------------
 
 export function CommunitySearch() {
+  const { t } = useT();
   const [q, setQ] = useState('');
   const [results, setResults] = useState<CommunityDTO[]>([]);
   const [loading, setLoading] = useState(false);
@@ -83,7 +85,7 @@ export function CommunitySearch() {
           setError(
             err instanceof ApiError
               ? err.message
-              : '커뮤니티를 불러오지 못했습니다.',
+              : t('community.loadError'),
           );
         }
       } finally {
@@ -94,13 +96,13 @@ export function CommunitySearch() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [q]);
+  }, [q, t]);
 
   const trimmed = q.trim();
 
   return (
     <div className="space-y-4 font-mono">
-      <h1 className="text-lg font-bold text-term-title glow">// 커뮤니티 검색</h1>
+      <h1 className="text-lg font-bold text-term-title glow">{t('community.searchTitle')}</h1>
 
       <div className="flex items-center gap-2 rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 focus-within:border-term-bright">
         <span aria-hidden className="text-term-cta">
@@ -110,8 +112,8 @@ export function CommunitySearch() {
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="커뮤니티 이름으로 검색"
-          aria-label="커뮤니티 이름으로 검색"
+          placeholder={t('community.searchPlaceholder')}
+          aria-label={t('community.searchAriaLabel')}
           className="w-full flex-1 bg-transparent text-sm text-term-bright outline-none placeholder:text-term-dim"
         />
       </div>
@@ -121,7 +123,7 @@ export function CommunitySearch() {
         state={trimmed ? { name: trimmed } : undefined}
         className="flex items-center justify-center gap-2 rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-4 py-3 text-sm font-bold tracking-wider text-term-title shadow-glow-cta glow-lg transition hover:border-term-bright"
       >
-        [+] 커뮤니티 만들기
+        {t('community.createCta')}
       </Link>
 
       {error && <ErrorState variant="banner" message={error} />}
@@ -157,14 +159,18 @@ export function CommunitySearch() {
 
       {!loading && !error && results.length === 0 && (
         <div className="rounded-[2px] border border-dashed border-term-border px-3 py-4 text-center text-sm leading-relaxed text-term-dim">
-          {trimmed ? `'${trimmed}' ` : ''}커뮤니티가 없어요
+          {trimmed
+            ? t('community.emptyNoMatch', { q: trimmed })
+            : t('community.emptyAll')}
           <br />
           <Link
             to="/create-community"
             state={trimmed ? { name: trimmed } : undefined}
             className="font-bold text-term-amber"
           >
-            [+] {trimmed ? `'${trimmed}' ` : ''}만들기 →
+            {trimmed
+              ? t('community.emptyCreateLinkWithName', { q: trimmed })
+              : t('community.emptyCreateLink')}
           </Link>
         </div>
       )}
@@ -177,6 +183,7 @@ export function CommunitySearch() {
 // ---------------------------------------------------------------------------
 
 function CommunityDetail({ slug }: { slug: string }) {
+  const { t } = useT();
   const userId = useAuthStore((s) => s.userId);
 
   const [community, setCommunity] = useState<CommunityDTO | null>(null);
@@ -215,7 +222,7 @@ function CommunityDetail({ slug }: { slug: string }) {
           setError(
             err instanceof ApiError
               ? err.message
-              : '커뮤니티를 불러오지 못했습니다.',
+              : t('community.loadError'),
           );
         }
       } finally {
@@ -225,7 +232,7 @@ function CommunityDetail({ slug }: { slug: string }) {
     return () => {
       cancelled = true;
     };
-  }, [slug, reloadKey]);
+  }, [slug, reloadKey, t]);
 
   const isCreator = useMemo(
     () => !!community && !!userId && community.creatorId === userId,
@@ -238,14 +245,14 @@ function CommunityDetail({ slug }: { slug: string }) {
   if (notFound) {
     return (
       <EmptyState
-        title="커뮤니티를 찾을 수 없어요"
-        hint="주소가 바뀌었거나 삭제된 커뮤니티일 수 있어요."
+        title={t('community.notFoundTitle')}
+        hint={t('community.notFoundHint')}
         action={
           <Link
             to="/search"
             className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-5 text-sm font-bold text-term-bright shadow-glow-cta transition hover:border-term-bright"
           >
-            커뮤니티 검색으로
+            {t('community.notFoundAction')}
           </Link>
         }
         className="py-10"
@@ -256,7 +263,7 @@ function CommunityDetail({ slug }: { slug: string }) {
     return <ErrorState message={error} onRetry={retry} />;
   }
   if (!community) {
-    return <EmptyState title="커뮤니티를 찾을 수 없어요" />;
+    return <EmptyState title={t('community.notFoundTitle')} />;
   }
 
   return (
@@ -277,10 +284,10 @@ function CommunityDetail({ slug }: { slug: string }) {
               to={`/create-community`}
               state={{ editSlug: community.slug }}
               className="shrink-0 rounded-[2px] border border-term-border px-2 py-1 text-xs text-term-dim transition hover:border-term-bright hover:text-term-bright"
-              aria-label="커뮤니티 편집"
-              title="커뮤니티 편집"
+              aria-label={t('community.editAriaLabel')}
+              title={t('community.editTitle')}
             >
-              ✎ 편집
+              {t('community.editButtonLabel')}
             </Link>
           )}
         </div>
@@ -305,25 +312,25 @@ function CommunityDetail({ slug }: { slug: string }) {
           to={`/c/${community.slug}/create-post`}
           className="flex items-center justify-center rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-4 py-3 text-sm font-bold tracking-wider text-term-title shadow-glow-cta glow-lg transition hover:border-term-bright"
         >
-          + 이 커뮤니티에 글쓰기
+          {t('community.writePost')}
         </Link>
       </header>
 
       {/* posts */}
       <section className="space-y-2">
         <h2 className="text-xs font-semibold tracking-wider text-term-faint">
-          // 글
+          {t('community.postsSection')}
         </h2>
         {posts.length === 0 ? (
           <EmptyState
-            title="아직 글이 없습니다."
-            hint="첫 글을 작성해 보세요."
+            title={t('community.noPostsTitle')}
+            hint={t('community.noPostsHint')}
             action={
               <Link
                 to={`/c/${community.slug}/create-post`}
                 className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-4 text-sm font-bold text-term-bright shadow-glow-cta transition hover:border-term-bright"
               >
-                + 첫 글 쓰기
+                {t('community.firstPost')}
               </Link>
             }
             className="py-10"
@@ -344,8 +351,11 @@ function CommunityDetail({ slug }: { slug: string }) {
                   </p>
                   <p className="mt-3 flex items-center gap-2 text-xs text-term-faint">
                     <Avatar kind="user" seed={p.authorUsername} size="sm" />
-                    u/{p.authorUsername} · 점수 {p.score} · 댓글{' '}
-                    {p.commentCount}
+                    {t('community.postMeta', {
+                      author: p.authorUsername,
+                      score: String(p.score),
+                      count: String(p.commentCount),
+                    })}
                   </p>
                 </Link>
               </li>

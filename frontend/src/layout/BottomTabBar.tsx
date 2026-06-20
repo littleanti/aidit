@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useT } from '../i18n/useT';
 
 function IconHome() {
   return (
@@ -39,24 +40,26 @@ function IconProfile() {
 
 interface Tab {
   to: string;
-  label: string;
+  /** i18n key into the 'nav' namespace, resolved at render via useT. */
+  labelKey: string;
   icon: () => JSX.Element;
   exact?: boolean;
 }
 
 const TABS: Tab[] = [
-  { to: '/', label: '홈', icon: IconHome, exact: true },
-  { to: '/search', label: '검색', icon: IconSearch },
-  { to: '/create-post', label: '작성', icon: IconWrite },
-  { to: '/me', label: '나', icon: IconProfile },
+  { to: '/', labelKey: 'nav.home', icon: IconHome, exact: true },
+  { to: '/search', labelKey: 'nav.search', icon: IconSearch },
+  { to: '/create-post', labelKey: 'nav.write', icon: IconWrite },
+  { to: '/me', labelKey: 'nav.me', icon: IconProfile },
 ];
 
 export default function BottomTabBar() {
+  const { t } = useT();
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-20 border-t border-term-border bg-term-screen tablet:hidden"
       style={{ paddingBottom: 'var(--safe-bottom)' }}
-      aria-label="하단 탭"
+      aria-label={t('nav.bottomBarAria')}
     >
       <ul className="mx-auto flex max-w-app items-stretch">
         {TABS.map((tab) => {
@@ -76,7 +79,7 @@ export default function BottomTabBar() {
                 <span aria-hidden className="flex h-6 items-center justify-center leading-none">
                   <Icon />
                 </span>
-                <span>{tab.label}</span>
+                <span>{t(tab.labelKey)}</span>
               </NavLink>
             </li>
           );

@@ -33,20 +33,25 @@ import ChatBubble from '../components/ChatBubble';
 import Composer from '../components/Composer';
 import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '../components/states';
 import SafeMarkdown from '../lib/SafeMarkdown';
+import { useT } from '../i18n/useT';
+import { tn } from '../i18n/tn';
+import { useLangStore } from '../stores/langStore';
 
-/** Compact relative time in Korean (방금 / N분 / N시간 / N일 / N주, else date). */
+/** Compact relative time (방금/just now, Nm/Nh/Nd/Nw, else locale date). */
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '';
   const diffSec = Math.floor((Date.now() - then) / 1000);
-  if (diffSec < 60) return '방금';
+  if (diffSec < 60) return tn('thread.justNow');
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}분`;
+  if (diffMin < 60) return `${diffMin}${tn('thread.minuteUnit')}`;
   const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}시간`;
+  if (diffHr < 24) return `${diffHr}${tn('thread.hourUnit')}`;
   const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 7) return `${diffDay}일`;
-  return new Date(then).toLocaleDateString('ko-KR', {
+  if (diffDay < 7) return `${diffDay}${tn('thread.dayUnit')}`;
+  // Use Intl with the current UI locale for the full date fallback.
+  const locale = useLangStore.getState().lang === 'en' ? 'en-US' : 'ko-KR';
+  return new Date(then).toLocaleDateString(locale, {
     year: 'numeric',
     month: 'numeric',
     day: 'numeric',
@@ -63,6 +68,7 @@ const SUMMARY_HARD_THRESHOLD = 128_000;
 export default function Thread() {
   const { postId } = useParams<{ postId: string }>();
   const navigate = useNavigate();
+  const { t } = useT();
 
   // VR-3: bookmark toggle — persisted via POST/DELETE /posts/:id/bookmark.
   // Initialised from loadedPost.bookmarked (server-computed via x-user-id).
@@ -175,7 +181,7 @@ export default function Thread() {
           setError(
             err instanceof ApiError
               ? err.message
-              : '스레드를 불러오지 못했습니다.',
+              : t('thread.loadError'),
           );
         }
       } finally {
@@ -217,7 +223,7 @@ export default function Thread() {
 
     const apiKey = useAuthStore.getState().googleApiKey;
     if (!apiKey) {
-      showAiToast('1차 AI 답변에는 Gemini 키가 필요합니다 — 로그인에서 키를 등록하세요.');
+      showAiToast(t('thread.primaryAiNoKey'));
       return;
     }
 
@@ -246,12 +252,12 @@ export default function Thread() {
       // Only AI bubbles are retryable here; human retry is the Composer's job.
       if (comment.authorId !== null) return;
       if (!comment.clientId) {
-        showAiToast('재시도할 수 없습니다 — 식별자가 없습니다.');
+        showAiToast(t('thread.retryNoClientId'));
         return;
       }
       const apiKey = useAuthStore.getState().googleApiKey;
       if (!apiKey) {
-        showAiToast('재시도에는 Gemini 키가 필요합니다 — 로그인에서 키를 등록하세요.');
+        showAiToast(t('thread.retryNoKey'));
         return;
       }
       void retryAiBubble({
@@ -295,31 +301,31 @@ export default function Thread() {
   }, [postId, loading, bubbles.length, activeSegmentIndex]);
 
   if (!postId) {
-    return <EmptyState title="잘못된 주소입니다." />;
+    return <EmptyState title={t('thread.invalidAddress')} />;
   }
   if (loading) {
-    return <LoadingState label="스레드 불러오는 중…" />;
+    return <LoadingState label={t('thread.loading')} />;
   }
   if (error) {
     return <ErrorState message={error} onRetry={retryLoad} />;
   }
   if (!post) {
-    return <EmptyState title="글을 찾을 수 없습니다." />;
+    return <EmptyState title={t('thread.postNotFound')} />;
   }
 
-  const personaName = community?.name ?? 'AI 페르소나';
+  const personaName = community?.name ?? t('thread.aiPersonaFallback');
   const personaIcon = community?.personaIcon ?? null;
-  const authorName = post.author?.username ?? '익명';
+  const authorName = post.author?.username ?? t('thread.anonymous');
   const hasComments = bubbles.length > 0;
 
   // Offline / reconnect strip (WIREFRAME §8). Show whenever the browser is
   // offline OR the SSE stream is not live ('open'). Hide once both are healthy.
   const degraded = !online || status !== 'open';
   const bannerLabel = !online
-    ? '오프라인 — 재연결 중…'
+    ? t('thread.offlineBanner')
     : status === 'reconnecting'
-      ? '연결이 끊겼습니다 — 다시 연결 중…'
-      : '실시간 연결 중…';
+      ? t('thread.reconnectingBanner')
+      : t('thread.connectingBanner');
 
   // FR-7.4: show the imminent-summary badge when the active segment is in the
   // warning band [120K, 128K), OR the server already reports summaryNeeded
@@ -343,7 +349,7 @@ export default function Thread() {
           <button
             type="button"
             onClick={() => navigate(-1)}
-            aria-label="뒤로"
+            aria-label={t('thread.backAria')}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[2px] text-term-dim hover:bg-term-hover"
           >
             <svg
@@ -378,11 +384,11 @@ export default function Thread() {
                   : removeBookmark(postId, myUserId));
               } catch {
                 setBookmarked(!next);
-                showAiToast('북마크 처리에 실패했습니다.');
+                showAiToast(t('thread.bookmarkError'));
               }
             }}
             aria-pressed={bookmarked}
-            aria-label={bookmarked ? '북마크 해제' : '북마크'}
+            aria-label={bookmarked ? t('thread.bookmarkRemoveAria') : t('thread.bookmarkAddAria')}
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[2px] text-lg text-term-dim hover:bg-term-hover ${
               bookmarked ? 'opacity-100' : 'opacity-40'
             }`}
@@ -396,10 +402,10 @@ export default function Thread() {
               to="/create-post"
               state={{ editPostId: post.id }}
               className="shrink-0 rounded-[2px] border border-term-border px-2 py-1 text-xs text-term-dim transition hover:border-term-bright hover:text-term-bright"
-              aria-label="글 편집"
-              title="글 편집"
+              aria-label={t('thread.editAria')}
+              title={t('thread.editAria')}
             >
-              ✎ 편집
+              {t('thread.editLabel')}
             </Link>
           )}
         </div>
@@ -416,7 +422,7 @@ export default function Thread() {
             aria-hidden
             className="absolute -top-1 left-[13px] bg-term-tag px-1 text-[9px] tracking-wider text-term-amber"
           >
-            ★ 원본 게시글
+            {t('thread.originalPostTag')}
           </span>
           <h2 className="mt-1 text-base font-bold leading-snug text-term-title glow">
             {post.title}
@@ -429,7 +435,7 @@ export default function Thread() {
           {post.imageUrl && (
             <img
               src={assetUrl(post.imageUrl)}
-              alt="첨부 이미지"
+              alt={t('thread.attachedImage')}
               className="mt-2 max-w-full rounded-[2px] border border-term-border"
               loading="lazy"
             />
@@ -442,7 +448,7 @@ export default function Thread() {
             <span className="ml-auto flex items-center gap-2">
               <button
                 type="button"
-                aria-label={voted ? '추천 취소' : '추천'}
+                aria-label={voted ? t('thread.upvoteRemoveAria') : t('thread.upvoteAddAria')}
                 aria-pressed={voted}
                 onClick={async () => {
                   if (!myUserId) { openLogin(); return; }
@@ -457,7 +463,7 @@ export default function Thread() {
                   } catch {
                     setVoted(!next);
                     setPostScore((s) => s + (next ? -1 : 1));
-                    showAiToast('추천 처리에 실패했습니다.');
+                    showAiToast(t('thread.upvoteError'));
                   }
                 }}
                 className={`flex items-center gap-0.5 rounded-[2px] transition hover:text-term-amber ${
@@ -474,7 +480,7 @@ export default function Thread() {
         {/* divider */}
         <div className="flex items-center gap-2 px-4 py-3 text-xs text-term-faint tracking-wider">
           <span className="h-px flex-1 bg-term-border" />
-          <span>대화</span>
+          <span>{t('thread.divider')}</span>
           <span className="h-px flex-1 bg-term-border" />
         </div>
 
@@ -494,8 +500,8 @@ export default function Thread() {
           </div>
         ) : (
           <EmptyState
-            title="첫 댓글을 남겨보세요"
-            hint="@AI 로 질문해보세요"
+            title={t('thread.emptyTitle')}
+            hint={t('thread.emptyHint')}
             className="py-10"
           />
         )}
@@ -517,10 +523,10 @@ export default function Thread() {
         <div className="px-3 pb-1">
           <div
             className="group relative inline-flex items-center gap-1.5 rounded-[2px] border border-term-border bg-term-info px-3 py-1 text-xs font-medium text-term-title"
-            title="다음 @AI 호출 시 먼저 요약이 실행됩니다. 요약은 호출한 분의 Gemini 키로 생성됩니다(비용 발생)."
+            title={t('thread.summaryBadgeTooltip')}
           >
             <span aria-hidden>🟣</span>
-            <span>{summaryNeeded ? '다음 @AI 호출 시 요약됩니다' : '곧 대화가 요약됩니다'}</span>
+            <span>{summaryNeeded ? t('thread.summaryNeededBadge') : t('thread.summarySoonBadge')}</span>
             <span
               aria-hidden
               className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-[2px] bg-term-hover text-[10px] text-term-title"
