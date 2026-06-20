@@ -9,6 +9,7 @@ import PersonaBadge from '../components/PersonaBadge';
 import Avatar from '../components/Avatar';
 import { useT } from '../i18n/useT';
 import LangToggle from '../components/LangToggle';
+import ShellPrompt from '../components/ShellPrompt';
 
 // FE: 👤 나 — profile page (WIREFRAME §9).
 // L1: googleApiKey is LOCAL ONLY. It is shown MASKED here and never logged,
@@ -128,6 +129,7 @@ export default function Profile() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 py-6 font-mono">
+      <ShellPrompt command="whoami" className="mb-3" />
       {/* header */}
       <header className="flex items-center gap-3">
         <Avatar kind="user" seed={username} size="md" />

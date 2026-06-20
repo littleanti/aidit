@@ -29,6 +29,7 @@ import { retryAiBubble } from '../engine/retryAiBubble';
 import { urlToInlineData } from '../lib/imageInline';
 import { assetUrl } from '../config/api';
 import Avatar from '../components/Avatar';
+import ShellPrompt from '../components/ShellPrompt';
 import ChatBubble from '../components/ChatBubble';
 import Composer from '../components/Composer';
 import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '../components/states';
@@ -415,6 +416,7 @@ export default function Thread() {
 
       {/* scrolling region: pinned original post + chat list */}
       <div className="flex-1 overflow-y-auto">
+        <ShellPrompt command={`tail -f /p/${postId.slice(0, 8)}`} className="mb-3 px-4 pt-3" />
         {/* PINNED original post (FR-5.1) */}
         <article className="relative mx-3 my-3 rounded-[2px] border border-term-border bg-term-card px-4 py-3">
           {/* corner tag */}

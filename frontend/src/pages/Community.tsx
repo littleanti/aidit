@@ -11,6 +11,7 @@ import { useAuthStore } from '../stores/authStore';
 import Avatar from '../components/Avatar';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
 import { useT } from '../i18n/useT';
+import ShellPrompt from '../components/ShellPrompt';
 
 // Robot persona tile (phosphor stroke line-art) — matches the canonical
 // retro screens. Honors a community's personaIcon when present, otherwise
@@ -102,6 +103,7 @@ export function CommunitySearch() {
 
   return (
     <div className="space-y-4 font-mono">
+      <ShellPrompt command={`grep -ri "${q}"`} className="mb-3" />
       <h1 className="text-lg font-bold text-term-title glow">{t('community.searchTitle')}</h1>
 
       <div className="flex items-center gap-2 rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 focus-within:border-term-bright">
@@ -185,6 +187,7 @@ export function CommunitySearch() {
 function CommunityDetail({ slug }: { slug: string }) {
   const { t } = useT();
   const userId = useAuthStore((s) => s.userId);
+  const [activeSort] = useState<'new' | 'top'>('new');
 
   const [community, setCommunity] = useState<CommunityDTO | null>(null);
   const [posts, setPosts] = useState<PostListItem[]>([]);
@@ -268,6 +271,7 @@ function CommunityDetail({ slug }: { slug: string }) {
 
   return (
     <div className="space-y-5 font-mono">
+      <ShellPrompt command={`feed r/${slug} --sort=${activeSort}`} className="mb-3" />
       {/* header */}
       <header className="space-y-4 border-b border-term-border pb-5">
         <div className="flex items-center gap-3">

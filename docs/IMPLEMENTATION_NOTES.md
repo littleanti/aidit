@@ -1,7 +1,7 @@
 # Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
 
 > 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
-> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-20 (KO/EN i18n)
+> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-20 (ShellPrompt 전 화면 확장)
 > 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
 
 ---
@@ -11,6 +11,7 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-20
+- **[feat]** **ShellPrompt 컴포넌트 추출 + 전 화면 확장**: 기존 Home 화면에만 하드코딩된 `aidit@yoon` 고정 문자열 프롬프트를 재사용 가능한 `src/components/ShellPrompt.tsx`로 추출. `authStore`에서 사용자명을 반응형으로 읽고 미로그인 시 `guest` 폴백 적용. 그린 CRT 터미널 스타일(`text-term-bright`, `glow`) + 블링킹 커서 애니메이션 보존. 8개 주요 화면(Home·Community·Thread·Search·CreatePost·CreateCommunity·Profile·Login)에 화면별 커맨드 매핑으로 일괄 적용. 기존 Home의 `aidit@yoon` 하드코딩 사용자명 버그 수정(로그인 사용자명 미반영 문제 해소). 커맨드 문자열은 번역 대상이 아님(i18n 비적용). (§4.12)
 - **[feat]** **회원가입 비밀번호 확인 필드 + 좀비 세션 보강**:
   - **비밀번호 확인(UX)**: `LoginForm`의 회원가입 모드에 **`비밀번호 확인`** 필드 추가. 입력 중 불일치하면 인라인 빨간 힌트(`aria-invalid` + 빨간 테두리), 제출 시 `password !== confirmPassword`면 `'비밀번호가 일치하지 않습니다.'`로 가입 차단(서버 호출 전). 로그인 모드에는 미표시. 모드 토글 시 확인값 초기화.
   - **좀비 세션 보강**: JWT 게이트 이전 세션(또는 시크릿 교체/토큰 만료)으로 `username`은 있는데 유효 토큰이 없어 "로그인된 듯 보이나 모든 쓰기가 401"이던 상태를 제거. ① **로드 시**: `authStore` 모듈-init이 `userId`는 있고 `token`이 없으면 `clearSession()`으로 세션 정리(Gemini 키는 보존). ② **런타임**: `rest.request`가 **토큰을 첨부한 요청이 401**이면 신규 leaf `lib/authEvents.ts`의 `notifyAuthExpired()` 호출 → `AppLayout`이 등록한 핸들러가 `clearSession()` + 로그인 모달 오픈(login/register의 무토큰 401은 `tok` 가드로 제외). 신규 `clearSession` 액션은 신원/토큰만 비우고 `googleApiKey`는 유지(만료로 BYOK 키를 잃지 않게). 순환참조 회피: rest→authEvents(leaf)→AppLayout 등록 구조. tsc 클린 + 프론트 30 테스트 green.
@@ -417,6 +418,41 @@ UGC(사용자가 입력한 글 제목·본문·댓글·커뮤니티 이름/설�
 - UGC 미번역(설계 의도).
 - 서버·API 계약·테스트 무변경(순수 프론트엔드 변경).
 - 세 가지 이상의 언어는 dict 파일과 `Lang` 타입 확장으로 추가 가능하나 현재는 `ko`/`en` 두 값만 유효.
+
+### 4.12 ShellPrompt 컴포넌트 추출 + 전 화면 확장 (2026-06-20)
+
+기존 Home 화면(`pages/Home.tsx`)에만 존재하던 그린 CRT 셸 프롬프트 라인이 **`aidit@yoon`** 으로 사용자명을 하드코딩하고 있어, 로그인한 실제 사용자명이 반영되지 않는 버그가 있었다. 본 작업은 프롬프트를 재사용 가능한 컴포넌트로 추출하고 전체 주요 화면에 일관 적용한다. 라우팅·스토어·API 계약·백엔드·테스트는 무변경이며 **순수 표현 계층** 변경이다.
+
+**`ShellPrompt` 컴포넌트 (`frontend/src/components/ShellPrompt.tsx`)**
+- props `{ command: string }` — 화면별 커맨드 문자열(프롬프트 우측에 표시할 텍스트).
+- `authStore`를 구독해 `username`을 반응형으로 읽음. 미로그인(`username` 없음)이면 `guest` 폴백.
+- 렌더: `` `aidit@{username} > {command}` `` 형태의 단일 행. 기존 Home의 스타일 토큰(`text-term-bright`, `font-mono`, `glow` 드롭섀도우 클래스)을 그대로 계승.
+- 블링킹 커서(`animate-blink` + `│` 또는 `▌`)는 기존 Home 구현과 동일하게 줄 끝에 유지.
+- 커맨드 문자열은 `t(...)` i18n 대상이 아님 — 터미널 ASCII 관용어이므로 언어에 무관하게 영문 고정.
+
+**하드코딩 사용자명 버그 수정**
+- 기존 Home의 `aidit@yoon`은 리터럴 문자열이라 어떤 사용자로 로그인해도 항상 `yoon`을 표시했다.
+- `ShellPrompt`가 `authStore.username`을 직접 구독함으로써 로그인 상태 변화(로그인·로그아웃·세션 복원)에 자동 반응한다. `guest`는 비로그인 상태임을 명시적으로 표현하는 폴백이다.
+
+**화면별 커맨드 매핑 (8개 주요 화면)**
+
+| 화면 | 파일 | 커맨드 문자열 |
+|------|------|--------------|
+| Home | `pages/Home.tsx` | `feed --hot` |
+| Community 상세 | `pages/Community.tsx` | `cd /c/{slug}` |
+| Thread | `pages/Thread.tsx` | `thread --id {postId}` |
+| Search | `pages/Search.tsx` | `search --query` |
+| CreatePost | `pages/CreatePost.tsx` | `new post` |
+| CreateCommunity | `pages/CreateCommunity.tsx` | `new community` |
+| Profile | `pages/Profile.tsx` | `whoami` |
+| Login | `pages/Login.tsx` | `auth login` |
+
+- `Community`·`Thread`처럼 라우트 파라미터가 있는 화면은 `slug`/`postId`를 동적으로 보간해 현재 컨텍스트를 반영한다.
+- 커맨드는 동작 없는 시각 요소이며 클릭·포커스 이벤트 없음.
+
+**변경 파일**: `frontend/src/components/ShellPrompt.tsx`(신규), `frontend/src/pages/{Home,Community,Thread,Search,CreatePost,CreateCommunity,Profile,Login}.tsx`.
+
+**불변(회귀 금지)**: 라우팅·스토어·API 계약·SSE·BYOK·i18n 딕셔너리·테스트. 기존 Home의 다른 레이아웃 요소는 ShellPrompt 교체 외 무변경.
 
 ---
 

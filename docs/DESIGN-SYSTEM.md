@@ -171,7 +171,8 @@ CRT 질감은 **앱 셸(디바이스 프레임) 최상위에 2겹 오버레이**
 | **앱 셸**(`AppLayout`/디바이스 프레임) | `bg-term-screen` + 스캔라인/비네팅 오버레이 2겹 + 전역 본문 글로우. |
 | **헤더** | 좌: 로고 마크 SVG(번개형 "A" path) + `AIDIT` 워드마크(`term-glow`, 넓은 자간). 우: `[ {user} ]` 또는 `[ Login ]`(로그아웃 시 `term-amber`). 하단 `border-term-line`. |
 | **하단 탭바**(홈/검색/작성/나) | `bg-term-nav` + 상단 `border-term-line`. 라인 아이콘 SVG + 라벨. 활성 = `term-amber`, 비활성 = `term-dim-2`. |
-| **피드/탭**(인기·최신) | 탭 컨테이너 `border-term-line`. 활성 탭 = `term-amber` 글자 + `rgba(255,207,74,0.06)` 배경 + 하단 `term-amber` 보더. 비활성 = `term-dim-2`. 위에 `aidit@yoon:~$ feed --sort=...` 프롬프트 + 커서. |
+| **피드/탭**(인기·최신) | 탭 컨테이너 `border-term-line`. 활성 탭 = `term-amber` 글자 + `rgba(255,207,74,0.06)` 배경 + 하단 `term-amber` 보더. 비활성 = `term-dim-2`. 상단에 `ShellPrompt` 컴포넌트 렌더링(아래 참조). |
+| **`ShellPrompt`** (전 주요 화면 공통) | 모든 주요 화면 **최상단**에 고정 렌더링되는 재사용 컴포넌트. 형식: `aidit@<user>:~$ <command> ▌` — `<user>`는 인증 스토어에서 주입(미인증 시 `'guest'` 폴백). 커서(`.term-cursor`)는 §3 blinking cursor 스펙 그대로. 글자 색 `term-faint`(접두), `term-dim`(명령), 커서 `term-glow`. **명령어는 번역하지 않는다**(터미널 관용구; UGC 인자 — 슬러그·검색어·글 번호 등 — 만 현재 언어 값을 그대로 보간). 화면별 명령 매핑: <br>• 피드(인기/최신) → `feed --sort=popular` / `feed --sort=new` <br>• 커뮤니티 상세 → `feed r/<slug>` <br>• 검색 → `grep -ri "<query>"` <br>• 글 상세(스레드) → `tail -f /p/<id>` <br>• 글 작성 → `post --new [r/<slug>]` <br>• 커뮤니티 생성 → `mkdir /c/new` <br>• 내 프로필 → `whoami` <br>• 로그인 화면 → `login` |
 | **카드(POST/커뮤니티/내 글)** | `bg-term-panel` + `border-term-border` + radius 2px. 상단에 음각 라벨 배지(`POST`/`PERSONA`/`API KEY`, `term-faint`, 카드 보더 위에 겹침). 제목 `term-fg-bright` + 글로우, 메타 `term-dim`. |
 | **CTA 버튼**(게시·만들기·시작하기·전송) | `bg-term-cta`(녹색 세로 그라디언트) + `border-term-active` + `term-fg-bright` 글자 + 글로우 + box-shadow. 라벨은 `[ 게시하기 ]`처럼 대괄호 래핑. |
 | **2차/토글 버튼** | `border-term-border` + `term-fg`/`term-dim`. 체크박스는 `[X]`/`[ ]` 글리프(ON = `term-amber`). |

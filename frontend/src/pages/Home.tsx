@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { getPosts, ApiError, type PostSort } from '../api/rest';
 import type { PostListItem } from '../api/types';
 import PostCard from '../components/PostCard';
+import ShellPrompt from '../components/ShellPrompt';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
 import { useAuthStore } from '../stores/authStore';
 import { useT } from '../i18n/useT';
@@ -114,10 +115,7 @@ export default function Home() {
       </div>
 
       {/* terminal prompt line */}
-      <div className="mb-3 text-xs text-term-faint">
-        aidit@yoon:~$ feed --sort={sort}{' '}
-        <span aria-hidden className="term-cursor" />
-      </div>
+      <ShellPrompt command={`feed --sort=${sort}`} className="mb-3" />
 
       {error && (
         <ErrorState

@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/authStore';
 import { usePostIntentStore } from '../stores/postIntentStore';
 import { useUiStore } from '../stores/uiStore';
 import { useT } from '../i18n/useT';
+import ShellPrompt from '../components/ShellPrompt';
 
 // FE-7: write a post (register-first, FR-4.2).
 // Flow: resolve target community -> POST /posts -> navigate immediately to the
@@ -280,8 +281,11 @@ export default function CreatePost() {
     );
   }
 
+  const shellCommand = slug ? `post --new r/${slug}` : 'post --new';
+
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 font-mono">
+      <ShellPrompt command={shellCommand} className="mb-3" />
       <h1 className="text-lg font-semibold text-term-title glow">
         {isEdit ? t('post.heading_edit') : t('post.heading_create')}
       </h1>
