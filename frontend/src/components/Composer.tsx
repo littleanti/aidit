@@ -88,8 +88,8 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
   const addOptimistic = useThreadStore((s) => s.addOptimistic);
   const upsertComment = useThreadStore((s) => s.upsertComment);
 
-  // Thread-scoped AI-mode toggle (session-only, default OFF per post).
-  const aiMode = useAiModeStore((s) => s.byPost[postId] ?? false);
+  // Thread-scoped AI-mode toggle (session-only, default ON per post).
+  const aiMode = useAiModeStore((s) => s.byPost[postId] ?? true);
   const toggleAiMode = useAiModeStore((s) => s.toggle);
 
   const [text, setText] = useState('');

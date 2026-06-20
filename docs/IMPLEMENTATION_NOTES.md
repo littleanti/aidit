@@ -1,7 +1,7 @@
 # Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
 
 > 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
-> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-20 (라이브 프롬프트 polish)
+> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-20 (댓글 AI 모드 기본 ON)
 > 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
 
 ---
@@ -11,6 +11,7 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-20
+- **[feat]** **댓글 AI 모드 기본 ON 전환**: `aiModeStore`의 스레드별 AI 모드 기본값을 **OFF → ON**으로 변경(`isOn`/`toggle` + `Composer` 읽기 3곳을 `?? false` → `?? true`). 스레드 진입 시 작성창이 **AI-우선**(체크박스 `[X]` · `@AI` 칩 · AI placeholder · 상단 프롬프트 `ai --ask /p/<id>`)이며, 일반 사람 댓글은 사용자가 토글을 끄면 된다. **트레이드오프**: 기존 "비용 안전 기본 OFF(BYOK 키를 의도적 opt-in으로만 소비)" 정책을 뒤집어 **기본적으로 사용자 키를 소비**한다 — 단, Composer의 전송 전 가드(키 없으면 AI 전송 차단 + 로그인 유도)는 불변이라 키 미설정 시 비용 0. 세션 한정·미영속(하드 리로드 시 다시 ON). (§3, §5 — 2026-06-18 `aiModeStore` 도입 항목의 "기본 OFF"를 대체)
 - **[feat]** **라이브 프롬프트 polish — ShellPrompt a11y·공유 util·파생 커맨드 반영**: ShellPrompt a11y 수정(전체 행 `aria-hidden="true"` + `role="presentation"` — 보조 기술이 장식 터미널 텍스트를 읽지 않도록; `aria-live` 미사용), 공유 순수 유틸 `src/lib/shellArg.ts::formatPromptArg` 도입(공백 압축 + ~32자 잘라내기 + 말줄임표 + 미관용 따옴표 이스케이프) + 단위 테스트, `CreateCommunity` 파생 slug 반영(`mkdir /c/<slug>`, 빈 slug → `mkdir /c/new`), `CreatePost` 잘라내기·이스케이프된 title 반영(`post --new r/<slug> "<title>"`, 빈 title → 기본 커맨드), `Thread` 정적 스왑(`tail -f /p/<id>` ↔ `ai --ask /p/<id>`, wantsAI boolean 콜백으로 리프트업; 라이브 댓글 텍스트 미러링은 의도적으로 제외). `Search`는 선례 화면으로 그대로 유지. 커맨드 문자열은 i18n 비적용 유지. (§4.13)
 - **[feat]** **ShellPrompt 컴포넌트 추출 + 전 화면 확장**: 기존 Home 화면에만 하드코딩된 `aidit@yoon` 고정 문자열 프롬프트를 재사용 가능한 `src/components/ShellPrompt.tsx`로 추출. `authStore`에서 사용자명을 반응형으로 읽고 미로그인 시 `guest` 폴백 적용. 그린 CRT 터미널 스타일(`text-term-bright`, `glow`) + 블링킹 커서 애니메이션 보존. 8개 주요 화면(Home·Community·Thread·Search·CreatePost·CreateCommunity·Profile·Login)에 화면별 커맨드 매핑으로 일괄 적용. 기존 Home의 `aidit@yoon` 하드코딩 사용자명 버그 수정(로그인 사용자명 미반영 문제 해소). 커맨드 문자열은 번역 대상이 아님(i18n 비적용). (§4.12)
 - **[feat]** **회원가입 비밀번호 확인 필드 + 좀비 세션 보강**:
