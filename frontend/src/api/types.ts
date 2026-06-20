@@ -116,6 +116,12 @@ export interface CreateCommentRequest {
   imageUrl?: string | null;
 }
 
+/** One page of the /users/:id/communities listing: items plus opaque next cursor. */
+export interface CommunitiesPage {
+  items: Community[];
+  nextCursor: string | null;
+}
+
 /**
  * Context payload assembled for a direct Gemini call (used in M3).
  * L5: built from the active ContextSegment; tokenSum is the 128K basis.

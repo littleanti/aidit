@@ -2,7 +2,11 @@ import type { FastifyPluginAsync } from "fastify";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "../db.js";
+import { encodeCursor, decodeCursor } from "../domain/cursor.js";
 import { requireAuth } from "../auth.js";
+
+// Profile community list page size (mirrors the profile post/bookmark size).
+const PROFILE_PAGE_SIZE = 20;
 
 // WP BE-4 — Community routes.
 // Server is KEY-BLIND (PLAN L1): no apiKey is ever read, stored, or relayed here.
@@ -68,27 +72,63 @@ const plugin: FastifyPluginAsync = async (app) => {
   });
 
   // GET /users/:id/communities — communities created by a user, newest first.
-  // Public profile view, read-only. Mirrors the GET /communities item shape.
-  app.get("/users/:id/communities", async (req) => {
+  // Public profile view, read-only. Mirrors the GET /communities item shape,
+  // wrapped in a keyset/cursor-paginated { items, nextCursor } envelope.
+  // Cursor anchor = community.createdAt(ms) + community.id (createdAt DESC, id DESC).
+  app.get("/users/:id/communities", async (req, reply) => {
     const { id } = req.params as { id: string };
+    const cursorRaw = (req.query as { cursor?: string } | undefined)?.cursor;
+    const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
+    if (cursorRaw && !cursor) {
+      return reply.code(400).send({ error: "Invalid cursor" });
+    }
 
-    const communities = await prisma.community.findMany({
-      where: { creatorId: id },
-      orderBy: { createdAt: "desc" },
+    const where =
+      cursor === null
+        ? { creatorId: id }
+        : {
+            creatorId: id,
+            OR: [
+              { createdAt: { lt: new Date(cursor.value) } },
+              {
+                AND: [
+                  { createdAt: new Date(cursor.value) },
+                  { id: { lt: cursor.id } },
+                ],
+              },
+            ],
+          };
+
+    const rows = await prisma.community.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }],
+      take: PROFILE_PAGE_SIZE + 1,
       include: { _count: { select: { posts: true } } },
     });
 
-    return communities.map((c) => ({
-      id: c.id,
-      slug: c.slug,
-      name: c.name,
-      description: c.description,
-      personaPrompt: c.personaPrompt,
-      personaIcon: c.personaIcon,
-      creatorId: c.creatorId,
-      createdAt: c.createdAt,
-      postCount: c._count.posts,
-    }));
+    const hasMore = rows.length > PROFILE_PAGE_SIZE;
+    const page = hasMore ? rows.slice(0, PROFILE_PAGE_SIZE) : rows;
+
+    let nextCursor: string | null = null;
+    if (hasMore && page.length > 0) {
+      const last = page[page.length - 1]!;
+      nextCursor = encodeCursor(last.createdAt.getTime(), last.id);
+    }
+
+    return reply.send({
+      items: page.map((c) => ({
+        id: c.id,
+        slug: c.slug,
+        name: c.name,
+        description: c.description,
+        personaPrompt: c.personaPrompt,
+        personaIcon: c.personaIcon,
+        creatorId: c.creatorId,
+        createdAt: c.createdAt,
+        postCount: c._count.posts,
+      })),
+      nextCursor,
+    });
   });
 
   // POST /communities — create a community. Acting user becomes the creator.

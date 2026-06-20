@@ -405,30 +405,149 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 
 ---
 
-## 9. 프로필/설정 (👤)
+## 9. 프로필 (/me) — **탭형 활동 피드 + 설정 진입점 (2026-06-21 v0.6)**
+
+> **v0.6 리디자인** — API Key·언어·로그아웃 설정을 `/me/settings`(§9.1)로 분리하고,
+> /me 본문을 **[ communities | posts | bookmarks ]** 세 탭의 무한 스크롤 피드로 전환한다.
+> 탭 UI·IntersectionObserver sentinel·opaque nextCursor·로딩/EOF 상태는 **Home 피드 패턴과 동일**.
+> 비로그인 시 기존과 동일한 `EmptyState`("로그인이 필요해요") 표시.
 
 ```
 ┌────────────────────────────┐
-│ 👤 yoon                     │
-│ • 내가 만든 커뮤니티           │
-│ • 내 글                      │
-│ ── 북마크한 글 ──            │
-│ ┌────────────────────────┐ │
-│ │ r/cooking · ChefBot🍳  │ │  ← 북마크한 글 카드(최신순)
-│ │ 자취 요리 3분 레시피 모음  │ │
-│ │ ▲ 128  💬 24           │ │
-│ └────────────────────────┘ │
-│ (빈상태: "북마크한 글이 없어요") │
+│ $ whoami                   │  ← ShellPrompt 헤더 (term-dim)
+│ > yoon                     │  ← 로그인 사용자명 (term-amber)
+│                    [ ⚙ ]   │  ← 우상단 설정 진입점 → /me/settings
 │ ──────────────────────────  │
-│ 🔑 API Key  ( ••••  )[변경]  │  ← localStorage 갱신
-│ 언어 / Language  [ KO | EN ] │  ← LangToggle variant="setting"
-│ [로그아웃] (username+key 삭제) │
+│ [ communities ][ posts ][ bookmarks ] │  ← 세그먼트 탭 컨트롤
+│   ^^(활성=term-amber 밑줄)             │     비활성=term-dim, hover=term-bright
+│ ──────────────────────────  │
+│  (활성 탭 콘텐츠 — 아래 참조)   │
+└────────────────────────────┘
+  [🏠]   [🔍]   [＋]   [👤]
+```
+
+### 탭 1 — communities
+
+```
+┌────────────────────────────┐
+│ $ whoami                   │
+│ > yoon              [ ⚙ ] │
+│ ──────────────────────────  │
+│ [ communities ][ posts ][ bookmarks ] │
+│ ──────────────────────────  │
+│ $ ls ~/communities         │  ← 탭별 ShellPrompt (term-dim)
+│                            │
+│ ┌────────────────────────┐ │
+│ │ r/cooking   🍳 ChefBot  │ │  ← CommunityCard (PostCard 스타일)
+│ │ 친절한 3분 요리 셰프       │ │
+│ │ 멤버 · 240글              │ │
+│ └────────────────────────┘ │
+│ ┌────────────────────────┐ │
+│ │ r/devlife   👩‍💻 SrDev    │ │
+│ │ 시니어 개발자 페르소나       │ │
+│ │ 멤버 · 41글               │ │
+│ └────────────────────────┘ │
+│          ⟳ 로딩 중…         │  ← sentinel(IntersectionObserver) 트리거
+│  ─────── EOF ───────        │  ← 마지막 페이지 도달 시
+│  (빈상태: "가입한 커뮤니티가    │
+│           없어요")           │
 └────────────────────────────┘
 ```
 
+### 탭 2 — posts
+
+```
+│ [ communities ][ posts ][ bookmarks ] │
+│ ──────────────────────────  │
+│ $ ls ~/posts               │
+│                            │
+│ ┌────────────────────────┐ │
+│ │ r/cooking · 2h          │ │  ← PostCard (Home 피드와 동일)
+│ │ 자취 요리 3분 레시피 모음  │ │
+│ │ ▲ 128  💬 24            │ │
+│ └────────────────────────┘ │
+│          ⟳ 로딩 중…         │
+│  ─────── EOF ───────        │
+│  (빈상태: "작성한 글이 없어요") │
+```
+
+### 탭 3 — bookmarks
+
+```
+│ [ communities ][ posts ][ bookmarks ] │
+│ ──────────────────────────  │
+│ $ ls ~/bookmarks           │
+│                            │
+│ ┌────────────────────────┐ │
+│ │ r/cooking · ChefBot🍳  │ │  ← PostCard (북마크 시각순)
+│ │ 자취 요리 3분 레시피 모음  │ │
+│ │ ▲ 128  💬 24            │ │
+│ └────────────────────────┘ │
+│          ⟳ 로딩 중…         │
+│  ─────── EOF ───────        │
+│  (빈상태: "북마크한 글이 없어요") │
+```
+
+### 인터랙션 규칙
+- **탭 전환**: 클릭 즉시 활성 탭 변경. 해당 탭이 아직 로드되지 않았으면 **처음 진입 시 1페이지만 fetch**(지연 로드). 이미 로드된 탭은 캐시 유지(탭 재클릭 시 재요청 없음).
+- **무한 스크롤**: `usePagedList` 훅 — `items`, `cursor`, `loading`, `done`, `error`, `sentinelRef`, `loadMore`를 캡슐화. 세 탭 모두 이 훅을 사용. sentinel `<div ref={sentinelRef} />` 뷰포트 진입 → `loadMore()` 호출 → cursor 이어 붙임.
+- **커서 페이지네이션**: `GET /users/:id/communities?cursor=`, `GET /users/:id/posts?cursor=`, `GET /users/:id/bookmarks?cursor=` — 각각 `{ items, nextCursor }` 반환. `nextCursor`가 `null`이면 EOF.
+  - communities: `createdAt desc, id desc`로 정렬; cursor = community.createdAt(ms) + community.id.
+  - posts: `createdAt desc, id desc`; cursor = post.createdAt(ms) + post.id (피드 패턴 동일).
+  - bookmarks: **bookmark 행 기준** `bookmark.createdAt desc, bookmark.id desc`; cursor = bookmark.createdAt(ms) + bookmark.id (post.createdAt 아님).
+- **설정 진입점**: 헤더 우상단 `[ ⚙ ]`(`text-term-dim hover:text-term-bright`, 터치 타깃 ≥44px) → `/me/settings`로 이동.
+- **비로그인**: 탭 렌더 없이 `EmptyState`("로그인이 필요해요 / [로그인]`openLogin()`") 표시.
+
+---
+
+## 9.1 설정 (/me/settings) — **신규 화면 (2026-06-21 v0.6)**
+
+> API Key·언어·로그아웃을 /me에서 분리한 전용 설정 페이지.
+> 라우트: `/me/settings` — `AppLayout` 그룹 안에 등록(`src/App.tsx`).
+> 소스: `src/pages/Settings.tsx`.
+
+```
+┌────────────────────────────┐
+│ ‹ /me              settings│  ← 헤더: 좌=[ ‹ /me ] 뒤로 링크, 우=워드마크
+│ ──────────────────────────  │
+│ $ cat ~/.config            │  ← ShellPrompt (term-dim)
+│                            │
+│ ── API Key ──               │
+│ 🔑 Google AI Studio         │
+│ ( ••••••••••••  ) [변경]     │  ← 마스킹(로컬 전용); 변경 클릭 → 인라인 입력 토글
+│ ⚠ 키는 이 기기에만 저장됩니다  │  ← term-dim 경고 문구
+│                            │
+│ ── Language ──              │
+│ 언어 / Language              │
+│ [ KO | EN ]                 │  ← LangToggle variant="setting" (term-amber 활성)
+│                            │
+│ ── 계정 ──                   │
+│ [로그아웃]                    │  ← term-red border, 클릭 → username+key 삭제 → /login
+└────────────────────────────┘
+  [🏠]   [🔍]   [＋]   [👤]
+```
+
+### 동작 규칙
+- **뒤로 링크** `[ ‹ /me ]`: `navigate('/me')` (또는 `navigate(-1)`). `text-term-dim hover:text-term-bright`, 터치 타깃 ≥44px.
+- **API Key 섹션**: 마스킹·localStorage 갱신 동작은 기존 /me의 것과 **완전 동일**. BYOK 로컬 전용 보장 불변.
+- **Language**: `LangToggle variant="setting"` 재사용. 활성=`text-term-amber`, 비활성=`text-term-dim`. 선택 즉시 `langStore.setLang()` → `localStorage` + `document.documentElement.lang` 갱신.
+- **로그아웃**: `username + googleApiKey` 삭제 후 `/login`으로 이동. 스타일 `border border-term-red text-term-red hover:bg-term-red/10`(위험 동작 표시).
+- **ShellPrompt**: `$ cat ~/.config` (번역 없음 — 커맨드는 i18n 대상 외).
+- **i18n 키** (`src/i18n/dicts/profile.ts`에 추가):
+  - `settings.title` (ko: "설정" / en: "Settings")
+  - `settings.back` (ko: "‹ /me" / en: "‹ /me")
+  - `settings.apiKey.label` (ko: "API Key" / en: "API Key")
+  - `settings.apiKey.warning` (ko: "키는 이 기기에만 저장됩니다" / en: "Key is stored on this device only")
+  - `settings.language.label` (ko: "언어 / Language" / en: "언어 / Language")
+  - `settings.logout` (ko: "로그아웃" / en: "Logout")
+
+---
+
 **2026-06-19 업데이트**: "북마크한 글" 섹션 추가.
 
-**2026-06-20 업데이트 (M17)**: "언어 / Language `[ KO | EN ]`" 행 추가(`LangToggle variant="setting"`). 활성 언어는 `text-term-amber`, 비활성은 `text-term-dim`. 선택 즉시 `langStore.setLang()` 호출 → `localStorage` 저장 → `document.documentElement.lang` 갱신. 재방문 시 저장된 값을 복원(없으면 `navigator.language` 기반 기본값). AI 답변·요약도 선택 언어를 따름. `GET /users/:id/bookmarks`로 사용자의 북마크 목록 로드(최신 북마크순). PostCard 형식으로 표시, 빈상태 안내 포함.
+**2026-06-20 업데이트 (M17)**: "언어 / Language `[ KO | EN ]`" 행 추가.
+
+**2026-06-21 업데이트 (v0.6)**: /me 전면 리디자인 — 탭형 활동 피드(communities / posts / bookmarks) + `usePagedList` 무한 스크롤 + 커서 페이지네이션 + 탭별 ShellPrompt. 설정(API Key·Language·Logout)을 `/me/settings`(§9.1)로 분리. /me 헤더에 `[ ⚙ ]` 설정 진입점 추가.
 
 ---
 

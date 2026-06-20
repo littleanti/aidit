@@ -8,6 +8,7 @@ import CreatePost from './pages/CreatePost';
 import Thread from './pages/Thread';
 import Search from './pages/Search';
 import Profile from './pages/Profile';
+import Settings from './pages/Settings';
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/search" element={<Search />} />
           <Route path="/me" element={<Profile />} />
+          <Route path="/me/settings" element={<Settings />} />
           <Route path="/c/:slug" element={<Community />} />
           <Route path="/c/:slug/create-post" element={<CreatePost />} />
           <Route path="/create-post" element={<CreatePost />} />

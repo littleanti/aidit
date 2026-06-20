@@ -688,3 +688,45 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 - [x] **I18N-13 · 검증**: `typecheck` + `test` + `build` green. 브라우저 — KO↔EN 토글 시 전체 UI 크롬 언어 전환 확인; AI 답변·요약 언어가 UI 언어를 따르는지 실 키로 확인; 새로고침 후 선택 언어 유지 확인.
 
 **M17 종료 기준**: `langStore`가 `localStorage`에 영속되고 `document.documentElement.lang`을 갱신함; `LangToggle`이 헤더·프로필 설정 양쪽에 존재하고 KO/EN을 즉시 전환함; 모든 UI 크롬 문자열이 딕셔너리로 이전되어 선택 언어로 표시됨(UGC는 원문 유지); AI가 `systemInstruction` 언어 지시어를 통해 UI 언어로 답변·요약함; `SUMMARY_DIRECTIVE`·`USER_MESSAGES`·AI 실패 문자열이 lang-aware임; typecheck · test · build 전부 green.
+
+---
+
+## 20. M18 — 프로필(/me) 리디자인: 탭 + 커서 페이지네이션 + 설정 분리 (v1.2, 예정)
+
+> 출처: Profile Redesign 승인 사양(2026-06-21). 레퍼런스: GitHub 프로필 탭, Reddit(Posts/Saved), X(Posts/Likes).
+> 앱은 그린 인광 CRT 터미널 미감 — 기존 Home 피드 패턴(탭 + IntersectionObserver 센티널 + opaque nextCursor + loading/EOF)을 **그대로 재사용**하여 일관성 유지.
+> **기능 추가 / IA 변경** — 라우팅 신규(`/me/settings`), 백엔드 3개 엔드포인트 keyset 페이지네이션 추가, 프론트 탭·무한스크롤·설정 페이지 분리.
+> 완료 게이트: `npm run typecheck` · `npm run test` · `npm run build` 전부 green + 브라우저 시각 검증(탭 전환·무한스크롤·설정 페이지 이동·KO/EN 전환).
+
+### 배경 — 현재 상태 (ground truth)
+
+- 피드 `GET /posts`는 `backend/src/routes/posts.ts`에 keyset 커서 페이지네이션 완비(`encodeCursor`/`decodeCursor` = createdAt(ms)+id base64url, PAGE+1 take, `items`+`nextCursor` 응답 envelope). 프론트 `getPosts`는 `PostsPage` shape 반환.
+- 프로필 3개 엔드포인트는 페이지네이션 **없음**(전체 목록 반환): `GET /users/:id/posts`, `GET /users/:id/bookmarks`(둘 다 `posts.ts`), `GET /users/:id/communities`(`communities.ts`).
+- `rest.ts`의 `getUserPosts`/`getUserBookmarks`/`getUserCommunities`는 커서를 버리고 bare 배열로 unwrap(`toItems`).
+- `Profile.tsx`는 `Promise.all`로 셋을 동시 로드·나열; API Key·Language·Logout 설정이 `/me` 상단에 위치.
+
+### 작업 패키지 (WP)
+
+#### 백엔드 — keyset 커서 페이지네이션 추가
+
+- [ ] **PR-BE-1 · 공유 커서 유틸 추출**: `backend/src/domain/cursor.ts` 신규. 기존 `posts.ts`의 `encodeCursor`/`decodeCursor`(createdAtMs + id base64url)를 이 모듈로 이전·재익스포트. `posts.ts`는 동일 함수를 `cursor.ts`에서 import — 피드·`/communities/:slug/posts` 동작 **불변**. `communities.ts`가 재사용.
+- [ ] **PR-BE-2 · `GET /users/:id/posts` 페이지네이션**: `createdAt desc, id desc` 정렬; 커서 앵커 = `post.createdAt(ms) + post.id`(피드 "new" 커서와 동일). `cursor` 쿼리 파라미터 수락; 잘못된 커서 → 400. `{ items, nextCursor }` 반환(끝이면 `null`). `PAGE_SIZE` 상수(~20) 사용.
+- [ ] **PR-BE-3 · `GET /users/:id/communities` 페이지네이션**: `createdAt desc, id desc` 정렬; 커서 앵커 = `community.createdAt(ms) + community.id`. PR-BE-1 `cursor.ts` 재사용. 동일 envelope 반환.
+- [ ] **PR-BE-4 · `GET /users/:id/bookmarks` 페이지네이션 (트리키)**: 정렬 기준은 **Bookmark 조인 행의 `createdAt desc`(북마크된 시각), 타이브레이크 `bookmark.id desc`**. 커서 앵커·keyset 조건자 모두 bookmark 행 기준(`bookmark.createdAt(ms) + bookmark.id`). `post.createdAt` 사용 금지. 동일 envelope 반환.
+- [ ] **PR-BE-5 · 백엔드 테스트 추가/확장**: 3개 엔드포인트 각각: 첫 페이지 크기 = PAGE_SIZE, `nextCursor` 존재(더 있을 때), 두 번째 페이지 이어지기, 목록 끝 `nextCursor null`, 잘못된 커서 400. 기존 피드 테스트 **무변경**.
+
+#### 클라이언트 — types + rest.ts 갱신
+
+- [ ] **PR-FE-1 · `api/types.ts` 타입 추가**: `CommunitiesPage { items: Community[]; nextCursor: string | null }` 신규. 기존 `PostsPage { items: Post[]; nextCursor: string | null }` 참조.
+- [ ] **PR-FE-2 · `rest.ts` 페이지 클라이언트 교체**: `getUserPosts(userId, cursor?)` → `PostsPage` 반환. `getUserBookmarks(userId, cursor?)` → `PostsPage` 반환. `getUserCommunities(userId, cursor?)` → `CommunitiesPage` 반환. Authorization 헤더(acting userId) 전달 방식 기존과 동일하게 유지.
+
+#### 프론트엔드 — 훅 + UI
+
+- [ ] **PR-FE-3 · `usePagedList` 훅**: 신규 `frontend/src/hooks/usePagedList.ts`. 캡슐화 항목: `items` 상태, `cursor`, `loading`, `done`(EOF), `error`, sentinel `ref`(IntersectionObserver), `loadMore`(items append). Home 피드의 IntersectionObserver + nextCursor 패턴을 재사용하여 3개 탭이 공유. 제네릭(`T`) 설계.
+- [ ] **PR-FE-4 · Profile 탭 UI 리디자인**: `Profile.tsx` 개편. 3개 탭 `[ communities | posts | bookmarks ]` — Home 피드 탭과 동일한 세그먼트 컨트롤 스타일(활성 = `text-term-amber`). 활성 탭만 lazy 로드·페이지네이션(`usePagedList` 사용). 탭별 ShellPrompt 커맨드: `ls ~/communities`, `ls ~/posts`, `ls ~/bookmarks`. 빈 상태·로딩·EOF 상태는 기존 Home 피드의 states 컴포넌트·idiom 재사용. 설정 섹션(API Key·Language·Logout)은 이 화면에서 **제거**하고 `/me/settings` 링크로 대체. 헤더에 gear 아이콘 또는 `[ settings ]` 링크 추가(→ `/me/settings`).
+- [ ] **PR-FE-5 · Settings 페이지 신규**: `frontend/src/pages/Settings.tsx` 신규. 내용: API Key 섹션(마스킹·로컬 전용 — 동작 **완전 동일**), Language 설정(`LangToggle variant='setting'`), Logout(→ `/login` 네비게이션). ShellPrompt 커맨드: `cat ~/.config`. `/me`로 돌아가는 back 링크. 터미널 미감 전체 유지.
+- [ ] **PR-FE-6 · 라우팅 등록**: `src/App.tsx`의 AppLayout 그룹 내 `/me/settings` 경로에 `Settings` 컴포넌트 등록.
+- [ ] **PR-FE-7 · i18n 키 추가**: `src/i18n/dicts/profile.ts`(ko + en)에 신규 키 추가 — 탭 레이블(`communities`, `posts`, `bookmarks`), 설정 링크 레이블, 설정 페이지 제목, 각 탭 EOF/빈 상태 문자열(Home 피드 기존 키와 중복 시 재사용 우선). 커맨드 문자열은 번역 대상 아님.
+- [ ] **PR-FE-8 · 검증**: `typecheck` + `test` + `build` green. 브라우저 — 탭 전환 · 무한스크롤 · `/me/settings` 이동·back · KO/EN 전환 · 비로그인 EmptyState 유지 · API Key 마스킹 동작·Logout 동작 확인.
+
+**M18 종료 기준**: 3개 프로필 엔드포인트가 keyset `{ items, nextCursor }` envelope 반환(잘못된 커서 400, EOF `null`); bookmarks 커서가 post.createdAt 아닌 bookmark 행 기준임; `getUserPosts`/`getUserBookmarks`/`getUserCommunities`가 paged shape 반환; Profile(`/me`)이 탭 3개(communities/posts/bookmarks) + 활성 탭 무한스크롤; 설정(API Key·Language·Logout)이 `/me/settings`로 이동됨; AppLayout 그룹에 `/me/settings` 라우트 등록; i18n 키 추가; BYOK 키 마스킹·로컬 전용 동작 불변; 비로그인 EmptyState 유지; 모바일 우선·터치 ≥44px·가로 스크롤 없음; `typecheck`·`test`·`build` green.

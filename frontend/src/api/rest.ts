@@ -1,6 +1,7 @@
 import type {
   Comment,
   CommentStatus,
+  CommunitiesPage,
   Community,
   ContextResponse,
   CreateCommentRequest,
@@ -227,34 +228,55 @@ export async function getCommunityPosts(slug: string, userId?: string): Promise<
 // ---- Profile ("my content") ----
 
 /**
- * GET /users/:id/posts — posts authored by a user (public, read-only).
- * Normalizes the server's { items } envelope to an array like getPosts.
+ * GET /users/:id/posts — posts authored by a user, keyset-paginated.
+ * Returns one page (items + opaque nextCursor). Pass cursor from the previous
+ * page to continue; omit for the first page. nextCursor is null at end-of-list.
  * Pass actingUserId for compat (unused; server reads identity from Authorization header).
  */
-export async function getUserPosts(userId: string, actingUserId?: string): Promise<PostListItem[]> {
-  const r = await request<PostListResponse>(`/users/${userId}/posts`, { userId: actingUserId });
-  return toItems(r);
-}
-
-/**
- * GET /users/:id/bookmarks — posts bookmarked by a user, most-recent first.
- * L1: NO apiKey. Pass actingUserId to have the server compute voted per card.
- * Normalizes the server's { items } envelope to an array like getUserPosts.
- */
-export async function getUserBookmarks(userId: string, actingUserId?: string): Promise<PostListItem[]> {
-  const r = await request<PostListResponse>(`/users/${userId}/bookmarks`, { userId: actingUserId });
-  return toItems(r);
-}
-
-/**
- * GET /users/:id/communities — communities created by a user (public, read-only).
- * Normalizes to an array consistently with getCommunities.
- */
-export async function getUserCommunities(userId: string): Promise<Community[]> {
-  const r = await request<Community[] | { items: Community[] }>(
-    `/users/${userId}/communities`,
+export async function getUserPosts(
+  userId: string,
+  cursor?: string,
+  actingUserId?: string,
+): Promise<PostsPage> {
+  const r = await request<{ items: PostListItem[]; nextCursor?: string | null }>(
+    `/users/${userId}/posts`,
+    { query: { cursor }, userId: actingUserId },
   );
-  return Array.isArray(r) ? r : (r?.items ?? []);
+  return { items: r.items ?? [], nextCursor: r.nextCursor ?? null };
+}
+
+/**
+ * GET /users/:id/bookmarks — posts bookmarked by a user, keyset-paginated by
+ * bookmark row (most-recently-bookmarked first). The cursor encodes the bookmark
+ * row position — treat it as fully opaque (do not derive from post fields).
+ * L1: NO apiKey. Pass actingUserId to have the server compute voted per card.
+ */
+export async function getUserBookmarks(
+  userId: string,
+  cursor?: string,
+  actingUserId?: string,
+): Promise<PostsPage> {
+  const r = await request<{ items: PostListItem[]; nextCursor?: string | null }>(
+    `/users/${userId}/bookmarks`,
+    { query: { cursor }, userId: actingUserId },
+  );
+  return { items: r.items ?? [], nextCursor: r.nextCursor ?? null };
+}
+
+/**
+ * GET /users/:id/communities — communities created by a user, keyset-paginated.
+ * Returns one page (items + opaque nextCursor). Pass cursor from the previous
+ * page to continue; omit for the first page. nextCursor is null at end-of-list.
+ */
+export async function getUserCommunities(
+  userId: string,
+  cursor?: string,
+): Promise<CommunitiesPage> {
+  const r = await request<{ items: Community[]; nextCursor?: string | null }>(
+    `/users/${userId}/communities`,
+    { query: { cursor } },
+  );
+  return { items: r.items ?? [], nextCursor: r.nextCursor ?? null };
 }
 
 export interface CreatePostBody {

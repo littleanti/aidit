@@ -1,7 +1,7 @@
 # Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
 
 > 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
-> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-20 (댓글 AI 모드 기본 ON)
+> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-21 (Profile 재설계 — 탭형 무한 스크롤 + /me/settings 분리)
 > 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
 
 ---
@@ -9,6 +9,15 @@
 ## 변경 이력 (Changelog)
 
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
+
+### 2026-06-21
+- **[feat]** **Profile(/me) 재설계 — 탭형 무한 스크롤 + /me/settings 분리**: 프로필 화면을 전면 재구성했다. 상세 내용:
+  - **백엔드 keyset cursor 페이지네이션**: `GET /users/:id/posts`·`GET /users/:id/bookmarks`(북마크 행 anchor 기반)·`GET /users/:id/communities`에 keyset cursor 페이지네이션 적용. 세 라우트의 커서 인코딩·디코딩 로직을 공유 유틸(`backend/src/lib/cursorUtil.ts` 또는 동등 위치)로 추출해 중복 제거.
+  - **rest.ts 페이지드 클라이언트**: `frontend/src/api/rest.ts`의 해당 세 fetcher가 `{ items, nextCursor }` envelope를 그대로 반환하는 paged client로 교체(기존 배열 반환에서 변경).
+  - **Profile(/me) 탭 UI**: `/me` 화면을 **[ communities | posts | bookmarks ]** 세 탭으로 재작성. 각 탭은 독립적인 무한 스크롤을 가지며, 공유 `usePagedList` 훅(또는 동등 커스텀 훅)으로 페이지 상태·로딩·fetchMore 로직을 일원화. 탭 ShellPrompt는 `ls ~/<tab>` 패턴.
+  - **설정 분리(/me/settings)**: 기존 /me에 인라인으로 있던 API Key 변경·언어 설정·로그아웃을 신규 `/me/settings` 페이지로 이동. /me 화면 상단에 설정 링크 추가.
+  - **신규 i18n 키**: 탭 레이블·설정 페이지 제목·빈 상태 메시지 등 관련 ko/en 사전 키 추가.
+  - **Home 피드 미변경**: 홈 피드(`GET /posts` + Home 컴포넌트)는 이번 작업 범위 밖이며 완전히 untouched.
 
 ### 2026-06-20
 - **[feat]** **댓글 AI 모드 기본 ON 전환**: `aiModeStore`의 스레드별 AI 모드 기본값을 **OFF → ON**으로 변경(`isOn`/`toggle` + `Composer` 읽기 3곳을 `?? false` → `?? true`). 스레드 진입 시 작성창이 **AI-우선**(체크박스 `[X]` · `@AI` 칩 · AI placeholder · 상단 프롬프트 `ai --ask /p/<id>`)이며, 일반 사람 댓글은 사용자가 토글을 끄면 된다. **트레이드오프**: 기존 "비용 안전 기본 OFF(BYOK 키를 의도적 opt-in으로만 소비)" 정책을 뒤집어 **기본적으로 사용자 키를 소비**한다 — 단, Composer의 전송 전 가드(키 없으면 AI 전송 차단 + 로그인 유도)는 불변이라 키 미설정 시 비용 0. 세션 한정·미영속(하드 리로드 시 다시 ON). (§3, §5 — 2026-06-18 `aiModeStore` 도입 항목의 "기본 OFF"를 대체)

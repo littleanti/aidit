@@ -1,78 +1,39 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
-import { getUserCommunities, getUserPosts, getUserBookmarks, ApiError } from '../api/rest';
+import {
+  getUserCommunities,
+  getUserPosts,
+  getUserBookmarks,
+} from '../api/rest';
 import type { Community, PostListItem } from '../api/types';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
 import PostCard from '../components/PostCard';
 import PersonaBadge from '../components/PersonaBadge';
 import Avatar from '../components/Avatar';
 import { useT } from '../i18n/useT';
-import LangToggle from '../components/LangToggle';
 import ShellPrompt from '../components/ShellPrompt';
+import { usePagedList } from '../hooks/usePagedList';
 
-// FE: 👤 나 — profile page (WIREFRAME §9).
-// L1: googleApiKey is LOCAL ONLY. It is shown MASKED here and never logged,
-// never sent to the server. Key changes go through authStore.updateKey.
+// FE: 👤 나 — profile page, now a TABBED activity view (WIREFRAME §9 redesign).
+// API Key / Language / Logout settings moved out to /me/settings (Settings.tsx).
+// Each tab fetches lazily and paginates with the same infinite-scroll mechanism
+// as the Home feed (IntersectionObserver sentinel + opaque nextCursor).
 
-type LoadState = 'loading' | 'error' | 'ready';
+type Tab = 'communities' | 'posts' | 'bookmarks';
 
-/** Show only that a key is set + its last 4 chars; never reveal the full key. */
-function maskKey(key: string): string {
-  const trimmed = key.trim();
-  if (!trimmed) return '';
-  if (trimmed.length <= 4) return '••••';
-  return `••••••••${trimmed.slice(-4)}`;
-}
+// Per-tab terminal command (NOT translated — shell idiom, identical KO/EN).
+const TAB_COMMAND: Record<Tab, string> = {
+  communities: 'ls ~/communities',
+  posts: 'ls ~/posts',
+  bookmarks: 'ls ~/bookmarks',
+};
 
 export default function Profile() {
   const { t } = useT();
-  const navigate = useNavigate();
   const userId = useAuthStore((s) => s.userId);
   const username = useAuthStore((s) => s.username);
-  const googleApiKey = useAuthStore((s) => s.googleApiKey);
-  const updateKey = useAuthStore((s) => s.updateKey);
-  const logout = useAuthStore((s) => s.logout);
-
-  // ---- key editing (local only) ----
-  const [editingKey, setEditingKey] = useState(false);
-  const [keyDraft, setKeyDraft] = useState('');
-
-  // ---- my content ----
-  const [communities, setCommunities] = useState<Community[]>([]);
-  const [posts, setPosts] = useState<PostListItem[]>([]);
-  const [bookmarks, setBookmarks] = useState<PostListItem[]>([]);
-  const [state, setState] = useState<LoadState>('loading');
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    setState('loading');
-    setError(null);
-
-    Promise.all([getUserCommunities(userId), getUserPosts(userId, userId), getUserBookmarks(userId, userId)])
-      .then(([cs, ps, bks]) => {
-        if (cancelled) return;
-        setCommunities(cs);
-        setPosts(ps);
-        setBookmarks(bks);
-        setState('ready');
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        const msg =
-          err instanceof ApiError
-            ? err.message
-            : t('profile.loadError');
-        setError(msg);
-        setState('error');
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
+  const [tab, setTab] = useState<Tab>('communities');
 
   // ---- not logged in ----
   if (!userId) {
@@ -104,46 +65,25 @@ export default function Profile() {
     );
   }
 
-  function handleLogout() {
-    logout();
-    navigate('/login');
-  }
-
-  function startEditKey() {
-    setKeyDraft('');
-    setEditingKey(true);
-  }
-
-  function saveKey() {
-    const next = keyDraft.trim();
-    if (!next) return;
-    updateKey(next); // L1: local only — never crosses the network.
-    setKeyDraft('');
-    setEditingKey(false);
-  }
-
-  function cancelEditKey() {
-    setKeyDraft('');
-    setEditingKey(false);
-  }
+  const TABS: { key: Tab; label: string }[] = [
+    { key: 'communities', label: t('profile.tabCommunities') },
+    { key: 'posts', label: t('profile.tabPosts') },
+    { key: 'bookmarks', label: t('profile.tabBookmarks') },
+  ];
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8 py-6 font-mono">
-      <ShellPrompt command="whoami" className="mb-3" />
-      {/* header */}
-      <header className="flex items-center gap-3">
+    <div className="mx-auto max-w-2xl py-6 font-mono">
+      {/* header: avatar + username + settings entry point */}
+      <header className="mb-4 flex items-center gap-3">
         <Avatar kind="user" seed={username} size="md" />
-        <h1 className="truncate text-xl font-bold text-term-title">
+        <h1 className="min-w-0 flex-1 truncate text-xl font-bold text-term-title">
           {username}
         </h1>
-      </header>
-
-      {/* API Key */}
-      <section className="relative rounded-[2px] border border-term-border bg-term-card p-4 shadow-term-glow">
-        <span className="absolute -top-2 left-3 select-none bg-term-tag px-1.5 text-[11px] font-bold uppercase tracking-wider text-term-faint">
-          API KEY
-        </span>
-        <h2 className="flex items-center gap-1.5 text-sm font-semibold text-term-bright">
+        <Link
+          to="/me/settings"
+          aria-label={t('profile.settingsLink')}
+          className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-[2px] border border-term-border px-3 text-sm font-semibold text-term-dim transition hover:border-term-bright hover:text-term-bright"
+        >
           <svg
             aria-hidden
             viewBox="0 0 24 24"
@@ -153,197 +93,264 @@ export default function Profile() {
             strokeWidth="1.5"
             strokeLinecap="square"
           >
-            <circle cx="8" cy="8" r="4" />
-            <path d="M11 11l8 8M16 16l2-2M19 19l2-2" />
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19" />
           </svg>
-          {t('profile.apiKeyHeading')}
-        </h2>
+          <span className="hidden sm:inline">{t('profile.settingsLink')}</span>
+        </Link>
+      </header>
 
-        {!editingKey ? (
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <span className="min-w-0 flex-1 truncate text-sm text-term-dim">
-              {googleApiKey ? maskKey(googleApiKey) : t('profile.keyNotSet')}
-            </span>
-            <button
-              type="button"
-              onClick={startEditKey}
-              className="inline-flex min-h-[44px] shrink-0 items-center rounded-[2px] border border-term-border px-4 text-sm font-semibold text-term-bright transition hover:border-term-bright hover:bg-term-hover"
-            >
-              {t('profile.keyChangeBtn')}
-            </button>
-          </div>
-        ) : (
-          <div className="mt-3 space-y-2">
-            <input
-              type="password"
-              autoComplete="off"
-              value={keyDraft}
-              onChange={(e) => setKeyDraft(e.target.value)}
-              placeholder="AIza..."
-              className="w-full rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 text-sm text-term-bright outline-none placeholder:text-term-dim focus:border-term-bright focus:ring-1 focus:ring-term-bright"
-            />
-            <div className="flex gap-2">
+      {/* tabs — same terminal/amber segmented style as the Home feed */}
+      <div className="sticky top-0 z-10 -mx-4 mb-3 border-b border-term-border bg-term-screen px-4">
+        <div className="flex">
+          {TABS.map((tabDef) => {
+            const active = tab === tabDef.key;
+            return (
               <button
+                key={tabDef.key}
                 type="button"
-                onClick={saveKey}
-                disabled={!keyDraft.trim()}
-                className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-[2px] border border-term-cta bg-gradient-to-b from-[#155230] to-[#0c3a20] px-4 text-sm font-bold text-term-bright shadow-glow-cta transition hover:border-term-bright disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={() => setTab(tabDef.key)}
+                aria-pressed={active}
+                className={`min-h-[44px] flex-1 border-b-2 text-sm font-semibold transition ${
+                  active
+                    ? 'border-term-amber bg-[rgba(255,207,74,0.06)] text-term-amber'
+                    : 'border-transparent text-term-dim hover:text-term-bright'
+                }`}
               >
-                {t('profile.keySaveBtn')}
+                {tabDef.label}
               </button>
-              <button
-                type="button"
-                onClick={cancelEditKey}
-                className="inline-flex min-h-[44px] items-center justify-center rounded-[2px] border border-term-border px-4 text-sm font-semibold text-term-bright transition hover:border-term-bright hover:bg-term-hover"
-              >
-                {t('profile.keyCancelBtn')}
-              </button>
-            </div>
-          </div>
-        )}
-
-        <p className="mt-3 rounded-[2px] bg-term-info px-3 py-2 text-xs leading-relaxed text-term-amber">
-          {t('profile.keyStorageNote')}
-        </p>
-      </section>
-
-      {/* Language setting (FR: secondary LangToggle in settings panel) */}
-      <section className="rounded-[2px] border border-term-border bg-term-card p-4 shadow-term-glow">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm font-semibold text-term-bright">
-            {t('profile.languageSettingLabel')}
-          </span>
-          <LangToggle variant="setting" />
+            );
+          })}
         </div>
-      </section>
+      </div>
 
-      {/* 로그아웃 (FR-2.4) */}
-      <section className="rounded-[2px] border border-term-border bg-term-card p-4 shadow-term-glow">
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="inline-flex min-h-[44px] w-full items-center justify-center rounded-[2px] border border-term-danger px-4 text-sm font-semibold text-term-danger transition hover:bg-term-hover"
-        >
-          {t('profile.logoutBtn')}
-        </button>
-      </section>
+      {/* terminal prompt line — per-tab command */}
+      <ShellPrompt command={TAB_COMMAND[tab]} className="mb-3" />
 
-      {/* 내가 만든 커뮤니티 + 내 글 */}
-      {state === 'loading' && <LoadingState label={t('profile.loadingActivity')} />}
+      {/* Only the active tab is mounted, so only it fetches + paginates. */}
+      {tab === 'communities' && <CommunitiesTab userId={userId} />}
+      {tab === 'posts' && <PostsTab userId={userId} />}
+      {tab === 'bookmarks' && <BookmarksTab userId={userId} />}
+    </div>
+  );
+}
 
-      {state === 'error' && (
+// ----------------------------------------------------------------------------
+// Tab panels. Each owns its own usePagedList instance so its cursor/loading/
+// done state is independent and only fetches while mounted (lazy per tab).
+// ----------------------------------------------------------------------------
+
+function CommunitiesTab({ userId }: { userId: string }) {
+  const { t } = useT();
+  const { items, loading, error, done, initialized, sentinelRef, reload } =
+    usePagedList<Community>({
+      resetKey: `communities:${userId}`,
+      errorFallback: t('profile.loadError'),
+      fetcher: (cursor) => getUserCommunities(userId, cursor),
+    });
+
+  const isEmpty = initialized && !error && items.length === 0;
+
+  return (
+    <>
+      {error && (
         <ErrorState
-          message={error ?? t('profile.loadError')}
-          onRetry={() => {
-            // re-trigger the effect by toggling state; simplest is a reload of
-            // the same userId-bound fetch.
-            setState('loading');
-            setError(null);
-            Promise.all([getUserCommunities(userId), getUserPosts(userId, userId), getUserBookmarks(userId, userId)])
-              .then(([cs, ps, bks]) => {
-                setCommunities(cs);
-                setPosts(ps);
-                setBookmarks(bks);
-                setState('ready');
-              })
-              .catch((err) => {
-                const msg =
-                  err instanceof ApiError
-                    ? err.message
-                    : t('profile.loadError');
-                setError(msg);
-                setState('error');
-              });
-          }}
+          variant="banner"
+          message={error}
+          onRetry={reload}
+          className="mb-3"
         />
       )}
 
-      {state === 'ready' && (
-        <>
-          <section>
-            <h2 className="mb-3 text-sm font-semibold text-term-faint">
-              {t('profile.communitiesHeading')}
-            </h2>
-            {communities.length === 0 ? (
-              <div className="rounded-[2px] border border-dashed border-term-border bg-term-card/40 py-2">
-                <EmptyState
-                  title={t('profile.noCommunityTitle')}
-                  hint={t('profile.noCommunityHint')}
-                  action={
-                    <Link
-                      to="/create-community"
-                      className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-border px-4 text-sm font-semibold text-term-bright transition hover:border-term-bright hover:bg-term-hover"
-                    >
-                      {t('profile.createCommunityBtn')}
-                    </Link>
-                  }
-                />
-              </div>
-            ) : (
-              <ul className="space-y-2">
-                {communities.map((c) => (
-                  <li key={c.id}>
-                    <Link
-                      to={`/c/${c.slug}`}
-                      className="flex items-center justify-between gap-3 rounded-[2px] border border-term-border bg-term-card px-4 py-3 shadow-term-glow transition active:bg-term-hover hover:border-term-bright"
-                    >
-                      <PersonaBadge
-                        personaIcon={c.personaIcon}
-                        name={c.name}
-                        size="sm"
-                        className="min-w-0"
-                      />
-                      <span className="shrink-0 text-xs text-term-faint">
-                        r/{c.slug}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section>
-            <h2 className="mb-3 text-sm font-semibold text-term-faint">
-              {t('profile.postsHeading')}
-            </h2>
-            {posts.length === 0 ? (
-              <div className="rounded-[2px] border border-dashed border-term-border bg-term-card/40 py-2">
-                <EmptyState
-                  title={t('profile.noPostTitle')}
-                  hint={t('profile.noPostHint')}
-                />
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {posts.map((p) => (
-                  <PostCard key={p.id} post={p} />
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section>
-            <h2 className="mb-3 text-sm font-semibold text-term-faint">
-              {t('profile.bookmarksHeading')}
-            </h2>
-            {bookmarks.length === 0 ? (
-              <div className="rounded-[2px] border border-dashed border-term-border bg-term-card/40 py-2">
-                <EmptyState
-                  title={t('profile.noBookmarkTitle')}
-                  hint={t('profile.noBookmarkHint')}
-                />
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {bookmarks.map((p) => (
-                  <PostCard key={p.id} post={p} />
-                ))}
-              </div>
-            )}
-          </section>
-        </>
+      {!initialized && loading && items.length === 0 && (
+        <LoadingState variant="skeleton" rows={5} />
       )}
+
+      {isEmpty && (
+        <div className="rounded-[2px] border border-dashed border-term-border bg-term-card/40 py-2">
+          <EmptyState
+            title={t('profile.noCommunityTitle')}
+            hint={t('profile.noCommunityHint')}
+            action={
+              <Link
+                to="/create-community"
+                className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-border px-4 text-sm font-semibold text-term-bright transition hover:border-term-bright hover:bg-term-hover"
+              >
+                {t('profile.createCommunityBtn')}
+              </Link>
+            }
+          />
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <ul className="space-y-2">
+          {items.map((c) => (
+            <li key={c.id}>
+              <Link
+                to={`/c/${c.slug}`}
+                className="flex items-center justify-between gap-3 rounded-[2px] border border-term-border bg-term-card px-4 py-3 shadow-term-glow transition active:bg-term-hover hover:border-term-bright"
+              >
+                <PersonaBadge
+                  personaIcon={c.personaIcon}
+                  name={c.name}
+                  size="sm"
+                  className="min-w-0"
+                />
+                <span className="shrink-0 text-xs text-term-faint">
+                  r/{c.slug}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Sentinel
+        sentinelRef={sentinelRef}
+        loading={loading}
+        done={done}
+        hasItems={items.length > 0}
+        isEmpty={isEmpty}
+      />
+    </>
+  );
+}
+
+function PostsTab({ userId }: { userId: string }) {
+  const { t } = useT();
+  const { items, loading, error, done, initialized, sentinelRef, reload } =
+    usePagedList<PostListItem>({
+      resetKey: `posts:${userId}`,
+      errorFallback: t('profile.loadError'),
+      fetcher: (cursor) => getUserPosts(userId, cursor, userId),
+    });
+
+  const isEmpty = initialized && !error && items.length === 0;
+
+  return (
+    <>
+      {error && (
+        <ErrorState
+          variant="banner"
+          message={error}
+          onRetry={reload}
+          className="mb-3"
+        />
+      )}
+
+      {!initialized && loading && items.length === 0 && (
+        <LoadingState variant="skeleton" rows={5} />
+      )}
+
+      {isEmpty && (
+        <div className="rounded-[2px] border border-dashed border-term-border bg-term-card/40 py-2">
+          <EmptyState
+            title={t('profile.noPostTitle')}
+            hint={t('profile.noPostHint')}
+          />
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div className="space-y-2">
+          {items.map((p) => (
+            <PostCard key={p.id} post={p} />
+          ))}
+        </div>
+      )}
+
+      <Sentinel
+        sentinelRef={sentinelRef}
+        loading={loading}
+        done={done}
+        hasItems={items.length > 0}
+        isEmpty={isEmpty}
+      />
+    </>
+  );
+}
+
+function BookmarksTab({ userId }: { userId: string }) {
+  const { t } = useT();
+  const { items, loading, error, done, initialized, sentinelRef, reload } =
+    usePagedList<PostListItem>({
+      resetKey: `bookmarks:${userId}`,
+      errorFallback: t('profile.loadError'),
+      fetcher: (cursor) => getUserBookmarks(userId, cursor, userId),
+    });
+
+  const isEmpty = initialized && !error && items.length === 0;
+
+  return (
+    <>
+      {error && (
+        <ErrorState
+          variant="banner"
+          message={error}
+          onRetry={reload}
+          className="mb-3"
+        />
+      )}
+
+      {!initialized && loading && items.length === 0 && (
+        <LoadingState variant="skeleton" rows={5} />
+      )}
+
+      {isEmpty && (
+        <div className="rounded-[2px] border border-dashed border-term-border bg-term-card/40 py-2">
+          <EmptyState
+            title={t('profile.noBookmarkTitle')}
+            hint={t('profile.noBookmarkHint')}
+          />
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div className="space-y-2">
+          {items.map((p) => (
+            <PostCard key={p.id} post={p} />
+          ))}
+        </div>
+      )}
+
+      <Sentinel
+        sentinelRef={sentinelRef}
+        loading={loading}
+        done={done}
+        hasItems={items.length > 0}
+        isEmpty={isEmpty}
+      />
+    </>
+  );
+}
+
+// Shared infinite-scroll sentinel + loading/EOF line (Home feed idiom).
+function Sentinel({
+  sentinelRef,
+  loading,
+  done,
+  hasItems,
+  isEmpty,
+}: {
+  sentinelRef: React.MutableRefObject<HTMLDivElement | null>;
+  loading: boolean;
+  done: boolean;
+  hasItems: boolean;
+  isEmpty: boolean;
+}) {
+  const { t } = useT();
+  if (isEmpty) return null;
+  return (
+    <div
+      ref={sentinelRef}
+      className="flex justify-center py-6 text-xs text-term-faint"
+    >
+      {loading && hasItems
+        ? t('profile.loading')
+        : done && hasItems
+          ? t('profile.eof')
+          : ''}
     </div>
   );
 }

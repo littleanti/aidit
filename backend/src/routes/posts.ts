@@ -3,34 +3,17 @@ import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../db.js";
 import { effectiveHotScore, hotScore } from "../domain/hotScore.js";
 import { createInitialSegment } from "../domain/segment.js";
+import { encodeCursor, decodeCursor } from "../domain/cursor.js";
 import { requireAuth, optionalAuth } from "../auth.js";
 
 // Feed cursor: opaque base64 of "hotScore|id" (hot) or "createdAtMs|id" (new). The
 // numeric component is the keyset tie-break anchor; id breaks ties deterministically.
-interface DecodedCursor {
-  value: number;
-  id: string;
-}
-
-function encodeCursor(value: number, id: string): string {
-  return Buffer.from(`${value}|${id}`, "utf8").toString("base64url");
-}
-
-function decodeCursor(cursor: string): DecodedCursor | null {
-  try {
-    const raw = Buffer.from(cursor, "base64url").toString("utf8");
-    const sep = raw.lastIndexOf("|");
-    if (sep <= 0) return null;
-    const value = Number(raw.slice(0, sep));
-    const id = raw.slice(sep + 1);
-    if (!Number.isFinite(value) || id === "") return null;
-    return { value, id };
-  } catch {
-    return null;
-  }
-}
+// encode/decode live in domain/cursor.ts so other routes reuse them verbatim.
 
 const FEED_PAGE_SIZE = 20;
+
+// Profile activity lists (a user's posts / bookmarks). Same default as the feed.
+const PROFILE_PAGE_SIZE = 20;
 
 // Shape a post row (with community + author) into a feed card. `hotScoreOverride`
 // lets the hot feed surface the read-time effective hotScore (XC-8) instead of the
@@ -384,20 +367,55 @@ const plugin: FastifyPluginAsync = async (app) => {
   );
 
   // Posts authored by a user (public profile view, read-only), newest first.
-  app.get<{ Params: { id: string } }>(
+  // Keyset/cursor paginated — identical anchor to the "new" feed
+  // (createdAt(ms) + id), so the cursor encoding matches the feed.
+  app.get<{ Params: { id: string }; Querystring: { cursor?: string } }>(
     "/users/:id/posts",
     async (req, reply) => {
+      const cursorRaw = req.query.cursor;
+      const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
+      if (cursorRaw && !cursor) {
+        return reply.code(400).send({ error: "Invalid cursor" });
+      }
+
+      // Keyset predicate (createdAt DESC, id DESC): rows strictly after cursor.
+      const where =
+        cursor === null
+          ? { authorId: req.params.id }
+          : {
+              authorId: req.params.id,
+              OR: [
+                { createdAt: { lt: new Date(cursor.value) } },
+                {
+                  AND: [
+                    { createdAt: new Date(cursor.value) },
+                    { id: { lt: cursor.id } },
+                  ],
+                },
+              ],
+            };
+
       const rows = await prisma.post.findMany({
-        where: { authorId: req.params.id },
+        where,
         orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }],
+        take: PROFILE_PAGE_SIZE + 1,
         include: feedInclude,
       });
+
+      const hasMore = rows.length > PROFILE_PAGE_SIZE;
+      const page = hasMore ? rows.slice(0, PROFILE_PAGE_SIZE) : rows;
+
+      let nextCursor: string | null = null;
+      if (hasMore && page.length > 0) {
+        const last = page[page.length - 1]!;
+        nextCursor = encodeCursor(last.createdAt.getTime(), last.id);
+      }
 
       // JWT-derived optional identity (never x-user-id).
       const actingUserId = await optionalAuth(req);
       const votedSet = new Set<string>();
-      if (actingUserId && rows.length > 0) {
-        const pageIds = rows.map((p) => p.id);
+      if (actingUserId && page.length > 0) {
+        const pageIds = page.map((p) => p.id);
         const userVotes = await prisma.vote.findMany({
           where: { userId: actingUserId, postId: { in: pageIds } },
           select: { postId: true },
@@ -406,7 +424,8 @@ const plugin: FastifyPluginAsync = async (app) => {
       }
 
       return reply.send({
-        items: rows.map((p) => toFeedCard(p, undefined, votedSet.has(p.id))),
+        items: page.map((p) => toFeedCard(p, undefined, votedSet.has(p.id))),
+        nextCursor,
       });
     },
   );
@@ -636,21 +655,61 @@ const plugin: FastifyPluginAsync = async (app) => {
   );
 
   // GET /users/:id/bookmarks — public; returns bookmarked posts as feed cards,
-  // ordered by bookmark createdAt DESC (most recently bookmarked first).
-  app.get<{ Params: { id: string } }>(
+  // ordered by BOOKMARK row createdAt DESC (most recently bookmarked first),
+  // tie-break by bookmark id DESC. Keyset/cursor paginated.
+  //
+  // IMPORTANT: the cursor anchor is the BOOKMARK join row position
+  // (bookmark.createdAt(ms) + bookmark.id), NOT post.createdAt. The keyset
+  // predicate and nextCursor both reference the bookmark row, because the sort
+  // order is "when bookmarked", which is independent of the post's own age.
+  app.get<{ Params: { id: string }; Querystring: { cursor?: string } }>(
     "/users/:id/bookmarks",
     async (req, reply) => {
+      const cursorRaw = req.query.cursor;
+      const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
+      if (cursorRaw && !cursor) {
+        return reply.code(400).send({ error: "Invalid cursor" });
+      }
+
+      // Keyset predicate on the BOOKMARK row (createdAt DESC, id DESC).
+      const where =
+        cursor === null
+          ? { userId: req.params.id }
+          : {
+              userId: req.params.id,
+              OR: [
+                { createdAt: { lt: new Date(cursor.value) } },
+                {
+                  AND: [
+                    { createdAt: new Date(cursor.value) },
+                    { id: { lt: cursor.id } },
+                  ],
+                },
+              ],
+            };
+
       const rows = await prisma.bookmark.findMany({
-        where: { userId: req.params.id },
-        orderBy: { createdAt: "desc" },
+        where,
+        orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }],
+        take: PROFILE_PAGE_SIZE + 1,
         include: { post: { include: feedInclude } },
       });
+
+      const hasMore = rows.length > PROFILE_PAGE_SIZE;
+      const page = hasMore ? rows.slice(0, PROFILE_PAGE_SIZE) : rows;
+
+      // nextCursor anchors on the LAST bookmark row in the page, NOT its post.
+      let nextCursor: string | null = null;
+      if (hasMore && page.length > 0) {
+        const last = page[page.length - 1]!;
+        nextCursor = encodeCursor(last.createdAt.getTime(), last.id);
+      }
 
       // JWT-derived optional identity (never x-user-id).
       const actingUserId = await optionalAuth(req);
       const votedSet = new Set<string>();
-      if (actingUserId && rows.length > 0) {
-        const pageIds = rows.map((r) => r.post.id);
+      if (actingUserId && page.length > 0) {
+        const pageIds = page.map((r) => r.post.id);
         const userVotes = await prisma.vote.findMany({
           where: { userId: actingUserId, postId: { in: pageIds } },
           select: { postId: true },
@@ -659,9 +718,10 @@ const plugin: FastifyPluginAsync = async (app) => {
       }
 
       return reply.send({
-        items: rows.map((r) =>
+        items: page.map((r) =>
           toFeedCard(r.post, undefined, votedSet.has(r.post.id)),
         ),
+        nextCursor,
       });
     },
   );

@@ -7,6 +7,20 @@ export const profile = {
     loadError: '내 활동을 불러오지 못했습니다.',
     loadingActivity: '내 활동을 불러오는 중…',
 
+    // infinite scroll (paginated tabs)
+    loading: '불러오는 중…',
+    eof: '— EOF · 마지막이에요 —',
+
+    // activity tabs (segmented control)
+    tabCommunities: '커뮤니티',
+    tabPosts: '글',
+    tabBookmarks: '북마크',
+
+    // settings entry point + settings page chrome
+    settingsLink: '설정',
+    settingsTitle: '설정',
+    settingsBack: '[ ← 프로필 ]',
+
     // not-logged-in gate
     loginRequired: '로그인이 필요합니다.',
     loginHint: '로그인하면 내 글과 커뮤니티를 볼 수 있어요.',
@@ -55,6 +69,20 @@ export const profile = {
     // errors / async
     loadError: 'Failed to load your activity.',
     loadingActivity: 'Loading your activity…',
+
+    // infinite scroll (paginated tabs)
+    loading: 'Loading…',
+    eof: '— EOF · Nothing more —',
+
+    // activity tabs (segmented control)
+    tabCommunities: 'Communities',
+    tabPosts: 'Posts',
+    tabBookmarks: 'Bookmarks',
+
+    // settings entry point + settings page chrome
+    settingsLink: 'Settings',
+    settingsTitle: 'Settings',
+    settingsBack: '[ ← Profile ]',
 
     // not-logged-in gate
     loginRequired: 'Login required.',

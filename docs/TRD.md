@@ -203,9 +203,9 @@ model Vote {
 | `DELETE /posts/:id/upvote` | **추천 취소(멱등)** | **`Authorization: Bearer <jwt>`** | `score=vote count` + hotScore 재계산, `{id,score,hotScore,voted:false}` · 토큰 검증 |
 | **`POST /posts/:id/bookmark`** | **북마크 추가**(idempotent upsert) | **`Authorization: Bearer <jwt>`** | 201 `{bookmarked:true}` · 토큰 검증 |
 | **`DELETE /posts/:id/bookmark`** | **북마크 제거**(idempotent delete) | **`Authorization: Bearer <jwt>`** | 200 `{bookmarked:false}` · 토큰 검증 |
-| **`GET /users/:id/bookmarks`** | **북마크한 글 목록**(피드 카드, 최신순) | - | 사용자별 북마크 조회 |
-| `GET /users/:id/posts` | 사용자가 작성한 글 목록(피드 카드, 최신순) | - | 프로필(나) — 내 글 |
-| `GET /users/:id/communities` | 사용자가 생성한 커뮤니티 목록 | - | 프로필(나) — 내 커뮤니티 |
+| **`GET /users/:id/bookmarks`** | **북마크한 글 목록**(피드 카드, 북마크 최신순) — 커서 페이지네이션 | - | `?cursor=` 수락. `{ items, nextCursor }` 응답. 커서는 **Bookmark 행** 기준(§4.2) |
+| `GET /users/:id/posts` | 사용자가 작성한 글 목록(피드 카드, 최신순) — 커서 페이지네이션 | - | `?cursor=` 수락. `{ items, nextCursor }` 응답. 커서 앵커 = `post.createdAt(ms) + post.id`(§4.2) |
+| `GET /users/:id/communities` | 사용자가 생성한 커뮤니티 목록 — 커서 페이지네이션 | - | `?cursor=` 수락. `{ items, nextCursor }` 응답. 커서 앵커 = `community.createdAt(ms) + community.id`(§4.2) |
 | `POST /metrics/visit` | 인증 앱 오픈 시 `VisitEvent` 일별 멱등 기록 | **`Authorization: Bearer <jwt>`** | BE-13 · 작성자 D1 · 토큰 검증 |
 | `GET /metrics` | §8 KPI 집계 반환 | - | BE-13 (형상: IMPLEMENTATION_NOTES §2.2) |
 
@@ -224,6 +224,58 @@ model Vote {
 ```
 - 서버는 `seq` 부여, 활성 `segmentId` 결정, `tokenCount`(서버 재추정 or 클라 제출) 반영, 활성 세그먼트 `tokenSum` 갱신, **SSE로 fan-out**.
 - `clientId` 멱등: 동일 clientId 재요청은 기존 버블 반환(네트워크 재시도 안전).
+
+### 4.2 프로필 엔드포인트 커서 페이지네이션
+
+세 프로필 엔드포인트는 홈 피드(`GET /posts`)와 **동일한 keyset 커서 패턴**을 따른다: `encodeCursor` / `decodeCursor`(base64url of `createdAtMs + id`)를 공유 유틸(`backend/src/domain/cursor.ts`)로 추출해 재사용한다.
+
+**공통 규칙**
+
+| 항목 | 값 |
+|------|----|
+| 쿼리 파라미터 | `cursor` (선택, 없으면 첫 페이지) |
+| 응답 봉투 | `{ items: T[], nextCursor: string \| null }` |
+| 페이지 크기 | `PAGE_SIZE`(프로필 전용 상수, 권장 20) |
+| 끝 표시 | `nextCursor: null` |
+| 잘못된 커서 | **400** |
+| 정렬 | 각 엔드포인트별 아래 명세 |
+
+**`GET /users/:id/posts`**
+
+- 정렬: `post.createdAt DESC, post.id DESC`
+- 커서 앵커: `post.createdAt(ms)` + `post.id` (홈 피드 `"new"` 정렬과 동일 인코딩)
+- keyset 조건(cursor 있을 때): `(createdAt, id) < (cursorCreatedAt, cursorId)`
+
+**`GET /users/:id/communities`**
+
+- 정렬: `community.createdAt DESC, community.id DESC`
+- 커서 앵커: `community.createdAt(ms)` + `community.id`
+- keyset 조건(cursor 있을 때): `(createdAt, id) < (cursorCreatedAt, cursorId)`
+
+**`GET /users/:id/bookmarks`** _(커서 기준이 다름 — 주의)_
+
+- items는 Post 피드 카드이지만 **정렬·커서 앵커는 Bookmark 행** 기준.
+- 정렬: `bookmark.createdAt DESC, bookmark.id DESC` (북마크한 시각 최신순)
+- 커서 앵커: `bookmark.createdAt(ms)` + `bookmark.id` ← **post.createdAt 아님**
+- keyset 조건(cursor 있을 때): `(bookmark.createdAt, bookmark.id) < (cursorCreatedAt, cursorId)`
+- `nextCursor`도 마지막 Bookmark 행의 `(createdAt, id)`로 인코딩한다.
+
+**클라이언트 타입 (`frontend/src/api/`)**
+
+```ts
+// types.ts — 추가
+export interface PostsPage   { items: Post[];      nextCursor: string | null; }
+export interface CommunitiesPage { items: Community[]; nextCursor: string | null; }
+
+// rest.ts — 변경 요약
+// getUserPosts(userId, cursor?)     → Promise<PostsPage>
+// getUserBookmarks(userId, cursor?) → Promise<PostsPage>
+// getUserCommunities(userId, cursor?) → Promise<CommunitiesPage>
+```
+
+**프론트엔드 무한 스크롤**
+
+홈 피드와 동일한 `IntersectionObserver` 센티널 + `usePagedList` 훅 패턴 사용. 프로필 탭 전환 시 해당 탭이 처음 활성화될 때만 첫 페이지를 lazy 로드한다. 탭별 독립 커서 상태 유지.
 
 ---
 
