@@ -68,9 +68,13 @@ function relativeTime(iso: string): string {
 const SUMMARY_WARN_FLOOR = 120_000;
 const SUMMARY_HARD_THRESHOLD = 128_000;
 
-// Jump-chip visibility threshold: the ↑/↓ corner chips appear once the user is
+// Jump-chip visibility threshold: the ↑/↓ corner chip appears once the user is
 // more than this many px from the corresponding end of the scroll region.
 const JUMP_CHIP_THRESHOLD = 400;
+
+// Minimum per-scroll delta (px) to count as a deliberate direction change. Below
+// this we treat the movement as jitter and keep whatever chip is already showing.
+const SCROLL_DIR_DEADZONE = 2;
 
 export default function Thread() {
   const { postId } = useParams<{ postId: string }>();
@@ -298,47 +302,56 @@ export default function Thread() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [bubbles.length]);
 
-  // FE: jump-to-top / jump-to-bottom for long threads (WIREFRAME §6). A pair of
-  // square corner chips floats at the scroll region's bottom-right. They surface
-  // ONLY while actively scrolling (and only toward an end that's actually out of
-  // reach), then fade out ~1s after scrolling stops — so a thread the reader has
-  // settled on stays fully unobscured. Honour prefers-reduced-motion (the
-  // CRT-cursor policy) by downgrading smooth → auto.
+  // FE: jump-to-top / jump-to-bottom for long threads (WIREFRAME §6). A single
+  // square corner chip floats at the scroll region's bottom-right and follows
+  // the scroll DIRECTION (Option A — direction-only, no velocity threshold):
+  // scrolling DOWN shows the ↓ (jump-to-bottom) chip, scrolling UP shows the ↑
+  // (jump-to-top) chip. There's only ever one chip in the slot at a time. The
+  // chip is reach-gated (JUMP_CHIP_THRESHOLD) so it never appears toward an end
+  // that's already close. It fades out ~1s after scrolling stops, so a thread
+  // the reader has settled on stays fully unobscured. Honour prefers-reduced-
+  // motion (the CRT-cursor policy) by downgrading smooth → auto.
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [showJumpTop, setShowJumpTop] = useState(false);
-  const [showJumpBottom, setShowJumpBottom] = useState(false);
-  const [scrolling, setScrolling] = useState(false);
+  const [activeChip, setActiveChip] = useState<'none' | 'top' | 'bottom'>('none');
   const scrollIdleTimer = useRef<number | null>(null);
-  // Position-only: is each end far enough to be worth a jump? (No flashing.)
-  const updateJumpReach = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const { scrollTop, scrollHeight, clientHeight } = el;
-    setShowJumpTop(scrollTop > JUMP_CHIP_THRESHOLD);
-    setShowJumpBottom(scrollHeight - scrollTop - clientHeight > JUMP_CHIP_THRESHOLD);
-  }, []);
-  // On scroll: refresh reach, reveal the chips, then arm a 1s idle timer to fade
-  // them out once scrolling stops.
+  // Last observed scrollTop — used to derive the per-scroll direction delta.
+  const lastScrollTop = useRef(0);
+  // Set while a programmatic jumpTo animation is in flight, so the resulting
+  // scroll events don't re-trigger the chip (self-trigger guard).
+  const isProgrammatic = useRef(false);
+  // On scroll: derive direction from the scrollTop delta, swap to the matching
+  // chip when that end is out of reach, then arm a 1s idle timer to fade out.
   const handleScroll = useCallback(() => {
-    updateJumpReach();
-    setScrolling(true);
+    const el = scrollRef.current;
+    if (!el || isProgrammatic.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const dY = scrollTop - lastScrollTop.current;
+    lastScrollTop.current = scrollTop;
+    const topOut = scrollTop > JUMP_CHIP_THRESHOLD;
+    const botOut = scrollHeight - scrollTop - clientHeight > JUMP_CHIP_THRESHOLD;
+    if (dY < -SCROLL_DIR_DEADZONE && topOut) setActiveChip('top');
+    else if (dY > SCROLL_DIR_DEADZONE && botOut) setActiveChip('bottom');
+    // Otherwise (jitter below the deadzone / a direction that's already at its
+    // end) keep whatever chip is currently showing.
     if (scrollIdleTimer.current) window.clearTimeout(scrollIdleTimer.current);
-    scrollIdleTimer.current = window.setTimeout(() => setScrolling(false), 1000);
-  }, [updateJumpReach]);
+    scrollIdleTimer.current = window.setTimeout(() => setActiveChip('none'), 1000);
+  }, []);
   const jumpTo = useCallback((edge: 'top' | 'bottom') => {
     const el = scrollRef.current;
     if (!el) return;
+    // Block our own scroll events from re-arming the chip, and hide it instantly.
+    isProgrammatic.current = true;
+    setActiveChip('none');
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     el.scrollTo({
       top: edge === 'top' ? 0 : el.scrollHeight,
       behavior: reduce ? 'auto' : 'smooth',
     });
+    window.setTimeout(() => {
+      isProgrammatic.current = false;
+      lastScrollTop.current = el.scrollTop;
+    }, reduce ? 0 : 700);
   }, []);
-  // Keep reach in sync as the thread grows (a new bubble can push the end out of
-  // reach); position-only so it never reveals the chips on its own.
-  useEffect(() => {
-    updateJumpReach();
-  }, [bubbles.length, updateJumpReach]);
   // Drop the idle timer on unmount.
   useEffect(
     () => () => {
@@ -385,9 +398,6 @@ export default function Thread() {
   const personaIcon = community?.personaIcon ?? null;
   const authorName = post.author?.username ?? t('thread.anonymous');
   const hasComments = bubbles.length > 0;
-  // Jump chips appear only while scrolling AND when that end is out of reach.
-  const showTopChip = showJumpTop && scrolling;
-  const showBottomChip = showJumpBottom && scrolling;
 
   // Offline / reconnect strip (WIREFRAME §8). Show whenever the browser is
   // offline OR the SSE stream is not live ('open'). Hide once both are healthy.
@@ -590,42 +600,29 @@ export default function Thread() {
           />
         )}
 
-        {/* Option A jump chips (WIREFRAME §6) — square ↑/↓ buttons that stick to
-            the scroll region's bottom-right. The wrapper is sticky + h-0 so it
-            adds no trailing scroll space; the inner group is anchored to its
-            bottom edge. Each chip fades in only when there's somewhere to jump
-            and is non-interactive (pointer-events-none + tabIndex -1) while
-            hidden, so idle threads stay fully unobscured. */}
+        {/* Option A jump chip (WIREFRAME §6) — a single square button that sticks
+            to the scroll region's bottom-right and follows the scroll DIRECTION:
+            ↓ while scrolling down, ↑ while scrolling up (single slot, no
+            velocity). The wrapper is sticky + h-0 so it adds no trailing scroll
+            space; the inner box is anchored to its bottom edge. The chip fades in
+            only when a direction is active and is non-interactive
+            (pointer-events-none + tabIndex -1) while hidden, so idle threads stay
+            fully unobscured. Label/icon/onClick swap with activeChip. */}
         <div className="pointer-events-none sticky bottom-3 z-20 h-0">
-          <div className="absolute bottom-0 right-3 flex flex-col items-end gap-2">
+          <div className="absolute bottom-0 right-3">
             <button
               type="button"
-              onClick={() => jumpTo('top')}
-              aria-label={t('thread.jumpTopAria')}
-              title={t('thread.jumpTopAria')}
-              aria-hidden={!showTopChip}
-              tabIndex={showTopChip ? 0 : -1}
+              onClick={() => jumpTo(activeChip === 'top' ? 'top' : 'bottom')}
+              aria-label={t(activeChip === 'top' ? 'thread.jumpTopAria' : 'thread.jumpBottomAria')}
+              title={t(activeChip === 'top' ? 'thread.jumpTopAria' : 'thread.jumpBottomAria')}
+              aria-hidden={activeChip === 'none'}
+              tabIndex={activeChip === 'none' ? -1 : 0}
               className={`grid h-10 w-10 place-items-center rounded-[2px] border border-term-border bg-term-card/85 text-term-dim backdrop-blur transition hover:border-term-bright hover:text-term-bright hover:shadow-glow-soft active:scale-95 ${
-                showTopChip ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+                activeChip !== 'none' ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
               }`}
             >
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="square" aria-hidden>
-                <path d="M6 15l6-6 6 6" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => jumpTo('bottom')}
-              aria-label={t('thread.jumpBottomAria')}
-              title={t('thread.jumpBottomAria')}
-              aria-hidden={!showBottomChip}
-              tabIndex={showBottomChip ? 0 : -1}
-              className={`grid h-10 w-10 place-items-center rounded-[2px] border border-term-border bg-term-card/85 text-term-dim backdrop-blur transition hover:border-term-bright hover:text-term-bright hover:shadow-glow-soft active:scale-95 ${
-                showBottomChip ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
-              }`}
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="square" aria-hidden>
-                <path d="M6 9l6 6 6-6" />
+                <path d={activeChip === 'top' ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} />
               </svg>
             </button>
           </div>
