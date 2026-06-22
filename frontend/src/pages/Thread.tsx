@@ -68,10 +68,6 @@ function relativeTime(iso: string): string {
 const SUMMARY_WARN_FLOOR = 120_000;
 const SUMMARY_HARD_THRESHOLD = 128_000;
 
-// Jump-chip visibility threshold: the ↑/↓ corner chip appears once the user is
-// more than this many px from the corresponding end of the scroll region.
-const JUMP_CHIP_THRESHOLD = 400;
-
 // Minimum per-scroll delta (px) to count as a deliberate direction change. Below
 // this we treat the movement as jitter and keep whatever chip is already showing.
 const SCROLL_DIR_DEADZONE = 2;
@@ -306,9 +302,9 @@ export default function Thread() {
   // square corner chip floats at the scroll region's bottom-right and follows
   // the scroll DIRECTION (Option A — direction-only, no velocity threshold):
   // scrolling DOWN shows the ↓ (jump-to-bottom) chip, scrolling UP shows the ↑
-  // (jump-to-top) chip. There's only ever one chip in the slot at a time. The
-  // chip is reach-gated (JUMP_CHIP_THRESHOLD) so it never appears toward an end
-  // that's already close. It fades out ~1s after scrolling stops, so a thread
+  // (jump-to-top) chip. There's only ever one chip in the slot at a time —
+  // direction alone decides which one, regardless of distance to either end.
+  // It fades out ~1s after scrolling stops, so a thread
   // the reader has settled on stays fully unobscured. Honour prefers-reduced-
   // motion (the CRT-cursor policy) by downgrading smooth → auto.
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -320,19 +316,16 @@ export default function Thread() {
   // scroll events don't re-trigger the chip (self-trigger guard).
   const isProgrammatic = useRef(false);
   // On scroll: derive direction from the scrollTop delta, swap to the matching
-  // chip when that end is out of reach, then arm a 1s idle timer to fade out.
+  // chip for that direction, then arm a 1s idle timer to fade out.
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el || isProgrammatic.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = el;
+    const { scrollTop } = el;
     const dY = scrollTop - lastScrollTop.current;
     lastScrollTop.current = scrollTop;
-    const topOut = scrollTop > JUMP_CHIP_THRESHOLD;
-    const botOut = scrollHeight - scrollTop - clientHeight > JUMP_CHIP_THRESHOLD;
-    if (dY < -SCROLL_DIR_DEADZONE && topOut) setActiveChip('top');
-    else if (dY > SCROLL_DIR_DEADZONE && botOut) setActiveChip('bottom');
-    // Otherwise (jitter below the deadzone / a direction that's already at its
-    // end) keep whatever chip is currently showing.
+    if (dY < -SCROLL_DIR_DEADZONE) setActiveChip('top');
+    else if (dY > SCROLL_DIR_DEADZONE) setActiveChip('bottom');
+    // Otherwise (jitter below the deadzone) keep whatever chip is currently showing.
     if (scrollIdleTimer.current) window.clearTimeout(scrollIdleTimer.current);
     scrollIdleTimer.current = window.setTimeout(() => setActiveChip('none'), 1000);
   }, []);
