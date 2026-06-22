@@ -9,7 +9,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 //
 // We inject this ONLY into the production-built index.html. In dev, Vite needs
 // inline scripts, eval, and a websocket connection for HMR, which a strict CSP
-// would block — so dev is left untouched.
+// would block, so dev is left untouched.
 function buildCsp(apiOrigin: string): string {
   const connectSrc = ["'self'", 'https://generativelanguage.googleapis.com'];
   const imgSrc = ["'self'", 'blob:', 'data:'];
@@ -51,13 +51,18 @@ function cspInjectionPlugin(apiOrigin: string): Plugin {
 }
 
 // Dev proxy: the REST client uses base URL "/api".
-// The backend (Fastify) serves routes WITHOUT an /api prefix, so we strip
-// the leading /api before forwarding to http://localhost:3001.
+// The backend in production can be mounted at /api or root depending on API_PREFIX.
+// Keep /api and /uploads rewritten so local dev can mirror production routing.
 export default defineConfig(({ mode }) => {
   // Load all env vars (including those not prefixed with VITE_) so we can
   // read VITE_API_ORIGIN at config time to build the CSP.
   const env = loadEnv(mode, process.cwd(), '');
   const apiOrigin = (env.VITE_API_ORIGIN ?? '').replace(/\/$/, '');
+  const backendApiPrefix = (env.API_PREFIX ?? '/').replace(/\/+$/, '');
+  const uploadsRewrite =
+    backendApiPrefix === '/' || backendApiPrefix === ''
+      ? '/uploads'
+      : `${backendApiPrefix}/uploads`;
 
   return {
     // USER page is served at root "/". Set VITE_BASE to a subpath for PROJECT
@@ -95,7 +100,7 @@ export default defineConfig(({ mode }) => {
           // index.html so the installed PWA opens offline.
           globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
           navigateFallback: '/index.html',
-          // Never let the SW intercept API or SSE traffic — those must always
+          // Never let the SW intercept API or SSE traffic; those must always
           // hit the network (and SSE must not be cached/buffered).
           navigateFallbackDenylist: [/^\/api\//],
         },
@@ -113,11 +118,12 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, ''),
         },
-        // Served image files live at /uploads/<name> on the server (no /api
-        // prefix, no rewrite — the path passes through verbatim).
+        // Served image files live at /uploads/<name> on the server.
         '/uploads': {
           target: 'http://localhost:3001',
           changeOrigin: true,
+          // Align path with API_PREFIX when local storage is mounted under /api.
+          rewrite: (path) => path.replace(/^\/uploads/, uploadsRewrite),
         },
       },
     },
