@@ -166,9 +166,11 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
       return;
     }
 
-    // 1b. AI invocation requires a personal Gemini key (BYOK). Block before
-    // posting so we never commit a human turn that can't be answered. The
-    // decision unifies the thread toggle and the manual '@AI' shortcut.
+    // 1b. AI invocation requires a personal Gemini key (BYOK). If the user wants
+    // AI but has no key, we DON'T block: the human comment still posts and we
+    // simply skip the AI turn (toast explains why). This keeps the app usable
+    // without a key. The check unifies the thread toggle and the manual '@AI'
+    // shortcut.
     const apiKey = useAuthStore.getState().googleApiKey;
     const hasApiKey = Boolean(apiKey);
     const willInvokeAi = wantsAI && hasApiKey;
