@@ -528,7 +528,7 @@ export default function Thread() {
               <span className="truncate">r/{community.slug}</span>
             </Link>
           )}
-          <h2 className="mt-1 text-base font-bold leading-snug text-term-title glow">
+          <h2 className="mt-1.5 text-base font-bold leading-snug text-term-title glow">
             {post.title}
           </h2>
           {post.body && (
