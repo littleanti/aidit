@@ -10,12 +10,16 @@
 //     the optimistic bubble; we upsert the server DTO too as a fast path.
 //  6. on failure: remove/mark the optimistic bubble + show a toast.
 //
-// '@AI' mention is detected & highlighted here. M3: when the sent comment
-// contains '@AI', after the human comment is committed we fire the engine's
-// runAtAiReply with the CALLER's key (BYOK). Non-@AI comments behave as before.
-// L1: nothing here ever sends a key to the Aidit server; the Gemini key is
-// handed straight to the engine (browser->Gemini) and only { type, body,
-// clientId } crosses the Aidit wire.
+// AI routing (M3 / 2026-06-23): AI replies are driven SOLELY by the in-composer
+// AI-mode toggle (the trailing [AI] popover) — there is NO '@AI' body-token
+// shortcut anymore. The toggle's default is key-based: a BYOK Gemini key present
+// -> default ON, absent -> default OFF. When AI mode is ON for a post, after the
+// human comment commits we fire the engine's runAtAiReply with the CALLER's key.
+// If AI is on but no key is set, the human comment still posts and the AI turn is
+// skipped (the key-absent guard is surfaced in the popover at activation time).
+// L1: nothing here ever sends a key to the Aidit server; the Gemini key is handed
+// straight to the engine (browser->Gemini) and only { type, body, clientId }
+// crosses the Aidit wire.
 
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -72,9 +76,6 @@ interface ComposerProps {
   onWantsAIChange?: (v: boolean) => void;
 }
 
-// Manual one-off @AI shortcut: a leading or whitespace-preceded '@AI' token.
-const AI_MENTION = /@AI\b/i;
-
 /** A monotonic-ish temp seq for optimistic bubbles; far above real seqs so it
  *  sorts last until the real server seq arrives. Negative would also work, but
  *  large positive keeps it visually at the bottom of an ascending list. */
@@ -82,19 +83,49 @@ function tempSeq(): number {
   return Number.MAX_SAFE_INTEGER - Math.floor(Math.random() * 1_000_000);
 }
 
-// The 3-level AI-response-length selector: three segmented radio buttons (no
-// visible "len" label — the bare 짧게/보통/길게 are self-explanatory). ACTIVE
-// uses the amber accent of the @AI chip with bracket accents (e.g. [짧게]);
-// inactive is dim. Arrow keys roving-focus across the group (radiogroup pattern).
+// The 3 AI-response-length levels, in display order.
 const LENGTH_ORDER: AiLength[] = ['short', 'normal', 'long'];
 
-function LengthSelector({
-  value,
-  onChange,
+/** Robot "AI" glyph shared by the trailing chip + the popover toggle. */
+function RobotIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    >
+      <rect x="5" y="8" width="14" height="11" rx="1" />
+      <path d="M12 8V4M9 4h6" />
+      <circle cx="9" cy="13" r="1" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="13" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+// FE: the trailing-popover AI menu — a single ROW with an [AI] on/off switch +
+// the 3-level length segments, plus a key-absent guard surfaced INLINE when AI is
+// turned on without a BYOK key. Replaces the old stacked control row + the inline
+// @AI chip. The "len" label is intentionally gone; the bare 짧게/보통/길게 are
+// self-explanatory. ACTIVE uses the amber accent with bracket accents ([보통]).
+function AiModeMenu({
+  aiMode,
+  length,
+  hasApiKey,
+  onToggle,
+  onPickLength,
+  onAddKey,
   t,
 }: {
-  value: AiLength;
-  onChange: (len: AiLength) => void;
+  aiMode: boolean;
+  length: AiLength;
+  hasApiKey: boolean;
+  onToggle: () => void;
+  onPickLength: (len: AiLength) => void;
+  onAddKey: () => void;
   t: (key: string) => string;
 }) {
   const labels: Record<AiLength, string> = {
@@ -102,43 +133,89 @@ function LengthSelector({
     normal: t('thread.lengthNormal'),
     long: t('thread.lengthLong'),
   };
-
-  function onKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, idx: number) {
-    let next = idx;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (idx + 1) % LENGTH_ORDER.length;
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (idx - 1 + LENGTH_ORDER.length) % LENGTH_ORDER.length;
-    else return;
-    e.preventDefault();
-    onChange(LENGTH_ORDER[next]);
-  }
-
   return (
     <div
-      role="radiogroup"
-      aria-label={t('thread.lengthAria')}
-      className="ml-auto flex items-center gap-1"
+      role="dialog"
+      aria-label={t('thread.aiMenuAria')}
+      className={`absolute bottom-full right-0 z-30 mb-2 flex w-[19rem] max-w-[calc(100vw-2.5rem)] flex-col gap-2 rounded-[2px] border bg-term-card p-2 shadow-glow-soft ${
+        aiMode ? 'border-term-amber' : 'border-term-border'
+      }`}
     >
-      {LENGTH_ORDER.map((len, idx) => {
-        const active = len === value;
-        return (
-          <button
-            key={len}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            tabIndex={active ? 0 : -1}
-            onClick={() => onChange(len)}
-            onKeyDown={(e) => onKeyDown(e, idx)}
-            className={`flex min-h-[44px] select-none items-center rounded-[2px] border px-2 text-xs font-bold transition ${
-              active
-                ? 'border-term-amber text-term-amber'
-                : 'border-term-border text-term-dim hover:text-term-bright'
-            }`}
+      {/* one row: [AI] switch | divider | length segments */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={aiMode}
+          aria-label={t('thread.aiModeLabel')}
+          onClick={onToggle}
+          className={`flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-[2px] border px-2.5 text-xs font-bold transition ${
+            aiMode
+              ? 'border-term-amber text-term-amber'
+              : 'border-term-border text-term-dim hover:text-term-bright'
+          }`}
+        >
+          <RobotIcon />
+          <span>AI</span>
+        </button>
+        <div
+          role="radiogroup"
+          aria-label={t('thread.lengthAria')}
+          className={`flex flex-1 items-center gap-1.5 border-l border-term-border pl-2 ${
+            aiMode ? '' : 'opacity-40'
+          }`}
+        >
+          {LENGTH_ORDER.map((len) => {
+            const active = aiMode && len === length;
+            return (
+              <button
+                key={len}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                disabled={!aiMode}
+                onClick={() => onPickLength(len)}
+                className={`flex min-h-[44px] flex-1 select-none items-center justify-center rounded-[2px] border px-1 text-xs font-bold transition ${
+                  active
+                    ? 'border-term-amber text-term-amber'
+                    : 'border-term-border text-term-dim'
+                } ${aiMode ? 'hover:text-term-bright' : 'cursor-not-allowed'}`}
+              >
+                {active ? `[${labels[len]}]` : labels[len]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {/* key-absent guard — shown the moment AI is turned on without a key */}
+      {aiMode && !hasApiKey && (
+        <div
+          role="alert"
+          className="flex items-start gap-1.5 rounded-[2px] border border-term-amber bg-term-info px-2 py-1.5 text-[11px] leading-snug text-term-amber"
+        >
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            className="mt-0.5 h-3.5 w-3.5 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
           >
-            {active ? `[${labels[len]}]` : labels[len]}
-          </button>
-        );
-      })}
+            <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+          </svg>
+          <span>
+            {t('thread.aiNoKeyHint')}{' '}
+            <button
+              type="button"
+              onClick={onAddKey}
+              className="text-term-bright underline underline-offset-2"
+            >
+              {t('thread.aiNoKeyCta')} →
+            </button>
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -147,16 +224,20 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
   const navigate = useNavigate();
   const { t } = useT();
   const userId = useAuthStore((s) => s.userId);
+  // Reactive BYOK key presence — drives the key-based AI-mode default + the guard.
+  const googleApiKey = useAuthStore((s) => s.googleApiKey);
+  const hasApiKey = Boolean(googleApiKey);
 
   const addOptimistic = useThreadStore((s) => s.addOptimistic);
   const upsertComment = useThreadStore((s) => s.upsertComment);
 
-  // Thread-scoped AI-mode toggle (session-only, default ON per post).
-  const aiMode = useAiModeStore((s) => s.byPost[postId] ?? true);
-  const toggleAiMode = useAiModeStore((s) => s.toggle);
+  // Thread-scoped AI mode (session-only, postId-scoped). The store holds ONLY an
+  // explicit user override; absent → key-based default (key present ON, absent OFF).
+  const aiModeOverride = useAiModeStore((s) => s.byPost[postId]);
+  const setAiMode = useAiModeStore((s) => s.set);
+  const aiMode = aiModeOverride ?? hasApiKey;
 
   // Thread-scoped AI-response-length (session-only, default 'normal' per post).
-  // 'normal' = a bounded one-or-two-paragraph answer (~4-6 sentences).
   const aiLength = useAiLengthStore((s) => s.byPost[postId] ?? DEFAULT_AI_LENGTH);
   const setAiLength = useAiLengthStore((s) => s.set);
 
@@ -167,24 +248,41 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
   // object URL (for the preview thumbnail / optimistic bubble).
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  // Trailing AI-menu popover open/close.
+  const [menuOpen, setMenuOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const trimmed = text.trim();
-  const hasMention = AI_MENTION.test(text);
-  // Unified routing: the message goes to the AI if the thread toggle is ON OR
-  // the user manually typed an '@AI' token (one-off shortcut). A single source
-  // of truth so we never double-trigger when both are true.
-  const wantsAI = aiMode || hasMention;
+  // AI routing is decided SOLELY by the toggle (no '@AI' body-token shortcut).
+  const wantsAI = aiMode;
 
   // Surface ONLY the wantsAI boolean up to Thread (drives its shell-prompt swap).
-  // The live comment TEXT is intentionally NOT surfaced — mirroring it would
-  // force a thread-wide re-render on every keystroke; only this boolean is.
   useEffect(() => {
     onWantsAIChange?.(wantsAI);
   }, [wantsAI, onWantsAIChange]);
   // Text becomes optional when an image is attached (image-only sends allowed).
   const canSend = (trimmed.length > 0 || imageFile != null) && !sending;
+
+  // Close the AI menu on outside click or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onPointerDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -234,22 +332,15 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
       return;
     }
 
-    // 1b. AI invocation requires a personal Gemini key (BYOK). If the user wants
-    // AI but has no key, we DON'T block: the human comment still posts and we
-    // simply skip the AI turn (toast explains why). This keeps the app usable
-    // without a key. The check unifies the thread toggle and the manual '@AI'
-    // shortcut.
+    // 1b. AI invocation requires a personal Gemini key (BYOK). The no-key guard
+    // is surfaced in the AI menu at activation time (not here): if AI mode is on
+    // without a key we DON'T block — the human comment still posts and the AI
+    // turn is silently skipped. willInvokeAi unifies "wants AI" + "has a key".
     const apiKey = useAuthStore.getState().googleApiKey;
-    const hasApiKey = Boolean(apiKey);
-    const willInvokeAi = wantsAI && hasApiKey;
-    if (wantsAI && !hasApiKey) {
-      showToast(t('thread.aiNoKey'));
-    }
+    const willInvokeAi = wantsAI && Boolean(apiKey);
 
-    // The stored human body is exactly what the user typed (trimmed). A manual
-    // '@AI' mention is preserved verbatim in the human bubble (it drives routing
-    // only, never mutates the body). In toggle-ON mode the text has no '@AI'
-    // prefix at all — the chip is a UI element, never injected into the value.
+    // The stored human body is exactly what the user typed (trimmed). The AI
+    // toggle is a UI element — it never injects '@AI' or any token into the body.
     const body = trimmed;
     const clientId =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -382,60 +473,6 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
         </div>
       )}
 
-      {/* Thin control row: thread-scoped AI-mode toggle + (when AI) length selector. */}
-      <div className="flex items-center gap-2 px-3 pt-2">
-        <label className="group inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 text-xs font-medium text-term-amber">
-          <input
-            type="checkbox"
-            checked={aiMode}
-            onChange={() => toggleAiMode(postId)}
-            className="sr-only"
-          />
-          <span aria-hidden className="select-none font-bold text-term-amber">
-            {aiMode ? '[X]' : '[ ]'}
-          </span>
-          <span className="inline-flex items-center gap-1 text-term-bright">
-            <svg
-              aria-hidden
-              viewBox="0 0 24 24"
-              className="h-3.5 w-3.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <rect x="5" y="8" width="14" height="11" rx="1" />
-              <path d="M12 8V4M9 4h6" />
-              <circle cx="9" cy="13" r="1" fill="currentColor" stroke="none" />
-              <circle cx="15" cy="13" r="1" fill="currentColor" stroke="none" />
-            </svg>
-            {t('thread.aiModeLabel')}
-          </span>
-        </label>
-        {/* AI-response-length selector — only when the message routes to AI. */}
-        {wantsAI && (
-          <LengthSelector value={aiLength} onChange={(len) => setAiLength(postId, len)} t={t} />
-        )}
-      </div>
-
-      {hasMention && !aiMode && (
-        <div className="flex items-center gap-1 px-3 pt-1 text-xs font-medium text-term-amber">
-          <svg
-            aria-hidden
-            viewBox="0 0 24 24"
-            className="h-3.5 w-3.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <rect x="5" y="8" width="14" height="11" rx="1" />
-            <path d="M12 8V4M9 4h6" />
-            <circle cx="9" cy="13" r="1" fill="currentColor" stroke="none" />
-            <circle cx="15" cy="13" r="1" fill="currentColor" stroke="none" />
-          </svg>
-          {t('thread.mentionIndicator')}
-        </div>
-      )}
-
       {objectUrl && (
         <div className="flex items-center gap-2 px-3 pt-2">
           <div className="relative inline-block">
@@ -466,7 +503,7 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
         </div>
       )}
 
-      <div className="flex items-center gap-2 px-3 py-2">
+      <div className="flex items-end gap-2 px-3 py-2">
         {/* Leading attach button — opens the native image picker. */}
         <input
           ref={fileRef}
@@ -494,20 +531,16 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
           </svg>
         </button>
         <div
-          className={`flex max-h-32 min-h-[44px] flex-1 items-center gap-2 rounded-[2px] border bg-term-bg px-4 py-1 ${
+          className={`flex max-h-32 min-h-[44px] flex-1 items-end gap-2 rounded-[2px] border bg-term-bg px-3 py-1 ${
             aiMode
               ? 'border-term-amber focus-within:border-term-amber'
               : 'border-term-border focus-within:border-term-bright'
           }`}
         >
-          {aiMode && (
-            <span
-              aria-label={t('thread.atAiChipAria')}
-              className="shrink-0 select-none rounded-[2px] border border-term-amber px-2 py-0.5 text-xs font-bold text-term-amber"
-            >
-              @AI
-            </span>
-          )}
+          {/* terminal prompt prefix (decorative) */}
+          <span aria-hidden className="select-none self-center text-sm text-term-faint">
+            &gt;
+          </span>
           <textarea
             ref={taRef}
             value={text}
@@ -518,6 +551,52 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
             aria-label={t('thread.commentInputAria')}
             className="max-h-28 flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed text-term-bright outline-none placeholder:text-term-dim"
           />
+          {/* trailing AI chip — opens the one-row AI menu (toggle + length). */}
+          <div ref={menuRef} className="relative shrink-0 self-center">
+            <button
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={menuOpen}
+              aria-label={t('thread.aiMenuAria')}
+              onClick={() => setMenuOpen((v) => !v)}
+              className={`flex h-9 items-center gap-1 rounded-[2px] border px-2 text-xs font-bold transition ${
+                aiMode
+                  ? 'border-term-amber text-term-amber'
+                  : 'border-term-border text-term-dim hover:text-term-bright'
+              }`}
+            >
+              <RobotIcon />
+              <span>AI</span>
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                className="h-2.5 w-2.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="square"
+              >
+                <path d={menuOpen ? 'M6 9l6 6 6-6' : 'M6 15l6-6 6 6'} />
+              </svg>
+            </button>
+            {menuOpen && (
+              <AiModeMenu
+                aiMode={aiMode}
+                length={aiLength}
+                hasApiKey={hasApiKey}
+                onToggle={() => setAiMode(postId, !aiMode)}
+                onPickLength={(len) => {
+                  setAiLength(postId, len);
+                  setMenuOpen(false);
+                }}
+                onAddKey={() => {
+                  setMenuOpen(false);
+                  navigate('/me/settings');
+                }}
+                t={t}
+              />
+            )}
+          </div>
         </div>
         <button
           type="button"

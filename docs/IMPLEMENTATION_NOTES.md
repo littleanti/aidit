@@ -1,7 +1,7 @@
 # Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
 
 > 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
-> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-22 (Composer 비용 힌트 문구 제거)
+> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-23 (Composer AI 모드를 트레일링 팝오버로 통합 + 키 기반 기본값)
 > 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
 
 ---
@@ -9,6 +9,15 @@
 ## 변경 이력 (Changelog)
 
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
+
+### 2026-06-23
+- **[feat]** **Composer AI 모드를 입력창에 통합(트레일링 팝오버) + 키 기반 기본값 + 수동 @AI 단축 제거**: 입력 위에 쌓이던 "컨트롤 행([X] AI 모드 토글 + 길이 세그먼트)"과 입력 내부 `@AI` 칩 적층을 폐기하고, AI 컨트롤을 **입력 바 우측의 트레일링 `[🤖 AI ⌄]` 칩 하나**로 접었다. 칩 탭 → 입력 바 위로 **한 줄 팝오버**(`[🤖 AI]` 사용/끄기 토글 + 구분선 + `[ 짧게 ][ 보통 ][ 길게 ]` 길이)가 열린다. 세부:
+  - **키 기반 기본값**: 스레드 진입 시 BYOK Gemini 키가 있으면 AI **ON**, 없으면 **OFF**로 시작. `aiModeStore`는 명시적 override만 보관(미설정=키 유무로 결정)하도록 의미를 바꾸고, 기본값 계산은 호출처(`Composer`)가 `useAuthStore().googleApiKey`를 반응형으로 읽어 수행. 토글은 `set(postId, next)`로 명시값 기록(기존 `toggle`의 `?? true` 기본값 의존 제거).
+  - **키 없음 가드 위치 이동**: 키가 없는데 팝오버에서 AI를 켜면 **그 팝오버 안에 앰버 경고**(`thread.aiNoKeyHint` + `키 등록하기 →` → `/me/settings`)를 즉시 표시(기존 "전송 시 `aiNoKey` 토스트"에서 이동·삭제). 토글은 ON 유지하되 키 등록 전까지 AI 미호출, 보낸 글은 일반 댓글로 등록(human-first 불변).
+  - **수동 `@AI` 단축 제거**: 본문 `@AI` 타이핑 라우팅(`AI_MENTION`/`hasMention`)과 멘션 안내 행(`mentionIndicator`)을 삭제. AI 여부는 **오직 토글**로 결정(`wantsAI = aiMode`). Thread 셸 프롬프트 스왑(`onWantsAIChange`)도 그대로 토글값만 반영.
+  - **상태 신호 동기화**: AI ON이면 트레일링 칩·입력 보더 `term-amber` + placeholder `@AI 메시지 보내기…`, OFF면 `term-border` 녹색 + `메시지 보내기…`. 길이 세그먼트는 AI OFF 시 비활성(disabled). 팝오버 버튼 터치 타깃 ≥44px, 길이 선택 시 팝오버 자동 닫힘, 바깥 클릭/Esc로 닫힘.
+  - **i18n**: `placeholderAi`(ko `@AI 메시지 보내기…`/en `Message @AI…`)·`placeholderHuman`(ko `메시지 보내기…`/en `Send a message…`) 카피 교체, 신규 `aiMenuAria`·`aiNoKeyHint`·`aiNoKeyCta` 추가, 미사용 `mentionIndicator`·`atAiChipAria`·`aiNoKey` 제거. `aiModeLabel`은 팝오버 토글 `aria-label`로 재활용.
+  - (`frontend/src/components/Composer.tsx`, `frontend/src/stores/aiModeStore.ts`, `frontend/src/i18n/dicts/thread.ts`; WIREFRAME §6.3-F·PRD FR-6 갱신)
 
 ### 2026-06-22
 - **[chore]** **Composer 컨트롤 행의 BYOK 비용 힌트 문구 제거**: AI 컴포저 컨트롤 행에 매 진입마다 상시 노출되던 안내글 `thread.costHint`(ko `메시지마다 내 키로 호출됩니다` / en `Uses your key for every message`)와 그 툴팁 `thread.costHintTooltip`을 제거했다. 같은 정보(키 미설정 시 동작·비용)는 이미 `thread.aiNoKey` 토스트와 `@AI` 칩/AI 모드 토글의 시각 신호로 전달되므로 중복이라 판단. **변경**: ① `Composer.tsx`에서 비용 힌트 `<span>`(title 툴팁 포함) 삭제 — 컨트롤 행은 이제 `[X] AI 모드` 토글 + (wantsAI 시) 길이 셀렉터만 남음. ② 미사용이 된 i18n 키 `costHint`·`costHintTooltip`을 ko/en 사전에서 제거. (`frontend/src/components/Composer.tsx`, `frontend/src/i18n/dicts/thread.ts`)

@@ -380,14 +380,19 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 - 입력 행: 왼쪽 **＋ 첨부 버튼**(`h-9 w-9 rounded-full text-slate-400`, 표시용 placeholder — 동작 없음, 주석 명시)
   + **알약형 입력**(`flex-1 rounded-full border bg-slate-50 px-4`) + **원형 전송 버튼**
   (`h-11 w-11 rounded-full bg-brand`(@AI/AI모드면 `bg-purple-600`) `text-white`, ↑ 아이콘).
-- placeholder: `메시지를 입력하세요…` (AI모드면 `AI에게 메시지 보내기…`). 기존 @AI 칩/감지 로직 유지.
-- **AI 응답 길이 컨트롤(FR-11)**: 컨트롤 행(`flex items-center gap-2 px-3 pt-2` — `[X] AI 모드` 토글이 있는 행)에, `wantsAI`(= AI 모드 ON || `@AI` 멘션 감지)일 때만 **3단계 세그먼트 버튼**을 함께 노출한다. 길이는 `runAtAiReply`에 전달돼 `@AI` 답변의 길이를 제어한다.
+- placeholder: AI OFF면 `메시지 보내기…`, ON이면 `@AI 메시지 보내기…`(i18n `thread.placeholderHuman`/`placeholderAi`). 입력 앞에 `>` 프롬프트 접두(`term-faint`, 장식).
+- **2026-06-23 — AI 모드를 입력창에 통합(트레일링 팝오버)**: 기존 "입력 위 컨트롤 행(`[X] AI 모드` 토글 + 길이 세그먼트) + 입력 내부 `@AI` 칩" **적층 구조를 폐기**하고, AI 컨트롤을 **입력 바 우측의 트레일링 `[🤖 AI ⌄]` 칩 하나**로 접는다. 칩을 탭하면 입력 바 위로 **한 줄 팝오버**가 열린다 — `[🤖 AI]` 사용/끄기 토글 + 구분선 + `[ 짧게 ][ 보통 ][ 길게 ]` 길이(FR-11).
   ```
-  [X] AI 모드   [ 짧게 ][ 보통 ][ 길게 ]
-                    ^^(기본=보통, 활성=term-amber)
+  ┌ 팝오버 (입력 바 위, bottom-full) ───┐
+  │ [🤖 AI] │ [ 짧게 ][ 보통 ][ 길게 ]    │
+  └─────────────────────────────────────┘
+   [+]  > @AI 메시지 보내기…   [🤖 AI ⌄]   [↑]
   ```
-  - 라벨 텍스트("len" 등) 없이 세 버튼만(자명). `role="radiogroup"` + `aria-label`. 활성=`term-amber`, 비활성=`term-dim hover:term-bright`.
-  - 길이 상태는 세션 한정·postId별·미영속(신규 길이 store가 `aiModeStore` 이디엄을 미러). 기본 `보통`은 지시문·토큰 상한을 추가하지 않아 현행 동작과 동일(FR-11.2).
+  - **상태 신호 동기화**: AI ON이면 트레일링 칩·입력 보더 `term-amber` + placeholder `@AI 메시지 보내기…`, OFF면 `term-border` 녹색 + `메시지 보내기…`. 길이 활성=`[보통]`(대괄호 + `term-amber`), 비활성=`term-dim`. **AI OFF면 길이 버튼 비활성**(disabled, `role="radiogroup"`/`role="switch"` + `aria-label`).
+  - **키 기반 기본값**: 스레드 진입 시 BYOK Gemini 키가 있으면 AI **ON**, 없으면 **OFF**로 시작(세션 한정·postId별 override 유지). 토글은 명시값을 `aiModeStore`에 기록.
+  - **키 없음 가드 위치**: 키가 없는데 팝오버에서 AI를 켜면 **그 팝오버 안에 앰버 경고**(`thread.aiNoKeyHint` + `키 등록하기 →` → `/me/settings`)를 즉시 띄운다(기존 전송 시 토스트에서 이동). 토글은 ON으로 두되 키 등록 전까지 AI 미호출, 보낸 글은 일반 댓글로 등록.
+  - **수동 `@AI` 단축 제거**: 본문에 `@AI`를 타이핑해 라우팅하던 경로와 멘션 안내 행(`mentionIndicator`)을 삭제. AI 여부는 **오직 토글**로 결정(`wantsAI = aiMode`).
+  - 모드·길이 상태 모두 세션 한정·postId별·미영속. 팝오버 버튼 터치 타깃 ≥44px, 길이 선택 시 자동 닫힘, 바깥 클릭/Esc로 닫힘. 기본 `보통`은 지시문·토큰 상한을 추가하지 않아 현행 동작과 동일(FR-11.2).
 
 ### G. 변경 없음(불변)
 - 라우팅, 스토어, 엔진(contextEngine/retry), SSE, BYOK 키 흐름, 요약 트리거 로직, 접근성 터치≥44px.
