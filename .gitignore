@@ -33,6 +33,12 @@ npm-debug.log*
 pnpm-debug.log*
 logs/
 
+# --- Local AWS deployment artifacts ---
+ops/aws/
+aidit-deploy-key.pem
+aidit-deploy-key-raw.pem
+aidit-deploy-key-v2.pem
+
 # --- Editor / OS ---
 .DS_Store
 Thumbs.db
