@@ -84,8 +84,8 @@ export interface BuildGeminiRequestArgs {
   appended?: AppendedTurn;
   /** Optional generation overrides (merged over defaults by gemini client). */
   generationConfig?: GenerationConfig;
-  /** Optional AI-response-length level. Omitted/'normal' => no length directive
-   *  + no token override (request identical to today). */
+  /** Optional AI-response-length level. Omitted => DEFAULT_AI_LENGTH ('normal',
+   *  a bounded one-or-two-paragraph answer). */
   length?: AiLength;
 }
 
@@ -112,12 +112,14 @@ function responseLanguageDirective(): string {
 }
 
 /** App-controlled response-length directive for the active UI language. Mirrors
- *  responseLanguageDirective(). 'normal' emits '' (no directive). XC-4: this is
- *  APP-controlled text (never user/comment content) appended to systemInstruction. */
+ *  responseLanguageDirective(). Every level (short/normal/long) emits a directive.
+ *  XC-4: this is APP-controlled text (never user/comment content) appended to
+ *  systemInstruction. */
 function responseLengthDirective(len: AiLength): string {
-  if (len === 'normal') return '';
   const lang = useLangStore.getState().lang;
-  return len === 'short' ? aiDict[lang].length_short : aiDict[lang].length_long;
+  if (len === 'short') return aiDict[lang].length_short;
+  if (len === 'long') return aiDict[lang].length_long;
+  return aiDict[lang].length_normal;
 }
 
 /**
@@ -168,17 +170,16 @@ export function buildGeminiRequest(
   const persona = personaPrompt.trim();
   const directive = responseLanguageDirective().trim();
   // Length directive (XC-4 safe): order is persona -> language -> length.
-  // 'normal' yields '' which .filter(Boolean) drops, so the assembly is
-  // byte-for-byte identical to today.
+  // Every level emits a directive (short/normal/long); .filter(Boolean) only
+  // drops empty persona/language pieces.
   const lengthDirective = responseLengthDirective(len).trim();
   const systemInstruction =
     [persona, directive, lengthDirective].filter(Boolean).join('\n\n') ||
     undefined;
 
-  // Safety-only token cap: merge a per-length maxOutputTokens ONLY when defined
-  // (i.e. short/long). 'normal' adds nothing, so when no generationConfig was
-  // passed the merged object stays empty and the key is omitted entirely —
-  // identical to today.
+  // Safety-only token cap: merge a per-length maxOutputTokens when defined.
+  // (All three levels define a cap; the `!== undefined` guard stays so a future
+  // undefined level would simply fall back to the gemini client default.)
   const cap = MAX_OUTPUT_TOKENS_BY_LENGTH[len];
   const mergedGenerationConfig: GenerationConfig = {
     ...generationConfig,

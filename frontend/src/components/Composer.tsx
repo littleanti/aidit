@@ -156,7 +156,7 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
   const toggleAiMode = useAiModeStore((s) => s.toggle);
 
   // Thread-scoped AI-response-length (session-only, default 'normal' per post).
-  // 'normal' emits no directive + no token override => identical to today.
+  // 'normal' = a bounded one-or-two-paragraph answer (~4-6 sentences).
   const aiLength = useAiLengthStore((s) => s.byPost[postId] ?? DEFAULT_AI_LENGTH);
   const setAiLength = useAiLengthStore((s) => s.set);
 

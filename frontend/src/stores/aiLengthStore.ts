@@ -3,8 +3,8 @@ import { type AiLength, DEFAULT_AI_LENGTH } from '../engine/length';
 
 // AI response-length control for the THREAD (@AI reply) flow, mirroring the
 // aiModeStore idiom. Keyed by postId so a length choice never leaks between
-// threads. Default is DEFAULT_AI_LENGTH ('normal') — i.e. no directive + no
-// token override, byte-for-byte identical to today.
+// threads. Default is DEFAULT_AI_LENGTH ('normal') — a bounded one-or-two-
+// paragraph answer (~4-6 sentences).
 //
 // Intentionally NOT persisted to localStorage: session-only, like aiModeStore.
 // The store outlives Composer unmounts, so the choice survives in-session

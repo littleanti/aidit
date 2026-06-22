@@ -156,12 +156,13 @@ Reddit형 멀티테넌트 커뮤니티에는 그대로 쓸 수 없다. 따라서
 
 ### FR-11 AI 응답 길이 (Response Length)
 - **FR-11.1** 사용자는 AI 답변의 길이를 **3단계 — 짧게(short) / 보통(normal) / 길게(long)** 중에서 고를 수 있다. 두 진입점: ① **글 작성 화면(CreatePost)** — 게시 후 자동 발화되는 **1차 AI 답변**의 길이, ② **스레드 작성창(Composer)** — `@AI`/AI 모드 댓글 답변의 길이.
-- **FR-11.2** 기본값은 **보통(normal)** 이며, 보통은 **현재 동작과 바이트 단위로 동일**하다(동작 중립). 즉 보통일 때는 길이 지시문도, 토큰 상한 오버라이드도 추가하지 않는다.
+- **FR-11.2** 기본값은 **보통(normal)** 이며, 보통은 **4~6문장 내외의 한두 문단**으로 답하도록 길이 지시문과 토큰 상한(1024)을 적용한다. 기본값이 보통이므로 길이를 명시적으로 조작하지 않은 답변도 이 보통 기준을 따른다.
 - **FR-11.3** 길이 제어는 **2-레버** 방식이다: (1) **systemInstruction 길이 지시문**(주 레버 — 기존 응답 언어 지시문 `response_directive`와 동일하게 앱이 제어하는 문구를 systemInstruction에 덧붙임), (2) **`maxOutputTokens` 상한**(안전 레버 — 길이별 토큰 캡). 지시문은 항상 **앱이 제어하는 텍스트**이며 사용자/댓글 내용이 아니다(XC-4 격리 유지).
-- **FR-11.4** 길이 지시문 문구는 i18n `ai` 사전에 두며(활성 UI 언어를 따름, FR-10.3과 동일 패턴), **보통은 빈 문자열**(지시문 없음)이다.
-  - `length_short` (ko) `핵심만 2~3문장으로 짧게 답하라. 머리말·맺음말·목록 없이 간결하게.` / (en) `Answer briefly in 2-3 sentences, core point only. No preamble, no wrap-up, no lists.`
-  - `length_long` (ko) `충분히 자세하고 철저하게 답하라. 필요하면 근거·예시·단계로 나눠 깊이 있게 설명하라.` / (en) `Answer thoroughly and in depth. Where useful, break the explanation into reasons, examples, or steps.`
-- **FR-11.5** `maxOutputTokens` 캡: **short = 512**, **normal = 미설정(기존 2048 상속)**, **long = 4096**. per-call 오버라이드만 적용되고 `temperature` 등 다른 생성 설정은 보존된다.
+- **FR-11.4** 길이 지시문 문구는 i18n `ai` 사전에 두며(활성 UI 언어를 따름, FR-10.3과 동일 패턴), **세 단계 모두 지시문을 가진다**.
+  - `length_short` (ko) `핵심만 1~2문장으로 짧게 답하라. 머리말·맺음말·목록 없이 간결하게.` / (en) `Answer briefly in 1-2 sentences, core point only. No preamble, no wrap-up, no lists.`
+  - `length_normal` (ko) `4~6문장 내외의 한두 문단으로 답하라. 핵심을 충실히 담되 장황하지 않게.` / (en) `Answer in one or two paragraphs of about 4-6 sentences — cover the key points without rambling.`
+  - `length_long` (ko) `문장 수 제한 없이 충분히 자세하고 철저하게 답하라. 필요하면 여러 문단·근거·예시·단계로 나눠 깊이 있게 설명하라.` / (en) `Answer thoroughly and in depth with no sentence limit. Use multiple paragraphs, reasons, examples, or steps where useful.`
+- **FR-11.5** `maxOutputTokens` 캡: **short = 512**, **normal = 1024**, **long = 4096**. per-call 오버라이드만 적용되고 `temperature` 등 다른 생성 설정은 보존된다.
 - **FR-11.6** 길이 설정은 1차 답변(`runPrimaryReply`)과 `@AI` 답변(`runAtAiReply`) 경로에만 전달된다. **128K 자동 요약(`ensureSummary`)은 길이의 영향을 받지 않는다**(요약 충실도 보존).
 - **FR-11.7** 길이 설정은 **세션 한정·미영속**(AI 모드 토글과 동일 철학)이며, 서버·API 계약·BYOK 키 흐름은 무변경이다(클라이언트 상태 전용, 어떤 헤더/바디에도 미포함).
 

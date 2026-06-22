@@ -52,9 +52,9 @@ export default function CreatePost() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [firstAi, setFirstAi] = useState(true); // default ON
-  // AI-response-length for the 1차 reply. Default 'normal' => no directive +
-  // no token override (byte-for-byte identical to today). Handed off to the
-  // Thread via postIntentStore alongside the firstAi flag.
+  // AI-response-length for the 1차 reply. Default 'normal' => a bounded one-or-
+  // two-paragraph answer (~4-6 sentences). Handed off to the Thread via
+  // postIntentStore alongside the firstAi flag.
   const [aiLength, setAiLength] = useState<AiLength>(DEFAULT_AI_LENGTH);
 
   // 작업4b: single-image attachment. We hold the server URL (after upload) so it

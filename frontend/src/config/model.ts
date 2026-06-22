@@ -14,13 +14,13 @@ export const GENERATION_CONFIG = {
   maxOutputTokens: 2048,
 } as const;
 
-/** Safety-only maxOutputTokens cap per AI-response-length level. 'normal' is
- *  undefined so it inherits the existing GENERATION_CONFIG cap (2048) and the
- *  wire request stays identical to today. */
+/** Safety-only maxOutputTokens cap per AI-response-length level — a backstop
+ *  only; the systemInstruction length directive is the primary lever. 'normal'
+ *  sits between short and long; 'long' has the widest headroom. */
 export const MAX_OUTPUT_TOKENS_BY_LENGTH: Record<AiLength, number | undefined> =
   {
     short: 512,
-    normal: undefined,
+    normal: 1024,
     long: 4096,
   };
 
