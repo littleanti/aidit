@@ -348,6 +348,7 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 ```
 ┌ (카드: rounded-2xl border border-slate-200 bg-white shadow-sm px-4 py-3, mx-3 my-3) ┐
 │ 📌 원본 게시글            ← inline-flex, text-xs font-semibold text-brand, 📌 아이콘
+│ {personaIcon} {community.name} · r/{slug}  ← 카테고리(커뮤니티) 링크 → /c/{slug}
 │ {post.title}              ← text-base font-bold text-slate-900 (mt-1)
 │ {SafeMarkdown(post.body)} ← mt-2 text-sm text-slate-700 (있을 때만)
 │ ─ 메타행(mt-3 flex items-center gap-2 text-xs text-slate-500) ─
@@ -356,6 +357,7 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 ```
 - 좋아요/점수: `▲ + post.score`. **(2026-06-19) 이제 인터랙티브 추천 토글 버튼** — PostCard(피드)·Thread(원본 글) 양쪽에서 클릭 시 `POST/DELETE /posts/:id/upvote` 토글. 로그인 필요(`openLogin()`), 낙관적 갱신+실패 롤백, `voted=true`면 `text-term-amber` 강조. `score`는 실시간 vote count. PostCard는 카드 전체가 navigate 대상이므로 버튼이 `stopPropagation`+`preventDefault`.
 - 댓글 수: `post.commentCount`. (Post DTO에 존재.)
+- **카테고리(커뮤니티) 링크 (2026-06-23)**: 코너 라벨 아래·제목 위에 글의 커뮤니티(=카테고리)를 한 줄로 표시한다 — `{personaIcon} {community.name} · r/{slug}` (PostCard 커뮤니티 라인과 동일 패턴: `text-xs text-term-dim hover:text-term-bright`). 문자를 누르면 `/c/{slug}` 커뮤니티 페이지로 이동하는 `<Link>`. `community`가 아직 해결되지 않았으면(폴백) 라인을 생략한다.
 - **글 이미지(2026-06-19)**: `post.imageUrl`이 있으면 본문 아래 `<img>`(`max-w-full rounded-[2px] border border-term-border`).
   src/베이스 경로 처리는 ChatBubble의 댓글 이미지 렌더 방식을 그대로 따른다(동일 업로드 경로/프록시).
   PostCard(홈/커뮤니티 리스트)도 제목 아래 작은 썸네일(`h-32` 정도, `object-cover`, `rounded-[2px] border`)로 선택 표시.

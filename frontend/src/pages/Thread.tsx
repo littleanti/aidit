@@ -511,6 +511,23 @@ export default function Thread() {
           >
             {t('thread.originalPostTag')}
           </span>
+          {/* category (community) link — taps through to the community page.
+              Mirrors PostCard's community line; omitted until community resolves. */}
+          {community && (
+            <Link
+              to={`/c/${community.slug}`}
+              className="flex w-fit max-w-full items-center gap-1.5 text-xs text-term-dim transition hover:text-term-bright"
+            >
+              {community.personaIcon && (
+                <span aria-hidden className="text-sm leading-none">
+                  {community.personaIcon}
+                </span>
+              )}
+              <span className="font-medium text-term-bright">{community.name}</span>
+              <span className="text-term-faint">·</span>
+              <span className="truncate">r/{community.slug}</span>
+            </Link>
+          )}
           <h2 className="mt-1 text-base font-bold leading-snug text-term-title glow">
             {post.title}
           </h2>

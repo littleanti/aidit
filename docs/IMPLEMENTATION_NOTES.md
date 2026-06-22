@@ -11,6 +11,7 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-23
+- **[feat]** **Thread 원본 게시글 카드에 카테고리(커뮤니티) 링크 추가**: `★ 원본 게시글` 카드의 코너 라벨 아래·제목 위에 글의 커뮤니티를 한 줄로 표시한다 — `{personaIcon} {community.name} · r/{slug}`. 문자를 누르면 `/c/{slug}` 커뮤니티 페이지로 이동(react-router `<Link>`, PostCard의 커뮤니티 라인과 동일 패턴/클래스 `text-xs text-term-dim hover:text-term-bright`). 출처는 Thread가 이미 보유한 `community` 상태(slug·name·personaIcon)이며, 미해결 시 라인 생략. 서버·라우트·데이터 계약 무변경(표현 계층만). (`frontend/src/pages/Thread.tsx`; WIREFRAME §6.3-D 갱신)
 - **[feat]** **Composer AI 모드를 입력창에 통합(트레일링 팝오버) + 키 기반 기본값 + 수동 @AI 단축 제거**: 입력 위에 쌓이던 "컨트롤 행([X] AI 모드 토글 + 길이 세그먼트)"과 입력 내부 `@AI` 칩 적층을 폐기하고, AI 컨트롤을 **입력 바 우측의 트레일링 `[🤖 AI ⌄]` 칩 하나**로 접었다. 칩 탭 → 입력 바 위로 **한 줄 팝오버**(`[🤖 AI]` 사용/끄기 토글 + 구분선 + `[ 짧게 ][ 보통 ][ 길게 ]` 길이)가 열린다. 세부:
   - **키 기반 기본값**: 스레드 진입 시 BYOK Gemini 키가 있으면 AI **ON**, 없으면 **OFF**로 시작. `aiModeStore`는 명시적 override만 보관(미설정=키 유무로 결정)하도록 의미를 바꾸고, 기본값 계산은 호출처(`Composer`)가 `useAuthStore().googleApiKey`를 반응형으로 읽어 수행. 토글은 `set(postId, next)`로 명시값 기록(기존 `toggle`의 `?? true` 기본값 의존 제거).
   - **키 없음 가드 — AI 켜기 차단**: BYOK Gemini 키가 없으면 **AI를 켤 수 없다**. 팝오버에서 AI 토글을 눌러도 켜지지 않고(`aiMode` OFF 유지), **팝오버 안에 앰버 경고**(`thread.aiNoKeyHint` "Gemini 키가 없어 AI를 켤 수 없어요." + `키 등록하기 →` → `/me/settings`)만 뜬다. 파생식 `aiMode = hasApiKey ? (override ?? true) : false`로 stale override가 있어도 키 없이는 ON 불가. 기존 "전송 시 `aiNoKey` 토스트"는 제거. (키 없는 사용자의 댓글은 항상 일반 댓글로 등록 — human-first 불변)
