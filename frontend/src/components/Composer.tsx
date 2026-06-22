@@ -382,7 +382,7 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
         </div>
       )}
 
-      {/* Thin control row: thread-scoped AI-mode toggle + BYOK cost hint. */}
+      {/* Thin control row: thread-scoped AI-mode toggle + (when AI) length selector. */}
       <div className="flex items-center gap-2 px-3 pt-2">
         <label className="group inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 text-xs font-medium text-term-amber">
           <input
@@ -411,12 +411,6 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
             {t('thread.aiModeLabel')}
           </span>
         </label>
-        <span
-          className="text-[11px] text-term-dim"
-          title={t('thread.costHintTooltip')}
-        >
-          {t('thread.costHint')}
-        </span>
         {/* AI-response-length selector — only when the message routes to AI. */}
         {wantsAI && (
           <LengthSelector value={aiLength} onChange={(len) => setAiLength(postId, len)} t={t} />
