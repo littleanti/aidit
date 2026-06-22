@@ -21,6 +21,8 @@ interface GeminiStatusState {
   lastKind: GeminiErrorKind | null;
   markSuccess: () => void;
   markFailure: (kind?: GeminiErrorKind) => void;
+  /** back to 'unknown' — e.g. when the BYOK key is removed (no key, no claim). */
+  reset: () => void;
 }
 
 export const useGeminiStatusStore = create<GeminiStatusState>((set) => ({
@@ -29,4 +31,5 @@ export const useGeminiStatusStore = create<GeminiStatusState>((set) => ({
   markSuccess: () => set({ status: 'connected', lastKind: null }),
   markFailure: (kind) =>
     set({ status: 'disconnected', lastKind: kind ?? 'unknown' }),
+  reset: () => set({ status: 'unknown', lastKind: null }),
 }));

@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
 import { pingGemini } from '../engine/geminiStatus';
+import { useGeminiStatusStore } from '../stores/geminiStatusStore';
 import { setOnAuthExpired } from '../lib/authEvents';
 import BottomTabBar from './BottomTabBar';
 import Logo from '../components/Logo';
@@ -63,6 +64,7 @@ export default function AppLayout() {
   const username = useAuthStore((s) => s.username);
   const googleApiKey = useAuthStore((s) => s.googleApiKey);
   const clearSession = useAuthStore((s) => s.clearSession);
+  const resetGeminiStatus = useGeminiStatusStore((s) => s.reset);
   const openLogin = useUiStore((s) => s.openLogin);
   const { t } = useT();
 
@@ -80,13 +82,20 @@ export default function AppLayout() {
   // Gemini 연결 표식: 키가 생기거나 바뀔 때(신규 로그인 · 프로필 키 변경 · 지속
   // 세션 로드) 키당 한 번 가벼운 연결 테스트(pingGemini)를 돌려 배지를 즉시
   // 갱신한다. ref로 마지막 핑한 키를 기억해 같은 키로는 한 번만 호출.
+  // 키가 제거되면(`updateKey('')`) 더는 보고할 BYOK 연결이 없으므로 ref를 비우고
+  // 배지를 '미확인'으로 되돌린다 — 같은 키를 다시 넣으면 핑이 한 번 더 돈다.
   const lastPingedKey = useRef<string | null>(null);
   useEffect(() => {
-    if (googleApiKey && googleApiKey !== lastPingedKey.current) {
-      lastPingedKey.current = googleApiKey;
-      void pingGemini(googleApiKey);
+    if (googleApiKey) {
+      if (googleApiKey !== lastPingedKey.current) {
+        lastPingedKey.current = googleApiKey;
+        void pingGemini(googleApiKey);
+      }
+    } else {
+      lastPingedKey.current = null;
+      resetGeminiStatus();
     }
-  }, [googleApiKey]);
+  }, [googleApiKey, resetGeminiStatus]);
 
   return (
     <div className="min-h-full">

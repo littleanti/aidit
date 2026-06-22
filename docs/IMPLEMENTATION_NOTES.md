@@ -1,7 +1,7 @@
 # Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
 
 > 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
-> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-22 (BYOK 키 미설정 시 AI 게이트 완화 — 차단/리다이렉트 제거 + 키 삭제 액션)
+> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-22 (BYOK 키 미설정 시 AI 게이트 완화 + 키 삭제 후 Gemini 배지 초기화 버그픽스)
 > 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
 
 ---
@@ -11,6 +11,8 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-22
+- **[fix]** **설정의 키 삭제 버튼이 한글 화면에서도 `Remove`로 노출되던 i18n 누락**: `Settings.tsx`의 키 삭제 버튼 라벨이 `[ Remove ]` 하드코딩이라 한국어 UI에서도 영어로 보였다. 신규 i18n 키 `profile.keyRemoveBtn`(ko `[ 삭제 ]` / en `[ Remove ]`)을 추가하고 버튼을 `t('profile.keyRemoveBtn')`로 교체. (`frontend/src/i18n/dicts/profile.ts`, `frontend/src/pages/Settings.tsx`)
+- **[fix]** **키 삭제 후에도 헤더 Gemini 배지가 초록(연결됨)으로 남던 버그**: `/me/settings`에서 키를 지워도(`updateKey('')`) 상단 `GeminiStatusBadge`가 직전 `connected`(초록 `●`) 상태 그대로 유지됐다. 원인은 `AppLayout`의 핑 effect가 **키가 *생기거나 바뀔* 때만** 다뤘기 때문 — `if (googleApiKey && googleApiKey !== lastPingedKey.current)` 가드는 빈 문자열(falsy)을 통과하지 못해, 키 제거 시 `geminiStatusStore`를 초기화하는 분기가 아예 없었다(배지는 마지막 쿼리 결과를 그대로 표시). **수정**: ① `geminiStatusStore`에 `reset()`(→ `{ status: 'unknown', lastKind: null }`) 액션 추가. ② `AppLayout` effect를 `googleApiKey`가 있으면 (변경 시) 핑, **없으면 `lastPingedKey` ref를 비우고 `reset()` 호출**하도록 분기 추가 → 키 삭제 즉시 배지가 `○ 미확인`으로 복귀하고, 같은 키 재입력 시 다시 핑이 한 번 돈다. (`frontend/src/stores/geminiStatusStore.ts`, `frontend/src/layout/AppLayout.tsx`)
 - **[feat]** **BYOK 키 미설정 시 AI 게이트 완화 — 사람 댓글 우선, AI만 건너뜀**: 기존엔 AI 토글 ON(또는 수동 `@AI`)인데 Gemini 키가 없으면 Composer가 전송 자체를 **차단**하고 `navigate('/login')`로 **하드 리다이렉트**했다(`showToast(thread.aiNoKey)` → `return`). 키가 없는 사용자는 일반 댓글조차 남길 수 없었다. **변경**(`frontend/src/components/Composer.tsx`): `willInvokeAi = wantsAI && hasApiKey`로 분리하고, `wantsAI && !hasApiKey`이면 **`thread.aiNoKey` 토스트만 띄운 뒤 그대로 진행** — 사람 댓글은 정상 등록되고 **AI 호출만 조용히 생략**된다(리다이렉트·`return` 제거). 즉 **키가 없어도 앱(글/댓글 작성)은 정상 동작**하며, 키 미설정의 비용은 여전히 0(AI 미호출). 키가 있으면 기존 `@AI` 흐름 그대로. (commit `6ab6784`)
 - **[feat]** **설정에 API 키 삭제(Remove) 액션 추가**: `/me/settings`의 API Key 섹션에 키가 설정돼 있을 때만 노출되는 **`[ Remove ]`** 버튼(위험색 `term-danger`)을 추가(`frontend/src/pages/Settings.tsx::removeKey` → `updateKey('')`). 기존 `[ 변경 ]` 버튼과 나란히 배치되며, 삭제 후 입력 초안/편집 모드를 초기화. 키 삭제는 **localStorage 로컬 전용**(L1 — 네트워크 미전송) 불변. 키를 지우면 위 AI 게이트 완화에 따라 이후 글/댓글은 AI 없이 계속 작성 가능. (commit `5362faa`)
 

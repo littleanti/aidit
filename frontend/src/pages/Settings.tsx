@@ -138,7 +138,7 @@ export default function Settings() {
                   onClick={removeKey}
                   className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-danger px-4 text-sm font-semibold text-term-danger transition hover:border-red-500 hover:bg-term-hover"
                 >
-                  [ Remove ]
+                  {t('profile.keyRemoveBtn')}
                 </button>
               )}
             </div>
