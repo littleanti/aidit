@@ -299,21 +299,32 @@ export default function Thread() {
   }, [bubbles.length]);
 
   // FE: jump-to-top / jump-to-bottom for long threads (WIREFRAME §6). A pair of
-  // square corner chips floats at the scroll region's bottom-right and fades in
-  // ONLY when there's somewhere to jump — ↑ once scrolled down past the
-  // threshold, ↓ while still that far from the end — so idle threads stay
-  // unobscured. Honour prefers-reduced-motion (the CRT-cursor policy) by
-  // downgrading smooth → auto.
+  // square corner chips floats at the scroll region's bottom-right. They surface
+  // ONLY while actively scrolling (and only toward an end that's actually out of
+  // reach), then fade out ~1s after scrolling stops — so a thread the reader has
+  // settled on stays fully unobscured. Honour prefers-reduced-motion (the
+  // CRT-cursor policy) by downgrading smooth → auto.
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showJumpTop, setShowJumpTop] = useState(false);
   const [showJumpBottom, setShowJumpBottom] = useState(false);
-  const syncJumpChips = useCallback(() => {
+  const [scrolling, setScrolling] = useState(false);
+  const scrollIdleTimer = useRef<number | null>(null);
+  // Position-only: is each end far enough to be worth a jump? (No flashing.)
+  const updateJumpReach = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     const { scrollTop, scrollHeight, clientHeight } = el;
     setShowJumpTop(scrollTop > JUMP_CHIP_THRESHOLD);
     setShowJumpBottom(scrollHeight - scrollTop - clientHeight > JUMP_CHIP_THRESHOLD);
   }, []);
+  // On scroll: refresh reach, reveal the chips, then arm a 1s idle timer to fade
+  // them out once scrolling stops.
+  const handleScroll = useCallback(() => {
+    updateJumpReach();
+    setScrolling(true);
+    if (scrollIdleTimer.current) window.clearTimeout(scrollIdleTimer.current);
+    scrollIdleTimer.current = window.setTimeout(() => setScrolling(false), 1000);
+  }, [updateJumpReach]);
   const jumpTo = useCallback((edge: 'top' | 'bottom') => {
     const el = scrollRef.current;
     if (!el) return;
@@ -323,11 +334,18 @@ export default function Thread() {
       behavior: reduce ? 'auto' : 'smooth',
     });
   }, []);
-  // Re-evaluate chip visibility on mount and whenever the thread grows (a new
-  // bubble can push the end out of reach, or the auto-scroll lands us at it).
+  // Keep reach in sync as the thread grows (a new bubble can push the end out of
+  // reach); position-only so it never reveals the chips on its own.
   useEffect(() => {
-    syncJumpChips();
-  }, [bubbles.length, syncJumpChips]);
+    updateJumpReach();
+  }, [bubbles.length, updateJumpReach]);
+  // Drop the idle timer on unmount.
+  useEffect(
+    () => () => {
+      if (scrollIdleTimer.current) window.clearTimeout(scrollIdleTimer.current);
+    },
+    [],
+  );
 
   // FR-7.4: refresh the active segment's tokenSum from GET /context. Triggered
   // on load, whenever the bubble count changes (a new comment may push the
@@ -367,6 +385,9 @@ export default function Thread() {
   const personaIcon = community?.personaIcon ?? null;
   const authorName = post.author?.username ?? t('thread.anonymous');
   const hasComments = bubbles.length > 0;
+  // Jump chips appear only while scrolling AND when that end is out of reach.
+  const showTopChip = showJumpTop && scrolling;
+  const showBottomChip = showJumpBottom && scrolling;
 
   // Offline / reconnect strip (WIREFRAME §8). Show whenever the browser is
   // offline OR the SSE stream is not live ('open'). Hide once both are healthy.
@@ -464,7 +485,7 @@ export default function Thread() {
       <OfflineBanner show={degraded} label={bannerLabel} />
 
       {/* scrolling region: pinned original post + chat list */}
-      <div ref={scrollRef} onScroll={syncJumpChips} className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
         {/* Live shell prompt reflects the Composer's wantsAI boolean ONLY (toggle
             ON or an @AI mention); the live comment TEXT is intentionally NOT
             mirrored — it would force a thread-wide re-render per keystroke. */}
@@ -582,10 +603,10 @@ export default function Thread() {
               onClick={() => jumpTo('top')}
               aria-label={t('thread.jumpTopAria')}
               title={t('thread.jumpTopAria')}
-              aria-hidden={!showJumpTop}
-              tabIndex={showJumpTop ? 0 : -1}
+              aria-hidden={!showTopChip}
+              tabIndex={showTopChip ? 0 : -1}
               className={`grid h-10 w-10 place-items-center rounded-[2px] border border-term-border bg-term-card/85 text-term-dim backdrop-blur transition hover:border-term-bright hover:text-term-bright hover:shadow-glow-soft active:scale-95 ${
-                showJumpTop ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+                showTopChip ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
               }`}
             >
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="square" aria-hidden>
@@ -597,10 +618,10 @@ export default function Thread() {
               onClick={() => jumpTo('bottom')}
               aria-label={t('thread.jumpBottomAria')}
               title={t('thread.jumpBottomAria')}
-              aria-hidden={!showJumpBottom}
-              tabIndex={showJumpBottom ? 0 : -1}
+              aria-hidden={!showBottomChip}
+              tabIndex={showBottomChip ? 0 : -1}
               className={`grid h-10 w-10 place-items-center rounded-[2px] border border-term-border bg-term-card/85 text-term-dim backdrop-blur transition hover:border-term-bright hover:text-term-bright hover:shadow-glow-soft active:scale-95 ${
-                showJumpBottom ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+                showBottomChip ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
               }`}
             >
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="square" aria-hidden>

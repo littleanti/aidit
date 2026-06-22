@@ -242,25 +242,24 @@ Login(모달) ─▶ Home ──┬──▶ Search ──┬──▶ Community
 │ (🟣)Aidit AI [AI]           │  ← AI = 좌, 그라데이션 로봇 아바타 + AI 배지
 │  └‹ 핵심 포인트는 … (앰버 틴트) │
 │    59분 전              ┌──┐│
-│                       │ ↑ ││  ← 점프 칩(우측 하단 고정, 사용 시에만 표시)
+│                       │ ↑ ││  ← 점프 칩(우측 하단 고정, 스크롤 중에만 표시)
 │ (🟣)Aidit AI [AI]      └──┘│
 │  └‹ ✨ AI가 답변을 작성 중…┌──┐│
-│ ──────────────────────│ ↓ │┘  ← 맨 아래로(끝에서 멀 때만 표시)
+│ ──────────────────────│ ↓ │┘  ← 멈추면 1초 후 페이드아웃
 │ (＋) ( 메시지를 입력하세요…  ) (↑)│  ← Composer: ＋첨부·입력·CTA 전송(term-cta)
 └────────────────────────────┘
 ```
 
 > **(2026-06-22) 스크롤 점프 — 우측 하단 점프 칩(Option A).** 긴 스레드에서 위/아래 끝까지 이동하기 위해
 > 스크롤 영역 우측 하단에 사각 `↑`/`↓` 칩 두 개를 띄운다. **`sticky bottom-3` + `h-0` 래퍼**로 스크롤 끝에
-> 여분 공간을 만들지 않고, 안쪽 그룹을 그 하단에 `absolute`로 앵커한다. **칩은 점프할 곳이 있을 때만 페이드 인** —
-> `↑`는 위로 `JUMP_CHIP_THRESHOLD`(400px) 넘게 내려왔을 때, `↓`는 끝에서 400px 넘게 남았을 때 — 그 외엔
-> `opacity-0` + `pointer-events-none` + `tabIndex -1`로 완전히 숨겨 한가할 땐 버블을 가리지 않는다.
+> 여분 공간을 만들지 않고, 안쪽 그룹을 그 하단에 `absolute`로 앵커한다. **칩은 스크롤 중에만, 그리고 그 방향
+> 끝이 실제로 멀 때만 표시된다** — `↑`는 위로 `JUMP_CHIP_THRESHOLD`(400px) 넘게 내려왔을 때, `↓`는 끝에서
+> 400px 넘게 남았을 때. 스크롤이 멈추면 **1초 후 페이드아웃**(스크롤마다 idle 타이머 재무장)하고, 숨김 상태에선
+> `opacity-0` + `pointer-events-none` + `tabIndex -1`로 완전히 비활성화해 읽는 동안 버블을 가리지 않는다.
 > 칩은 `bg-term-card/85 backdrop-blur`(반투명 + 블러)로 버블 위에 떠도 분리되며, hover 시 `shadow-glow-soft`.
 > 클릭 시 스크롤 컨테이너(`scrollRef`)를 양 끝으로 `scrollTo`(top→`{top:0}`, bottom→`{top:scrollHeight}`),
 > `prefers-reduced-motion`이면 smooth→auto. `─ 대화 ─` 구분선은 점프 컨트롤 없는 평범한 인플로우 구분선으로 둔다.
 > aria-label은 `thread.jumpTopAria` / `thread.jumpBottomAria`(KO/EN).
-> aria-label은 `thread.jumpTopAria` / `thread.jumpBottomAria`(KO/EN). 표시 라벨 `↑ top`/`↓ bottom`은
-> 명령형 셸 토큰이라 비번역.
 
 ### 6.1 버블 타입별 스타일 (v0.3)
 | 타입 | 위치 | 아바타 | 색/표시 |
