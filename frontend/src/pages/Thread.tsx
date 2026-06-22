@@ -514,11 +514,10 @@ export default function Thread() {
             scroll region and carries [↑ top]/[↓ bottom] jump controls so long
             threads don't need manual end-to-end scrolling. Opaque bg-term-screen
             so bubbles never bleed through while it's stuck. */}
-        <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-term-border bg-term-screen px-4 py-2 text-xs tracking-wider text-term-faint">
-          <span className="h-px w-6 bg-term-border" />
+        <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-term-border/60 bg-term-screen px-4 py-2.5 text-xs tracking-wider text-term-faint">
+          <span className="h-px w-7 bg-term-border" />
           <span>{t('thread.divider')}</span>
-          <span className="h-px flex-1 bg-term-border" />
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={() => jumpTo('top')}
