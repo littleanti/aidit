@@ -169,12 +169,11 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
     // 1b. AI invocation requires a personal Gemini key (BYOK). Block before
     // posting so we never commit a human turn that can't be answered. The
     // decision unifies the thread toggle and the manual '@AI' shortcut.
-    const willInvokeAi = wantsAI;
     const apiKey = useAuthStore.getState().googleApiKey;
-    if (willInvokeAi && !apiKey) {
+    const hasApiKey = Boolean(apiKey);
+    const willInvokeAi = wantsAI && hasApiKey;
+    if (wantsAI && !hasApiKey) {
       showToast(t('thread.aiNoKey'));
-      navigate('/login');
-      return;
     }
 
     // The stored human body is exactly what the user typed (trimmed). A manual
