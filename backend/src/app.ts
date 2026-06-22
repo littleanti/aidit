@@ -21,6 +21,8 @@ import streamRoutes from "./realtime/stream.js";
 import { UPLOAD_DIR } from "./uploads-dir.js";
 
 export async function build(): Promise<FastifyInstance> {
+  const apiPrefix = config.apiPrefix === "/" ? "" : config.apiPrefix;
+
   const app = Fastify({
     logger: true,
   });
@@ -90,26 +92,27 @@ export async function build(): Promise<FastifyInstance> {
   await app.register(multipart, {
     limits: { fileSize: 5 * 1024 * 1024, files: 1 },
   });
-  // Serve stored images at /uploads/<name> (no /api prefix). decorateReply:false
-  // avoids clobbering reply.sendFile used elsewhere (none today, future-safe).
+  // Serve stored images at /uploads/<name> (or /api/uploads/<name> when
+  // API_PREFIX=/api). decorateReply:false avoids clobbering reply.sendFile used
+  // elsewhere (none today, future-safe).
   await app.register(fastifyStatic, {
     root: UPLOAD_DIR,
-    prefix: "/uploads/",
+    prefix: apiPrefix ? `${apiPrefix}/uploads/` : "/uploads/",
     decorateReply: false,
   });
 
   // Health check.
-  app.get("/health", async () => ({ status: "ok" }));
+  app.get(`${apiPrefix}/health`, async () => ({ status: "ok" }));
 
   // Feature route plugins. Each default-exports a FastifyPluginAsync.
-  await app.register(authRoutes, { prefix: "/" });
-  await app.register(communityRoutes, { prefix: "/" });
-  await app.register(postRoutes, { prefix: "/" });
-  await app.register(commentRoutes, { prefix: "/" });
-  await app.register(contextRoutes, { prefix: "/" });
-  await app.register(metricsRoutes, { prefix: "/" });
-  await app.register(uploadRoutes, { prefix: "/" });
-  await app.register(streamRoutes, { prefix: "/" });
+  await app.register(authRoutes, { prefix: config.apiPrefix });
+  await app.register(communityRoutes, { prefix: config.apiPrefix });
+  await app.register(postRoutes, { prefix: config.apiPrefix });
+  await app.register(commentRoutes, { prefix: config.apiPrefix });
+  await app.register(contextRoutes, { prefix: config.apiPrefix });
+  await app.register(metricsRoutes, { prefix: config.apiPrefix });
+  await app.register(uploadRoutes, { prefix: config.apiPrefix });
+  await app.register(streamRoutes, { prefix: config.apiPrefix });
 
   return app;
 }

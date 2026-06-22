@@ -11,6 +11,7 @@ import {
   type CommentDTO,
 } from "../realtime/events.js";
 import { requireAuth } from "../auth.js";
+import { isAllowedImageUrl } from "../storage/imageUrl.js";
 
 // WP BE-6 + BE-11 — Comments route.
 //
@@ -119,11 +120,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       // R-6: a provided imageUrl must be a server-relative /uploads/ path with no
       // traversal — reject attacker-controlled absolute/arbitrary URLs.
       if (imageUrl !== undefined && imageUrl !== null) {
-        if (
-          typeof imageUrl !== "string" ||
-          !imageUrl.startsWith("/uploads/") ||
-          imageUrl.includes("..")
-        ) {
+        if (typeof imageUrl !== "string" || !isAllowedImageUrl(imageUrl)) {
           return reply.code(400).send({ error: "Invalid imageUrl" });
         }
       }

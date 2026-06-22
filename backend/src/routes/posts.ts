@@ -4,6 +4,7 @@ import { prisma } from "../db.js";
 import { effectiveHotScore, hotScore } from "../domain/hotScore.js";
 import { createInitialSegment } from "../domain/segment.js";
 import { encodeCursor, decodeCursor } from "../domain/cursor.js";
+import { isAllowedImageUrl } from "../storage/imageUrl.js";
 import { requireAuth, optionalAuth } from "../auth.js";
 
 // Feed cursor: opaque base64 of "hotScore|id" (hot) or "createdAtMs|id" (new). The
@@ -88,6 +89,18 @@ const plugin: FastifyPluginAsync = async (app) => {
           .send({ error: "communityId, title and body are required" });
       }
 
+      if (imageUrl !== undefined && typeof imageUrl !== "string") {
+        return reply.code(400).send({ error: "Invalid imageUrl" });
+      }
+      if (
+        typeof imageUrl === "string" &&
+        imageUrl.length > 0 &&
+        !isAllowedImageUrl(imageUrl)
+      ) {
+        return reply.code(400).send({ error: "Invalid imageUrl" });
+      }
+      const safeImageUrl = typeof imageUrl === "string" && imageUrl.length > 0 ? imageUrl : null;
+
       const community = await prisma.community.findUnique({
         where: { id: communityId },
         select: { id: true },
@@ -106,7 +119,7 @@ const plugin: FastifyPluginAsync = async (app) => {
             authorId: userId,
             title,
             body,
-            imageUrl: imageUrl ?? null,
+            imageUrl: safeImageUrl,
             score: 0,
             commentCount: 0,
             hotScore: initialHot,
@@ -480,8 +493,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       if (imageUrl !== null) {
         if (
           typeof imageUrl !== "string" ||
-          !imageUrl.startsWith("/uploads/") ||
-          imageUrl.includes("..")
+          !isAllowedImageUrl(imageUrl)
         ) {
           return reply.code(400).send({ error: "Invalid imageUrl" });
         }
