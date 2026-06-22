@@ -114,7 +114,7 @@ function RobotIcon({ size = 14 }: { size?: number }) {
 function AiModeMenu({
   aiMode,
   length,
-  hasApiKey,
+  showGuard,
   onToggle,
   onPickLength,
   onAddKey,
@@ -122,7 +122,8 @@ function AiModeMenu({
 }: {
   aiMode: boolean;
   length: AiLength;
-  hasApiKey: boolean;
+  /** show the key-absent guard (user tried to enable AI without a BYOK key). */
+  showGuard: boolean;
   onToggle: () => void;
   onPickLength: (len: AiLength) => void;
   onAddKey: () => void;
@@ -187,8 +188,9 @@ function AiModeMenu({
           })}
         </div>
       </div>
-      {/* key-absent guard — shown the moment AI is turned on without a key */}
-      {aiMode && !hasApiKey && (
+      {/* key-absent guard — shown when the user taps the toggle without a key
+          (AI stays OFF; the guard explains why + links to key registration). */}
+      {showGuard && (
         <div
           role="alert"
           className="flex items-start gap-1.5 rounded-[2px] border border-term-amber bg-term-info px-2 py-1.5 text-[11px] leading-snug text-term-amber"
@@ -232,10 +234,12 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
   const upsertComment = useThreadStore((s) => s.upsertComment);
 
   // Thread-scoped AI mode (session-only, postId-scoped). The store holds ONLY an
-  // explicit user override; absent → key-based default (key present ON, absent OFF).
+  // explicit user override; absent → key-based default. AI can NEVER be on without
+  // a BYOK key: no key → always OFF (even if a stale override says true). With a
+  // key, use the explicit override, else default ON.
   const aiModeOverride = useAiModeStore((s) => s.byPost[postId]);
   const setAiMode = useAiModeStore((s) => s.set);
-  const aiMode = aiModeOverride ?? hasApiKey;
+  const aiMode = hasApiKey ? (aiModeOverride ?? true) : false;
 
   // Thread-scoped AI-response-length (session-only, default 'normal' per post).
   const aiLength = useAiLengthStore((s) => s.byPost[postId] ?? DEFAULT_AI_LENGTH);
@@ -250,6 +254,8 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   // Trailing AI-menu popover open/close.
   const [menuOpen, setMenuOpen] = useState(false);
+  // "tried to enable AI without a key" — surfaces the guard; AI stays OFF.
+  const [noKeyWarn, setNoKeyWarn] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -283,6 +289,21 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
       document.removeEventListener('keydown', onKey);
     };
   }, [menuOpen]);
+
+  // Clear the no-key warning whenever the menu closes (fresh start on reopen).
+  useEffect(() => {
+    if (!menuOpen) setNoKeyWarn(false);
+  }, [menuOpen]);
+
+  // Toggle AI mode. With no BYOK key, AI CANNOT be enabled — surface the guard
+  // instead of flipping it on. With a key, flip the explicit override.
+  function handleToggleAi() {
+    if (!hasApiKey) {
+      setNoKeyWarn(true);
+      return;
+    }
+    setAiMode(postId, !aiMode);
+  }
 
   function showToast(msg: string) {
     setToast(msg);
@@ -583,8 +604,8 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
               <AiModeMenu
                 aiMode={aiMode}
                 length={aiLength}
-                hasApiKey={hasApiKey}
-                onToggle={() => setAiMode(postId, !aiMode)}
+                showGuard={!hasApiKey && noKeyWarn}
+                onToggle={handleToggleAi}
                 onPickLength={(len) => {
                   setAiLength(postId, len);
                   setMenuOpen(false);

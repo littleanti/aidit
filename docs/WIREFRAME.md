@@ -390,7 +390,7 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
   ```
   - **상태 신호 동기화**: AI ON이면 트레일링 칩·입력 보더 `term-amber` + placeholder `@AI 메시지 보내기…`, OFF면 `term-border` 녹색 + `메시지 보내기…`. 길이 활성=`[보통]`(대괄호 + `term-amber`), 비활성=`term-dim`. **AI OFF면 길이 버튼 비활성**(disabled, `role="radiogroup"`/`role="switch"` + `aria-label`).
   - **키 기반 기본값**: 스레드 진입 시 BYOK Gemini 키가 있으면 AI **ON**, 없으면 **OFF**로 시작(세션 한정·postId별 override 유지). 토글은 명시값을 `aiModeStore`에 기록.
-  - **키 없음 가드 위치**: 키가 없는데 팝오버에서 AI를 켜면 **그 팝오버 안에 앰버 경고**(`thread.aiNoKeyHint` + `키 등록하기 →` → `/me/settings`)를 즉시 띄운다(기존 전송 시 토스트에서 이동). 토글은 ON으로 두되 키 등록 전까지 AI 미호출, 보낸 글은 일반 댓글로 등록.
+  - **키 없음 가드 — AI 켜기 차단**: BYOK Gemini 키가 없으면 **AI를 켤 수 없다**. 팝오버에서 AI 토글을 눌러도 켜지지 않고(OFF 유지), **팝오버 안에 앰버 경고**(`thread.aiNoKeyHint` + `키 등록하기 →` → `/me/settings`)만 뜬다(기존 전송 시 토스트에서 이동). 키 없는 사용자의 댓글은 항상 일반 댓글로 등록.
   - **수동 `@AI` 단축 제거**: 본문에 `@AI`를 타이핑해 라우팅하던 경로와 멘션 안내 행(`mentionIndicator`)을 삭제. AI 여부는 **오직 토글**로 결정(`wantsAI = aiMode`).
   - 모드·길이 상태 모두 세션 한정·postId별·미영속. 팝오버 버튼 터치 타깃 ≥44px, 길이 선택 시 자동 닫힘, 바깥 클릭/Esc로 닫힘. 기본 `보통`은 지시문·토큰 상한을 추가하지 않아 현행 동작과 동일(FR-11.2).
 
