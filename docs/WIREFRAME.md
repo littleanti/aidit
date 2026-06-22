@@ -222,12 +222,12 @@ Login(모달) ─▶ Home ──┬──▶ Search ──┬──▶ Community
 ```
 ┌────────────────────────────┐
 │ ‹  Aidit 사용자 경험에 대한…  🔖 ⋯│  ← 글 상세 헤더(뒤로·제목 중앙·북마크·메뉴)
+│ ─ 대화 ─        [↑ top][↓ bottom]│  ← 점프 내비 바(헤더 직속·스크롤 밖·고정)
 │ ┌──────────────────────────┐ │
-│ │ 📌 원본 게시글             │ │  ← 음각 라벨(term-faint/amber)
+│ │ 📌 원본 게시글             │ │  ← 음각 라벨(term-faint/amber) — 아래는 스크롤 영역
 │ │ Aidit에서 가장 좋았던 점은?  │ │  ← 제목(굵게)
 │ │ (👤) 익명 사용자 · 1시간 전  ♡12 💬8 │ │ ← 아바타+작성자·시간 / 우측 좋아요·댓글
 │ └──────────────────────────┘ │  (카드: 흰 배경, 라운드, 옅은 그림자)
-│ ─ 대화 ─        [↑ top][↓ bottom]│  ← sticky 셸 내비(상단 고정·점프)
 │                            │
 │ (🟢)타인 사용자 A            │  ← 타인 = 좌, 아바타 좌측
 │  └‹ 깔끔한 UI가 마음에 들어요  │     회색 버블, 꼬리 좌하
@@ -247,13 +247,18 @@ Login(모달) ─▶ Home ──┬──▶ Search ──┬──▶ Community
 └────────────────────────────┘
 ```
 
-> **(2026-06-22) 스크롤 점프 — sticky 셸 내비.** 긴 스레드에서 위/아래 끝까지 이동하기 위해
-> `─ 대화 ─` 구분선을 스크롤 영역 상단에 `sticky top-0 z-10`으로 고정하고, 우측에 `[↑ top] [↓ bottom]`
-> 셸 컨트롤을 얹는다. **새 플로팅 레이어(FAB 등)를 만들지 않아 버블을 가리지 않는다** — 고정 시
-> `bg-term-screen`(불투명)으로 아래 버블이 비치지 않게 하고, 클릭 시 스크롤 컨테이너(`scrollRef`)를
-> 양 끝으로 `scrollTo`한다. `prefers-reduced-motion`이면 smooth→auto로 다운그레이드(CRT 커서 정책과 동일).
-> aria-label은 `thread.jumpTopAria` / `thread.jumpBottomAria`(KO/EN). 표시 라벨 `↑ top`/`↓ bottom`은
-> 명령형 셸 토큰이라 비번역.
+> **(2026-06-22) 스크롤 점프 — 고정 셸 내비 바.** 긴 스레드에서 위/아래 끝까지 이동하기 위해
+> `─ 대화 ─  [↑ top] [↓ bottom]` 바를 둔다. **새 플로팅 레이어(FAB 등)를 만들지 않아 버블을 가리지 않으며**,
+> 클릭 시 스크롤 컨테이너(`scrollRef`)를 양 끝으로 `scrollTo`한다(top→`scrollTo({top:0})`,
+> bottom→`scrollTo({top:scrollHeight})`). `prefers-reduced-motion`이면 smooth→auto.
+> aria-label은 `thread.jumpTopAria` / `thread.jumpBottomAria`(KO/EN), 표시 라벨 `↑ top`/`↓ bottom`은 비번역.
+>
+> ⚠️ **바는 스크롤 영역 안의 `sticky`가 아니라 헤더 바로 아래 `flex-none` 고정 행(스크롤 밖)이다.**
+> 초기 구현은 구분선을 `sticky top-0`으로 스크롤 안에 두었으나, 모바일(특히 Chrome iPhone 에뮬레이션)에서
+> `100dvh`가 가시 영역보다 커지면 내부 스크롤 영역 대신 **문서(body)가 스크롤**하게 되어 sticky 바가
+> 고정되지 못하고, 헤더와 바 사이로 댓글이 비쳐 보이는 공백이 생겼다(Playwright로 재현·확인). 바를
+> 헤더의 flex 형제로 빼내면 둘이 항상 인접해 공백이 구조적으로 불가능하다. 추가로 Thread 루트에
+> `overflow-hidden`, 스크롤 영역에 `min-h-0 flex-1`을 주어 내부 영역이 항상 스크롤러가 되도록 강제한다.
 
 ### 6.1 버블 타입별 스타일 (v0.3)
 | 타입 | 위치 | 아바타 | 색/표시 |

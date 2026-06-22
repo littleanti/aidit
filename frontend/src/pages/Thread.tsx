@@ -361,7 +361,7 @@ export default function Thread() {
   // Full-screen chat column. The page lives inside AppLayout's <main>; we make
   // this region fill the viewport below the app bar (h-12) and bottom tab bar.
   return (
-    <div className="-mx-4 -mt-4 -mb-20 flex h-[calc(100dvh-3rem)] flex-col pb-[calc(3.5rem+var(--safe-bottom,0px))] tablet:pb-0 desktop:mx-0 desktop:mt-0 desktop:mb-0 desktop:h-[calc(100dvh-6rem)]">
+    <div className="-mx-4 -mt-4 -mb-20 flex h-[calc(100dvh-3rem)] flex-col overflow-hidden pb-[calc(3.5rem+var(--safe-bottom,0px))] tablet:pb-0 desktop:mx-0 desktop:mt-0 desktop:mb-0 desktop:h-[calc(100dvh-6rem)]">
       {/* VR-3: post-detail header. The persona is no longer shown here; it
           lives in the original-post card / menu instead. */}
       <header className="flex items-center gap-2 border-b border-term-border bg-term-screen px-2 py-2">
@@ -435,8 +435,39 @@ export default function Thread() {
 
       <OfflineBanner show={degraded} label={bannerLabel} />
 
+      {/* jump-nav bar — lives OUTSIDE the scroll region as fixed chrome. Kept as a
+          flex sibling of the header so the two are ALWAYS adjacent: a
+          sticky-in-scroll bar can detach on mobile when dvh inflates the layout
+          and the document (not this inner region) scrolls, leaving a gap with
+          comments showing through above an un-pinned bar. [↑ top]/[↓ bottom]
+          scroll the region below to either end. */}
+      <div className="flex flex-none items-center gap-2 border-b border-term-border/60 bg-term-screen px-4 py-2.5 text-xs tracking-wider text-term-faint">
+        <span className="h-px w-7 bg-term-border" />
+        <span>{t('thread.divider')}</span>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => jumpTo('top')}
+            aria-label={t('thread.jumpTopAria')}
+            title={t('thread.jumpTopAria')}
+            className="rounded-[2px] border border-transparent px-1.5 py-0.5 transition hover:border-term-border hover:text-term-bright"
+          >
+            ↑ top
+          </button>
+          <button
+            type="button"
+            onClick={() => jumpTo('bottom')}
+            aria-label={t('thread.jumpBottomAria')}
+            title={t('thread.jumpBottomAria')}
+            className="rounded-[2px] border border-transparent px-1.5 py-0.5 transition hover:border-term-border hover:text-term-bright"
+          >
+            ↓ bottom
+          </button>
+        </div>
+      </div>
+
       {/* scrolling region: pinned original post + chat list */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         {/* Live shell prompt reflects the Composer's wantsAI boolean ONLY (toggle
             ON or an @AI mention); the live comment TEXT is intentionally NOT
             mirrored — it would force a thread-wide re-render per keystroke. */}
@@ -509,35 +540,6 @@ export default function Thread() {
             </span>
           </div>
         </article>
-
-        {/* divider — doubles as a sticky shell-nav bar: pins to the top of the
-            scroll region and carries [↑ top]/[↓ bottom] jump controls so long
-            threads don't need manual end-to-end scrolling. Opaque bg-term-screen
-            so bubbles never bleed through while it's stuck. */}
-        <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-term-border/60 bg-term-screen px-4 py-2.5 text-xs tracking-wider text-term-faint">
-          <span className="h-px w-7 bg-term-border" />
-          <span>{t('thread.divider')}</span>
-          <div className="ml-auto flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={() => jumpTo('top')}
-              aria-label={t('thread.jumpTopAria')}
-              title={t('thread.jumpTopAria')}
-              className="rounded-[2px] border border-transparent px-1.5 py-0.5 transition hover:border-term-border hover:text-term-bright"
-            >
-              ↑ top
-            </button>
-            <button
-              type="button"
-              onClick={() => jumpTo('bottom')}
-              aria-label={t('thread.jumpBottomAria')}
-              title={t('thread.jumpBottomAria')}
-              className="rounded-[2px] border border-transparent px-1.5 py-0.5 transition hover:border-term-border hover:text-term-bright"
-            >
-              ↓ bottom
-            </button>
-          </div>
-        </div>
 
         {/* chat list */}
         {hasComments ? (
