@@ -65,7 +65,13 @@ export default function Settings() {
   function saveKey() {
     const next = keyDraft.trim();
     if (!next) return;
-    updateKey(next); // L1: local only — never crosses the network.
+    updateKey(next);
+    setKeyDraft('');
+    setEditingKey(false);
+  }
+
+  function removeKey() {
+    updateKey('');
     setKeyDraft('');
     setEditingKey(false);
   }
@@ -118,13 +124,24 @@ export default function Settings() {
             <span className="min-w-0 flex-1 truncate text-sm text-term-dim">
               {googleApiKey ? maskKey(googleApiKey) : t('profile.keyNotSet')}
             </span>
-            <button
-              type="button"
-              onClick={startEditKey}
-              className="inline-flex min-h-[44px] shrink-0 items-center rounded-[2px] border border-term-border px-4 text-sm font-semibold text-term-bright transition hover:border-term-bright hover:bg-term-hover"
-            >
-              {t('profile.keyChangeBtn')}
-            </button>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={startEditKey}
+                className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-border px-4 text-sm font-semibold text-term-bright transition hover:border-term-bright hover:bg-term-hover"
+              >
+                {t('profile.keyChangeBtn')}
+              </button>
+              {googleApiKey && (
+                <button
+                  type="button"
+                  onClick={removeKey}
+                  className="inline-flex min-h-[44px] items-center rounded-[2px] border border-term-danger px-4 text-sm font-semibold text-term-danger transition hover:border-red-500 hover:bg-term-hover"
+                >
+                  [ Remove ]
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="mt-3 space-y-2">
