@@ -22,9 +22,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useThreadStore } from '../stores/threadStore';
 import { useAiModeStore } from '../stores/aiModeStore';
+import { useAiLengthStore } from '../stores/aiLengthStore';
 import { postComment, uploadImage } from '../api/rest';
 import type { Comment } from '../api/types';
 import { runAtAiReply } from '../engine/contextEngine';
+import { type AiLength, DEFAULT_AI_LENGTH } from '../engine/length';
 import { useT } from '../i18n/useT';
 import { tn } from '../i18n/tn';
 
@@ -80,6 +82,67 @@ function tempSeq(): number {
   return Number.MAX_SAFE_INTEGER - Math.floor(Math.random() * 1_000_000);
 }
 
+// The 3-level AI-response-length selector: three segmented radio buttons (no
+// visible "len" label — the bare 짧게/보통/길게 are self-explanatory). ACTIVE
+// uses the amber accent of the @AI chip with bracket accents (e.g. [짧게]);
+// inactive is dim. Arrow keys roving-focus across the group (radiogroup pattern).
+const LENGTH_ORDER: AiLength[] = ['short', 'normal', 'long'];
+
+function LengthSelector({
+  value,
+  onChange,
+  t,
+}: {
+  value: AiLength;
+  onChange: (len: AiLength) => void;
+  t: (key: string) => string;
+}) {
+  const labels: Record<AiLength, string> = {
+    short: t('thread.lengthShort'),
+    normal: t('thread.lengthNormal'),
+    long: t('thread.lengthLong'),
+  };
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, idx: number) {
+    let next = idx;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (idx + 1) % LENGTH_ORDER.length;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (idx - 1 + LENGTH_ORDER.length) % LENGTH_ORDER.length;
+    else return;
+    e.preventDefault();
+    onChange(LENGTH_ORDER[next]);
+  }
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label={t('thread.lengthAria')}
+      className="ml-auto flex items-center gap-1"
+    >
+      {LENGTH_ORDER.map((len, idx) => {
+        const active = len === value;
+        return (
+          <button
+            key={len}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onChange(len)}
+            onKeyDown={(e) => onKeyDown(e, idx)}
+            className={`flex min-h-[44px] select-none items-center rounded-[2px] border px-2 text-xs font-bold transition ${
+              active
+                ? 'border-term-amber text-term-amber'
+                : 'border-term-border text-term-dim hover:text-term-bright'
+            }`}
+          >
+            {active ? `[${labels[len]}]` : labels[len]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Composer({ postId, communityPersonaPrompt, onWantsAIChange }: ComposerProps) {
   const navigate = useNavigate();
   const { t } = useT();
@@ -91,6 +154,11 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
   // Thread-scoped AI-mode toggle (session-only, default ON per post).
   const aiMode = useAiModeStore((s) => s.byPost[postId] ?? true);
   const toggleAiMode = useAiModeStore((s) => s.toggle);
+
+  // Thread-scoped AI-response-length (session-only, default 'normal' per post).
+  // 'normal' emits no directive + no token override => identical to today.
+  const aiLength = useAiLengthStore((s) => s.byPost[postId] ?? DEFAULT_AI_LENGTH);
+  const setAiLength = useAiLengthStore((s) => s.set);
 
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -283,6 +351,7 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
         callerApiKey: apiKey,
         humanCommentBody: body,
         image: imagePart,
+        length: aiLength,
       }).then((res) => {
         if (!res.ok && res.errorMessage) showToast(res.errorMessage);
       });
@@ -348,6 +417,10 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
         >
           {t('thread.costHint')}
         </span>
+        {/* AI-response-length selector — only when the message routes to AI. */}
+        {wantsAI && (
+          <LengthSelector value={aiLength} onChange={(len) => setAiLength(postId, len)} t={t} />
+        )}
       </div>
 
       {hasMention && !aiMode && (

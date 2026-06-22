@@ -5,6 +5,7 @@ import type { Community } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
 import { usePostIntentStore } from '../stores/postIntentStore';
 import { useUiStore } from '../stores/uiStore';
+import { type AiLength, DEFAULT_AI_LENGTH } from '../engine/length';
 import { useT } from '../i18n/useT';
 import ShellPrompt from '../components/ShellPrompt';
 import { formatPromptArg } from '../lib/shellArg';
@@ -32,6 +33,7 @@ export default function CreatePost() {
 
   const userId = useAuthStore((s) => s.userId);
   const setFirstAiReply = usePostIntentStore((s) => s.setFirstAiReply);
+  const setFirstAiLength = usePostIntentStore((s) => s.setFirstAiLength);
   const openLogin = useUiStore((s) => s.openLogin);
 
   // Router-state handoff: { editPostId } from the Thread's ✎ edit link.
@@ -50,6 +52,10 @@ export default function CreatePost() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [firstAi, setFirstAi] = useState(true); // default ON
+  // AI-response-length for the 1차 reply. Default 'normal' => no directive +
+  // no token override (byte-for-byte identical to today). Handed off to the
+  // Thread via postIntentStore alongside the firstAi flag.
+  const [aiLength, setAiLength] = useState<AiLength>(DEFAULT_AI_LENGTH);
 
   // 작업4b: single-image attachment. We hold the server URL (after upload) so it
   // can ride the postPost body; the local object URL drives the preview chip.
@@ -253,6 +259,7 @@ export default function CreatePost() {
         );
         // Record the AI-first-reply intent for the Thread to consume (M3).
         setFirstAiReply(post.id, firstAi);
+        setFirstAiLength(post.id, aiLength);
         // Register-first: jump straight to the thread.
         navigate(`/p/${post.id}`);
       }
@@ -480,16 +487,55 @@ export default function CreatePost() {
 
       {/* AI first-reply toggle: hidden in edit mode (must not re-trigger). */}
       {!isEdit && (
-        <label className="flex items-center gap-2 text-sm text-term-dim">
-          <input
-            type="checkbox"
-            checked={firstAi}
-            onChange={(e) => setFirstAi(e.target.checked)}
-            disabled={submitting}
-            className="h-4 w-4 rounded-[2px] accent-[#3fa564]"
-          />
-          <span>{t('post.ai_first_reply')}</span>
-        </label>
+        <div className="flex flex-col gap-2">
+          <label className="flex items-center gap-2 text-sm text-term-dim">
+            <input
+              type="checkbox"
+              checked={firstAi}
+              onChange={(e) => setFirstAi(e.target.checked)}
+              disabled={submitting}
+              className="h-4 w-4 rounded-[2px] accent-[#3fa564]"
+            />
+            <span>{t('post.ai_first_reply')}</span>
+          </label>
+
+          {/* AI-response-length selector for the 1차 reply — only when opted in.
+              No visible "len" label (the bare 짧게/보통/길게 are self-explanatory);
+              ACTIVE = amber bracket accent like the @AI chip, inactive = dim. */}
+          {firstAi && (
+            <div
+              role="radiogroup"
+              aria-label={t('post.ai_length_aria')}
+              className="ml-6 flex items-center gap-1 border-l border-term-border pl-3"
+            >
+              {([
+                ['short', t('post.ai_length_short')],
+                ['normal', t('post.ai_length_normal')],
+                ['long', t('post.ai_length_long')],
+              ] as [AiLength, string][]).map(([len, label]) => {
+                const active = len === aiLength;
+                return (
+                  <button
+                    key={len}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    tabIndex={active ? 0 : -1}
+                    onClick={() => setAiLength(len)}
+                    disabled={submitting}
+                    className={`flex min-h-[44px] select-none items-center rounded-[2px] border px-2 text-xs font-bold transition disabled:opacity-50 ${
+                      active
+                        ? 'border-term-amber text-term-amber'
+                        : 'border-term-border text-term-dim hover:text-term-bright'
+                    }`}
+                  >
+                    {active ? `[${label}]` : label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {slugNotFound && (

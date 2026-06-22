@@ -22,6 +22,8 @@ import type { Comment, Community, Post } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
 import { usePostIntentStore } from '../stores/postIntentStore';
+import { useAiLengthStore } from '../stores/aiLengthStore';
+import { DEFAULT_AI_LENGTH } from '../engine/length';
 import { useThreadStore } from '../stores/threadStore';
 import { useThreadStream } from '../stream/useThreadStream';
 import { runPrimaryReply } from '../engine/contextEngine';
@@ -94,6 +96,10 @@ export default function Thread() {
 
   const myUserId = useAuthStore((s) => s.userId);
   const consumeFirstAiReply = usePostIntentStore((s) => s.consumeFirstAiReply);
+  const consumeFirstAiLength = usePostIntentStore((s) => s.consumeFirstAiLength);
+
+  // Thread-scoped @AI length (for the shell-prompt hint only). Default 'normal'.
+  const aiLength = useAiLengthStore((s) => (postId ? s.byPost[postId] : undefined) ?? DEFAULT_AI_LENGTH);
 
   // Live shell-prompt routing: mirror only the Composer's wantsAI boolean (the
   // live comment TEXT is intentionally NOT mirrored — surfacing it would force a
@@ -216,6 +222,8 @@ export default function Thread() {
 
     // One-shot intent set by CreatePost; reading it also clears it.
     const wantsPrimary = consumeFirstAiReply(postId);
+    // Length handoff from CreatePost (one-shot consume; default 'normal').
+    const length = consumeFirstAiLength(postId);
     if (!wantsPrimary) return;
 
     // From here on we are committed to a single attempt this mount.
@@ -246,10 +254,11 @@ export default function Thread() {
         communityPersonaPrompt: community?.personaPrompt ?? '',
         apiKey,
         image,
+        length,
       });
       if (!res.ok && res.errorMessage) showAiToast(res.errorMessage);
     })();
-  }, [postId, post, loading, myUserId, community, consumeFirstAiReply]);
+  }, [postId, post, loading, myUserId, community, consumeFirstAiReply, consumeFirstAiLength]);
 
   // ----- FE-12: retry a FAILED AI bubble in place -----
   const handleRetry = useCallback(
@@ -443,7 +452,9 @@ export default function Thread() {
         <ShellPrompt
           command={
             wantsAI
-              ? `ai --ask /p/${postId.slice(0, 8)}`
+              ? `ai --ask /p/${postId.slice(0, 8)}${
+                  aiLength !== 'normal' ? ` --len=${aiLength}` : ''
+                }`
               : `tail -f /p/${postId.slice(0, 8)}`
           }
           className="mb-3 px-4 pt-3"

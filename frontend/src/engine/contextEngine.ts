@@ -42,6 +42,8 @@ import { useLangStore } from '../stores/langStore';
 import { track } from '../lib/metrics';
 import { tn } from '../i18n/tn';
 import { ai as aiDict } from '../i18n/dicts/ai';
+import { type AiLength, DEFAULT_AI_LENGTH } from './length';
+import { MAX_OUTPUT_TOKENS_BY_LENGTH } from '../config/model';
 
 /** Product threshold (A-2 / FR-7): active-segment token budget. Above this the
  *  next @AI caller must summarize first. Kept here so the engine's lazy-summary
@@ -82,6 +84,9 @@ export interface BuildGeminiRequestArgs {
   appended?: AppendedTurn;
   /** Optional generation overrides (merged over defaults by gemini client). */
   generationConfig?: GenerationConfig;
+  /** Optional AI-response-length level. Omitted/'normal' => no length directive
+   *  + no token override (request identical to today). */
+  length?: AiLength;
 }
 
 export interface GeminiRequest {
@@ -106,6 +111,15 @@ function responseLanguageDirective(): string {
     : aiDict.ko.response_directive;
 }
 
+/** App-controlled response-length directive for the active UI language. Mirrors
+ *  responseLanguageDirective(). 'normal' emits '' (no directive). XC-4: this is
+ *  APP-controlled text (never user/comment content) appended to systemInstruction. */
+function responseLengthDirective(len: AiLength): string {
+  if (len === 'normal') return '';
+  const lang = useLangStore.getState().lang;
+  return len === 'short' ? aiDict[lang].length_short : aiDict[lang].length_long;
+}
+
 /**
  * Map a ContextResponse (+ optional appended user turn) into a Gemini request.
  *
@@ -118,6 +132,7 @@ export function buildGeminiRequest(
   args: BuildGeminiRequestArgs,
 ): GeminiRequest {
   const { personaPrompt, context, appended, generationConfig } = args;
+  const len = args.length ?? DEFAULT_AI_LENGTH;
 
   // Copy context turns verbatim into wire shape. The server-side assembler is
   // the source of truth for role mapping; we do NOT re-derive roles here, only
@@ -152,13 +167,30 @@ export function buildGeminiRequest(
   // systemInstruction — NO user/comment content (XC-4).
   const persona = personaPrompt.trim();
   const directive = responseLanguageDirective().trim();
+  // Length directive (XC-4 safe): order is persona -> language -> length.
+  // 'normal' yields '' which .filter(Boolean) drops, so the assembly is
+  // byte-for-byte identical to today.
+  const lengthDirective = responseLengthDirective(len).trim();
   const systemInstruction =
-    [persona, directive].filter(Boolean).join('\n\n') || undefined;
+    [persona, directive, lengthDirective].filter(Boolean).join('\n\n') ||
+    undefined;
+
+  // Safety-only token cap: merge a per-length maxOutputTokens ONLY when defined
+  // (i.e. short/long). 'normal' adds nothing, so when no generationConfig was
+  // passed the merged object stays empty and the key is omitted entirely —
+  // identical to today.
+  const cap = MAX_OUTPUT_TOKENS_BY_LENGTH[len];
+  const mergedGenerationConfig: GenerationConfig = {
+    ...generationConfig,
+    ...(cap !== undefined ? { maxOutputTokens: cap } : {}),
+  };
 
   return {
     systemInstruction,
     contents,
-    ...(generationConfig ? { generationConfig } : {}),
+    ...(Object.keys(mergedGenerationConfig).length > 0
+      ? { generationConfig: mergedGenerationConfig }
+      : {}),
   };
 }
 
@@ -272,6 +304,8 @@ export interface RunPrimaryReplyArgs {
    *  context turn (text); this rides the picture along as an extra author
    *  user-turn so the 1차 AI reply is multimodal. Omit for text-only posts. */
   image?: { mimeType: string; data: string };
+  /** Optional AI-response-length for the 1차 reply. Omitted => 'normal'. */
+  length?: AiLength;
 }
 
 /**
@@ -285,6 +319,7 @@ export async function runPrimaryReply(
   args: RunPrimaryReplyArgs,
 ): Promise<ReplyResult> {
   const { postId, communityPersonaPrompt, apiKey, image } = args;
+  const length = args.length;
 
   let context: ContextResponse;
   try {
@@ -314,6 +349,7 @@ export async function runPrimaryReply(
     personaPrompt: communityPersonaPrompt,
     context,
     appended,
+    length,
   });
 
   const clientId = makeClientId();
@@ -370,6 +406,8 @@ export interface RunAtAiReplyArgs {
   /** optional: inline image bytes (base64) freshly uploaded on THIS turn. When
    *  present, the appended user turn is FORCED so the image rides this call. */
   image?: { mimeType: string; data: string };
+  /** Optional AI-response-length for the @AI reply. Omitted => 'normal'. */
+  length?: AiLength;
 }
 
 // ---------------------------------------------------------------------------
@@ -519,6 +557,7 @@ export async function runAtAiReply(
     humanCommentBody,
     image,
   } = args;
+  const length = args.length;
 
   let context: ContextResponse;
   try {
@@ -578,6 +617,7 @@ export async function runAtAiReply(
     personaPrompt: communityPersonaPrompt,
     context,
     appended,
+    length,
   });
 
   const clientId = makeClientId();

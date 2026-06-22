@@ -42,6 +42,12 @@ export const post = {
     // CreatePost — AI toggle
     ai_first_reply: '게시 후 AI 1차 답변 받기',
 
+    // CreatePost — AI response length
+    ai_length_short: '짧게',
+    ai_length_normal: '보통',
+    ai_length_long: '길게',
+    ai_length_aria: 'AI 답변 길이',
+
     // CreatePost — submit buttons
     btn_submit: '[ 게시하기 ]',
     btn_submitting: '[ 게시 중… ]',
@@ -109,6 +115,12 @@ export const post = {
 
     // CreatePost — AI toggle
     ai_first_reply: 'Get first AI reply after posting',
+
+    // CreatePost — AI response length
+    ai_length_short: 'Short',
+    ai_length_normal: 'Normal',
+    ai_length_long: 'Long',
+    ai_length_aria: 'AI response length',
 
     // CreatePost — submit buttons
     btn_submit: '[ Post ]',

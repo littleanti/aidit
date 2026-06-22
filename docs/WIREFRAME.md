@@ -194,9 +194,12 @@ Login(모달) ─▶ Home ──┬──▶ Search ──┬──▶ Community
 │ └──────────────────────────────┘ │
 │ 🖼 cooking.png · 이미지 · 첨부됨 [x] │  ← 업로드 후 썸네일 칩([x]로 제거)
 │  ☑ 게시 후 AI 1차 답변 받기         │ ← 기본 ON (FR-4.3)
+│  AI 답변 길이                        │ ← firstAi ON일 때만 노출 (FR-11)
+│  [ 짧게 ][ 보통 ][ 길게 ]            │ ← 세그먼트 3버튼, 기본=보통(활성=term-amber)
 │        [  게시하기  ]               │
 └──────────────────────────────────┘
 ```
+- **AI 응답 길이(FR-11)**: `firstAi` 체크박스가 ON일 때만 그 아래에 **3단계 세그먼트 버튼**(`짧게`/`보통`/`길게`, 기본 `보통`)을 노출한다. 라벨 텍스트("len" 등) 없이 세 버튼만 두며(자명), `role="radiogroup"`에 `aria-label`을 단다. 선택값은 게시 시 `setFirstAiReply(post.id, firstAi)`와 함께 길이 핸드오프(예: `postIntentStore` 확장)로 넘겨 Thread의 1차 발화(`runPrimaryReply`)에 전달한다. 활성 버튼=`term-amber`, 비활성=`term-dim hover:term-bright`. **기본 `보통`은 지시문·토큰 상한을 모두 추가하지 않아 현행 동작과 동일**(FR-11.2).
 - **커뮤니티 피커**(slug 없을 때): 선택 필드 행(`bg-term-input border border-term-border`) 왼쪽=선택된
   이름(없으면 placeholder, `text-term-bright`), 오른쪽=`▾ 변경`(`text-term-dim`). 클릭 시 펼침 패널 토글
   (상태 `pickerOpen`/`pickerQuery`, 선택은 기존 `selectedCommunityId` 유지). 패널은 `> ` 프롬프트 검색
@@ -370,6 +373,13 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
   + **알약형 입력**(`flex-1 rounded-full border bg-slate-50 px-4`) + **원형 전송 버튼**
   (`h-11 w-11 rounded-full bg-brand`(@AI/AI모드면 `bg-purple-600`) `text-white`, ↑ 아이콘).
 - placeholder: `메시지를 입력하세요…` (AI모드면 `AI에게 메시지 보내기…`). 기존 @AI 칩/감지 로직 유지.
+- **AI 응답 길이 컨트롤(FR-11)**: 컨트롤 행(`flex items-center gap-2 px-3 pt-2` — `[X] AI 모드` 토글 + 비용 힌트가 있는 행)에, `wantsAI`(= AI 모드 ON || `@AI` 멘션 감지)일 때만 **3단계 세그먼트 버튼**을 함께 노출한다. 길이는 `runAtAiReply`에 전달돼 `@AI` 답변의 길이를 제어한다.
+  ```
+  [X] AI 모드 · 내 키로 호출   [ 짧게 ][ 보통 ][ 길게 ]
+                                   ^^(기본=보통, 활성=term-amber)
+  ```
+  - 라벨 텍스트("len" 등) 없이 세 버튼만(자명). `role="radiogroup"` + `aria-label`. 활성=`term-amber`, 비활성=`term-dim hover:term-bright`.
+  - 길이 상태는 세션 한정·postId별·미영속(신규 길이 store가 `aiModeStore` 이디엄을 미러). 기본 `보통`은 지시문·토큰 상한을 추가하지 않아 현행 동작과 동일(FR-11.2).
 
 ### G. 변경 없음(불변)
 - 라우팅, 스토어, 엔진(contextEngine/retry), SSE, BYOK 키 흐름, 요약 트리거 로직, 접근성 터치≥44px.
@@ -575,6 +585,7 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 | `useThreadStream`(SSE) | Thread | FR-5.4 |
 | `contextEngine`(128K·요약·답변) | Thread | FR-6, FR-7 |
 | `LangToggle`(header/setting variant) | AppLayout 상단바, Profile(/me) | FR-10 |
+| `LengthSelector`(short/normal/long) | CreatePost(1차), Composer(@AI) | FR-11 |
 
 ---
 
