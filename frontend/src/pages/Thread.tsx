@@ -536,7 +536,7 @@ export default function Thread() {
               title={t('thread.jumpTopAria')}
               className="rounded-[2px] border border-transparent px-1.5 py-0.5 transition hover:border-term-border hover:text-term-bright"
             >
-              ↑ top
+              [↑ top]
             </button>
             <button
               type="button"
@@ -545,7 +545,7 @@ export default function Thread() {
               title={t('thread.jumpBottomAria')}
               className="rounded-[2px] border border-transparent px-1.5 py-0.5 transition hover:border-term-border hover:text-term-bright"
             >
-              ↓ bottom
+              [↓ bottom]
             </button>
           </div>
         </div>
