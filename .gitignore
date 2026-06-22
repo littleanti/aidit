@@ -13,7 +13,9 @@ build/
 .vite/
 
 # --- Uploaded images (filesystem storage, auto-created on boot) ---
-backend/uploads/
+# Ignore the runtime-uploaded images but keep the (empty) folder via .gitkeep.
+backend/uploads/*
+!backend/uploads/.gitkeep
 
 # --- Environment / secrets ---
 .env
