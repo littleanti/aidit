@@ -285,6 +285,22 @@ export default function Thread() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [bubbles.length]);
 
+  // FE: jump-to-top / jump-to-bottom for long threads (WIREFRAME §6). The
+  // sticky "─ 대화 ─" divider carries [↑ top]/[↓ bottom] shell controls that
+  // scroll this region to either end — no floating FAB, so bubbles stay
+  // unobscured. Honour prefers-reduced-motion (the CRT-cursor policy) by
+  // downgrading smooth → auto.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const jumpTo = useCallback((edge: 'top' | 'bottom') => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollTo({
+      top: edge === 'top' ? 0 : el.scrollHeight,
+      behavior: reduce ? 'auto' : 'smooth',
+    });
+  }, []);
+
   // FR-7.4: refresh the active segment's tokenSum from GET /context. Triggered
   // on load, whenever the bubble count changes (a new comment may push the
   // active segment toward 128K), and whenever activeSegmentIndex changes (a
@@ -420,7 +436,7 @@ export default function Thread() {
       <OfflineBanner show={degraded} label={bannerLabel} />
 
       {/* scrolling region: pinned original post + chat list */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         {/* Live shell prompt reflects the Composer's wantsAI boolean ONLY (toggle
             ON or an @AI mention); the live comment TEXT is intentionally NOT
             mirrored — it would force a thread-wide re-render per keystroke. */}
@@ -494,11 +510,34 @@ export default function Thread() {
           </div>
         </article>
 
-        {/* divider */}
-        <div className="flex items-center gap-2 px-4 py-3 text-xs text-term-faint tracking-wider">
-          <span className="h-px flex-1 bg-term-border" />
+        {/* divider — doubles as a sticky shell-nav bar: pins to the top of the
+            scroll region and carries [↑ top]/[↓ bottom] jump controls so long
+            threads don't need manual end-to-end scrolling. Opaque bg-term-screen
+            so bubbles never bleed through while it's stuck. */}
+        <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-term-border bg-term-screen px-4 py-2 text-xs tracking-wider text-term-faint">
+          <span className="h-px w-6 bg-term-border" />
           <span>{t('thread.divider')}</span>
           <span className="h-px flex-1 bg-term-border" />
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={() => jumpTo('top')}
+              aria-label={t('thread.jumpTopAria')}
+              title={t('thread.jumpTopAria')}
+              className="rounded-[2px] border border-transparent px-1.5 py-0.5 transition hover:border-term-border hover:text-term-bright"
+            >
+              ↑ top
+            </button>
+            <button
+              type="button"
+              onClick={() => jumpTo('bottom')}
+              aria-label={t('thread.jumpBottomAria')}
+              title={t('thread.jumpBottomAria')}
+              className="rounded-[2px] border border-transparent px-1.5 py-0.5 transition hover:border-term-border hover:text-term-bright"
+            >
+              ↓ bottom
+            </button>
+          </div>
         </div>
 
         {/* chat list */}
