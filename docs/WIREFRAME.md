@@ -230,7 +230,7 @@ Login(모달) ─▶ Home ──┬──▶ Search ──┬──▶ Community
 │ │ Aidit에서 가장 좋았던 점은?  │ │  ← 제목(굵게)
 │ │ (👤) 익명 사용자 · 1시간 전  ♡12 💬8 │ │ ← 아바타+작성자·시간 / 우측 좋아요·댓글
 │ └──────────────────────────┘ │  (카드: 흰 배경, 라운드, 옅은 그림자)
-│ ─ 대화 ─        [↑ top][↓ bottom]│  ← sticky 셸 내비(상단 고정·점프)
+│ ──────── 대화 ────────        │  ← 평범한 인플로우 구분선(점프 컨트롤 없음)
 │                            │
 │ (🟢)타인 사용자 A            │  ← 타인 = 좌, 아바타 좌측
 │  └‹ 깔끔한 UI가 마음에 들어요  │     회색 버블, 꼬리 좌하
@@ -241,20 +241,24 @@ Login(모달) ─▶ Home ──┬──▶ Search ──┬──▶ Community
 │                            │
 │ (🟣)Aidit AI [AI]           │  ← AI = 좌, 그라데이션 로봇 아바타 + AI 배지
 │  └‹ 핵심 포인트는 … (앰버 틴트) │
-│    59분 전                  │
-│                            │
-│ (🟣)Aidit AI [AI]           │  ← AI 답변 로딩(PENDING)
-│  └‹ ✨ AI가 답변을 작성 중… •••│
-│ ──────────────────────────  │
+│    59분 전              ┌──┐│
+│                       │ ↑ ││  ← 점프 칩(우측 하단 고정, 사용 시에만 표시)
+│ (🟣)Aidit AI [AI]      └──┘│
+│  └‹ ✨ AI가 답변을 작성 중…┌──┐│
+│ ──────────────────────│ ↓ │┘  ← 맨 아래로(끝에서 멀 때만 표시)
 │ (＋) ( 메시지를 입력하세요…  ) (↑)│  ← Composer: ＋첨부·입력·CTA 전송(term-cta)
 └────────────────────────────┘
 ```
 
-> **(2026-06-22) 스크롤 점프 — sticky 셸 내비.** 긴 스레드에서 위/아래 끝까지 이동하기 위해
-> `─ 대화 ─` 구분선을 스크롤 영역 상단에 `sticky top-0 z-10`으로 고정하고, 우측에 `[↑ top] [↓ bottom]`
-> 셸 컨트롤을 얹는다. **새 플로팅 레이어(FAB 등)를 만들지 않아 버블을 가리지 않는다** — 고정 시
-> `bg-term-screen`(불투명)으로 아래 버블이 비치지 않게 하고, 클릭 시 스크롤 컨테이너(`scrollRef`)를
-> 양 끝으로 `scrollTo`한다. `prefers-reduced-motion`이면 smooth→auto로 다운그레이드(CRT 커서 정책과 동일).
+> **(2026-06-22) 스크롤 점프 — 우측 하단 점프 칩(Option A).** 긴 스레드에서 위/아래 끝까지 이동하기 위해
+> 스크롤 영역 우측 하단에 사각 `↑`/`↓` 칩 두 개를 띄운다. **`sticky bottom-3` + `h-0` 래퍼**로 스크롤 끝에
+> 여분 공간을 만들지 않고, 안쪽 그룹을 그 하단에 `absolute`로 앵커한다. **칩은 점프할 곳이 있을 때만 페이드 인** —
+> `↑`는 위로 `JUMP_CHIP_THRESHOLD`(400px) 넘게 내려왔을 때, `↓`는 끝에서 400px 넘게 남았을 때 — 그 외엔
+> `opacity-0` + `pointer-events-none` + `tabIndex -1`로 완전히 숨겨 한가할 땐 버블을 가리지 않는다.
+> 칩은 `bg-term-card/85 backdrop-blur`(반투명 + 블러)로 버블 위에 떠도 분리되며, hover 시 `shadow-glow-soft`.
+> 클릭 시 스크롤 컨테이너(`scrollRef`)를 양 끝으로 `scrollTo`(top→`{top:0}`, bottom→`{top:scrollHeight}`),
+> `prefers-reduced-motion`이면 smooth→auto. `─ 대화 ─` 구분선은 점프 컨트롤 없는 평범한 인플로우 구분선으로 둔다.
+> aria-label은 `thread.jumpTopAria` / `thread.jumpBottomAria`(KO/EN).
 > aria-label은 `thread.jumpTopAria` / `thread.jumpBottomAria`(KO/EN). 표시 라벨 `↑ top`/`↓ bottom`은
 > 명령형 셸 토큰이라 비번역.
 
@@ -373,10 +377,10 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
   + **알약형 입력**(`flex-1 rounded-full border bg-slate-50 px-4`) + **원형 전송 버튼**
   (`h-11 w-11 rounded-full bg-brand`(@AI/AI모드면 `bg-purple-600`) `text-white`, ↑ 아이콘).
 - placeholder: `메시지를 입력하세요…` (AI모드면 `AI에게 메시지 보내기…`). 기존 @AI 칩/감지 로직 유지.
-- **AI 응답 길이 컨트롤(FR-11)**: 컨트롤 행(`flex items-center gap-2 px-3 pt-2` — `[X] AI 모드` 토글 + 비용 힌트가 있는 행)에, `wantsAI`(= AI 모드 ON || `@AI` 멘션 감지)일 때만 **3단계 세그먼트 버튼**을 함께 노출한다. 길이는 `runAtAiReply`에 전달돼 `@AI` 답변의 길이를 제어한다.
+- **AI 응답 길이 컨트롤(FR-11)**: 컨트롤 행(`flex items-center gap-2 px-3 pt-2` — `[X] AI 모드` 토글이 있는 행)에, `wantsAI`(= AI 모드 ON || `@AI` 멘션 감지)일 때만 **3단계 세그먼트 버튼**을 함께 노출한다. 길이는 `runAtAiReply`에 전달돼 `@AI` 답변의 길이를 제어한다.
   ```
-  [X] AI 모드 · 내 키로 호출   [ 짧게 ][ 보통 ][ 길게 ]
-                                   ^^(기본=보통, 활성=term-amber)
+  [X] AI 모드   [ 짧게 ][ 보통 ][ 길게 ]
+                    ^^(기본=보통, 활성=term-amber)
   ```
   - 라벨 텍스트("len" 등) 없이 세 버튼만(자명). `role="radiogroup"` + `aria-label`. 활성=`term-amber`, 비활성=`term-dim hover:term-bright`.
   - 길이 상태는 세션 한정·postId별·미영속(신규 길이 store가 `aiModeStore` 이디엄을 미러). 기본 `보통`은 지시문·토큰 상한을 추가하지 않아 현행 동작과 동일(FR-11.2).
