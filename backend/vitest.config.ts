@@ -19,6 +19,10 @@ export default defineConfig({
     env: {
       DATABASE_URL: "file:./test.db",
       NODE_ENV: "test",
+      // Pin ON (signup) mode for `npm test`; OFF/guest mode runs via
+      // vitest.guest.config.ts (`npm run test:guest`). This keeps both-mode
+      // coverage independent of the production default (which is now OFF/guest).
+      AUTH_SIGNUP_REQUIRED: "true",
     },
     pool: "forks",
     poolOptions: {

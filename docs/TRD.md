@@ -178,7 +178,7 @@ model Vote {
 
 ## 4. REST API (요약)
 
-> **인증 정책(확정)**: 모든 쓰기 요청은 **`Authorization: Bearer <jwt>` 헤더로 서명된 JWT 토큰**을 보낸다. 서버는 토큰을 **JWT_SECRET(환경변수)** 로 검증해 `userId`를 파생한다(x-user-id 신뢰 폐기). 토큰은 **JWT_EXPIRES(기본 7일)** 후 만료하되, **슬라이딩 갱신**(유효 토큰 제시 시 `POST /auth/refresh`로 재발급)으로 **마지막 활동 기준**으로 연장된다. **비밀번호는 bcrypt 해시로 저장**(평문 비전송). **회원가입 토글**: 서버 플래그 `AUTH_SIGNUP_REQUIRED`(기본 true)가 false면 회원가입·비밀번호 없이 `POST /auth/guest`로 **닉네임(최대 16자, `#` 입력 금지) + 서버 부여 `#`hex4 식별자**만으로 진입한다(`passwordHash=null`). 프론트는 같은 베이스 이름의 빌드타임 플래그 `VITE_AUTH_SIGNUP_REQUIRED`(자체 `.env`, Vite 관례상 `VITE_` 접두사)로 UI를 분기하며 두 값은 운영자가 수동 동기화(런타임 모드 조회 엔드포인트 없음). 전체 구현 차이·추가 엔드포인트·KPI 형상은 [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md) 참조.
+> **인증 정책(확정)**: 모든 쓰기 요청은 **`Authorization: Bearer <jwt>` 헤더로 서명된 JWT 토큰**을 보낸다. 서버는 토큰을 **JWT_SECRET(환경변수)** 로 검증해 `userId`를 파생한다(x-user-id 신뢰 폐기). 토큰은 **JWT_EXPIRES(기본 7일)** 후 만료하되, **슬라이딩 갱신**(유효 토큰 제시 시 `POST /auth/refresh`로 재발급)으로 **마지막 활동 기준**으로 연장된다. **비밀번호는 bcrypt 해시로 저장**(평문 비전송). **회원가입 토글**: 서버 플래그 `AUTH_SIGNUP_REQUIRED`(기본 `false`=게스트 모드)가 false면 회원가입·비밀번호 없이 `POST /auth/guest`로 **닉네임(최대 16자, `#` 입력 금지) + 서버 부여 `#`hex4 식별자**만으로 진입한다(`passwordHash=null`). 프론트는 같은 베이스 이름의 빌드타임 플래그 `VITE_AUTH_SIGNUP_REQUIRED`(자체 `.env`, Vite 관례상 `VITE_` 접두사)로 UI를 분기하며 두 값은 운영자가 수동 동기화(런타임 모드 조회 엔드포인트 없음). 전체 구현 차이·추가 엔드포인트·KPI 형상은 [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md) 참조.
 
 | Method · Path | 설명 | 인증 | 비고 |
 |---------------|------|------|------|
