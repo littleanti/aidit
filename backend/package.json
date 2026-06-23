@@ -13,7 +13,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:guest": "vitest run -c vitest.guest.config.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",

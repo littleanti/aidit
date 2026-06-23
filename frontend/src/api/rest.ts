@@ -125,6 +125,26 @@ export function login(username: string, password: string): Promise<AuthResponse>
 }
 
 /**
+ * POST /auth/guest { username } → 201 { token, id, username }.
+ * Password-less guest entry (server appends a #hex4 tag to the base nickname).
+ * Returns the same AuthResponse shape as register/login.
+ */
+export function guestLogin(username: string): Promise<AuthResponse> {
+  return request<AuthResponse>('/auth/guest', {
+    method: 'POST',
+    body: { username },
+  });
+}
+
+/**
+ * POST /auth/refresh (Bearer, no body) → 200 { token }.
+ * Sliding-window renewal: presenting a valid token mints a fresh one.
+ */
+export function refreshToken(): Promise<{ token: string }> {
+  return request<{ token: string }>('/auth/refresh', { method: 'POST' });
+}
+
+/**
  * Thin compat alias — authStore previously called postAuthSession(username).
  * @deprecated Use login(username, password) instead.
  */

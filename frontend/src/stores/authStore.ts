@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { login as apiLogin, register as apiRegister } from '../api/rest';
+import {
+  login as apiLogin,
+  register as apiRegister,
+  guestLogin as apiGuestLogin,
+  refreshToken as apiRefreshToken,
+} from '../api/rest';
 import { setAuthToken } from '../lib/authToken';
 import { recordVisit, track } from '../lib/metrics';
 
@@ -20,6 +25,11 @@ interface AuthState {
   login: (username: string, password: string) => Promise<void>;
   /** Register a new account with username + password; sets JWT token on success. */
   register: (username: string, password: string) => Promise<void>;
+  /** Password-less guest entry by nickname; sets JWT token on success. */
+  guestLogin: (username: string) => Promise<void>;
+  /** Sliding-window token renewal. Silent on failure — the existing 401 path
+   *  (notifyAuthExpired → clearSession) handles a rejected/expired token. */
+  refresh: () => Promise<void>;
   /** update ONLY the local Google API key (L1: never sent to the server). */
   updateKey: (key: string) => void;
   /** clear identity + token but KEEP the local Gemini key. Used for an expired /
@@ -60,6 +70,31 @@ export const useAuthStore = create<AuthState>()(
         });
         track('register');
         recordVisit(resp.id);
+      },
+
+      guestLogin: async (username: string) => {
+        const resp = await apiGuestLogin(username);
+        setAuthToken(resp.token);
+        set({
+          userId: resp.id,
+          username: resp.username,
+          token: resp.token,
+        });
+        track('login');
+        recordVisit(resp.id);
+      },
+
+      refresh: async () => {
+        // Slide the expiry window. On failure, swallow — a 401 here is already
+        // handled by rest.ts (notifyAuthExpired → clearSession); other errors
+        // (offline, 5xx) should not disrupt the session.
+        try {
+          const resp = await apiRefreshToken();
+          setAuthToken(resp.token);
+          set({ token: resp.token });
+        } catch {
+          // intentionally ignored
+        }
       },
 
       // L1: googleApiKey stays LOCAL ONLY (localStorage). Updating it never

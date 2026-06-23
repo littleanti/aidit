@@ -63,8 +63,8 @@
 
 model User {
   id           String   @id @default(cuid())
-  username     String   @unique          // 표시 + 본인 판별. 키는 저장 안 함.
-  passwordHash String                   // bcrypt 해시 (평문 비밀번호는 저장 안 함)
+  username     String   @unique          // 표시 + 본인 판별. 키는 저장 안 함. 게스트는 `닉네임#hex4`(예: 철수#a3f9) 결합 문자열.
+  passwordHash String?                  // bcrypt 해시(평문 비밀번호 미저장). 게스트(무회원, AUTH_SIGNUP_REQUIRED=false)는 null.
   createdAt    DateTime @default(now())
   communities  Community[] @relation("CreatedCommunities")
   posts        Post[]
@@ -178,12 +178,14 @@ model Vote {
 
 ## 4. REST API (요약)
 
-> **인증 정책(확정)**: 모든 쓰기 요청은 **`Authorization: Bearer <jwt>` 헤더로 서명된 JWT 토큰**을 보낸다. 서버는 토큰을 **JWT_SECRET(환경변수)** 로 검증해 `userId`를 파생한다(x-user-id 신뢰 폐기). 토큰은 **JWT_EXPIRES(기본 7일)** 후 만료. **비밀번호는 bcrypt 해시로 저장**(평문 비전송). 전체 구현 차이·추가 엔드포인트·KPI 형상은 [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md) 참조.
+> **인증 정책(확정)**: 모든 쓰기 요청은 **`Authorization: Bearer <jwt>` 헤더로 서명된 JWT 토큰**을 보낸다. 서버는 토큰을 **JWT_SECRET(환경변수)** 로 검증해 `userId`를 파생한다(x-user-id 신뢰 폐기). 토큰은 **JWT_EXPIRES(기본 7일)** 후 만료하되, **슬라이딩 갱신**(유효 토큰 제시 시 `POST /auth/refresh`로 재발급)으로 **마지막 활동 기준**으로 연장된다. **비밀번호는 bcrypt 해시로 저장**(평문 비전송). **회원가입 토글**: 서버 플래그 `AUTH_SIGNUP_REQUIRED`(기본 true)가 false면 회원가입·비밀번호 없이 `POST /auth/guest`로 **닉네임(최대 16자, `#` 입력 금지) + 서버 부여 `#`hex4 식별자**만으로 진입한다(`passwordHash=null`). 프론트는 같은 베이스 이름의 빌드타임 플래그 `VITE_AUTH_SIGNUP_REQUIRED`(자체 `.env`, Vite 관례상 `VITE_` 접두사)로 UI를 분기하며 두 값은 운영자가 수동 동기화(런타임 모드 조회 엔드포인트 없음). 전체 구현 차이·추가 엔드포인트·KPI 형상은 [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md) 참조.
 
 | Method · Path | 설명 | 인증 | 비고 |
 |---------------|------|------|------|
 | `POST /auth/register` | 회원가입(username+password) → User 생성, **`{ id, token, username }` 반환** | - | username 중복 409. 키는 미전송. **JWT 서명·반환(Bearer 토큰).** |
 | `POST /auth/session` | 로그인(username+password) → **`{ id, token, username }` 반환, 토큰 검증** | - | 실패 시 401. 키 미전송. **JWT 서명·반환(Bearer 토큰).** |
+| `POST /auth/guest` | **게스트 진입**(닉네임만, `AUTH_SIGNUP_REQUIRED=false`일 때만; ON이면 403) → User 생성(`passwordHash=null`) → **`{ id, token, username }` 반환** | - | 닉네임 ≤16자·`#` 입력 금지. 서버가 `#`hex4 식별자 부여(예 `철수#a3f9`, 충돌 시 재생성). JWT 서명·반환. |
+| `POST /auth/refresh` | **토큰 슬라이딩 갱신**(유효 Bearer → 새 토큰) → **`{ token }` 반환** | **`Authorization: Bearer <jwt>`** | 만료를 마지막 활동+JWT_EXPIRES로 연장. 무효/만료 토큰 401. 게스트·회원 공통. |
 | `GET /communities?q=` | 커뮤니티 검색(부분일치) | - | FR-1.2 |
 | `GET /communities/:slug` | 단일 커뮤니티 조회(slug 정확 일치, 없으면 404) | - | 상세 뷰 |
 | `POST /communities` | 커뮤니티 생성(name, slug, personaPrompt, personaIcon) | **`Authorization: Bearer <jwt>`** | FR-3.1 · 토큰 검증(서명/만료) |

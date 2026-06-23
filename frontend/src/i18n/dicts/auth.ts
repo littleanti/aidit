@@ -15,6 +15,11 @@ export const auth = {
     submitting: '[ 처리 중… ]',
     loginBtn: '[ 로그인 ]',
     registerBtn: '[ 회원가입 ]',
+    guestStartBtn: '[ 시작하기 ]',
+    guestNameNote:
+      '입력한 닉네임 뒤에 #식별자가 자동으로 붙어 표시됩니다 (예: 철수#a3f9). 같은 닉네임이어도 식별자로 구분됩니다.',
+    guestEphemeralWarning:
+      '비밀번호 없는 게스트 모드입니다. 로그아웃하거나 브라우저 데이터를 지우면 이 계정으로 다시 들어올 수 없습니다.',
     switchToRegister: '처음이신가요?',
     switchToLogin: '이미 계정이 있으신가요?',
     switchToRegisterLink: '회원가입',
@@ -41,6 +46,11 @@ export const auth = {
     submitting: '[ Processing… ]',
     loginBtn: '[ Login ]',
     registerBtn: '[ Sign Up ]',
+    guestStartBtn: '[ Start ]',
+    guestNameNote:
+      'A #tag is automatically appended to your nickname (e.g. alex#a3f9). Users with the same nickname are told apart by this tag.',
+    guestEphemeralWarning:
+      'This is a password-less guest mode. If you log out or clear your browser data, you will not be able to return to this account.',
     switchToRegister: 'New here?',
     switchToLogin: 'Already have an account?',
     switchToRegisterLink: 'Sign up',

@@ -7,6 +7,7 @@
 import type { FastifyInstance } from "fastify";
 
 import { build } from "../src/app.js";
+import { config } from "../src/config.js";
 import { prisma } from "../src/db.js";
 
 export { prisma };
@@ -35,23 +36,41 @@ function uniq(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${counter}`;
 }
 
-// Register a real user via POST /auth/register and return { id, username, token }.
-// The password is fixed to "password123" (satisfies min-length 8).
+// Mode-aware user factory returning { id, username, token } in BOTH modes:
+//   ON  (config.signupRequired):  POST /auth/register with password "password123".
+//   OFF (guest mode):             POST /auth/guest with the nickname only.
+// Both shapes are identical so downstream helpers/tests (which use only `token`)
+// work unchanged. NOTE: in OFF mode the returned `username` is the server-assigned
+// `name#hex4`, NOT the input — callers asserting on the username must use the
+// RETURNED value. The auto-generated nickname uses a short `u` prefix so the base
+// stays within the 16-char guest limit.
 export async function createUser(
   app: FastifyInstance,
   username?: string,
 ): Promise<{ id: string; username: string; token: string }> {
-  const name = username ?? uniq("user");
+  const name = username ?? uniq("u");
+
+  if (config.signupRequired) {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: { username: name, password: "password123" },
+    });
+    if (res.statusCode !== 201) {
+      throw new Error(`createUser failed: ${res.statusCode} ${res.body}`);
+    }
+    return JSON.parse(res.body) as { id: string; username: string; token: string };
+  }
+
   const res = await app.inject({
     method: "POST",
-    url: "/auth/register",
-    payload: { username: name, password: "password123" },
+    url: "/auth/guest",
+    payload: { username: name },
   });
   if (res.statusCode !== 201) {
-    throw new Error(`createUser failed: ${res.statusCode} ${res.body}`);
+    throw new Error(`createUser (guest) failed: ${res.statusCode} ${res.body}`);
   }
-  const body = JSON.parse(res.body) as { id: string; username: string; token: string };
-  return body;
+  return JSON.parse(res.body) as { id: string; username: string; token: string };
 }
 
 // Return an Authorization header object for the given token.

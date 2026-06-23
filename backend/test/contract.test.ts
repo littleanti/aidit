@@ -8,6 +8,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 
+import { config } from "../src/config.js";
 import {
   authHeader,
   createCommunity,
@@ -37,7 +38,7 @@ beforeEach(async () => {
 // Auth: register + session
 // ---------------------------------------------------------------------------
 
-describe("auth/register", () => {
+describe.skipIf(!config.signupRequired)("auth/register", () => {
   it("returns 201 { token, id, username } with a valid Bearer token", async () => {
     const res = await app.inject({
       method: "POST",
@@ -87,7 +88,7 @@ describe("auth/register", () => {
   });
 });
 
-describe("auth/session", () => {
+describe.skipIf(!config.signupRequired)("auth/session", () => {
   it("returns 200 { token, id, username } with correct credentials", async () => {
     await app.inject({
       method: "POST",
@@ -151,6 +152,98 @@ describe("auth/session", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Auth: guest entry (OFF mode only)
+// ---------------------------------------------------------------------------
+
+describe.skipIf(config.signupRequired)("auth/guest (guest mode)", () => {
+  it("returns 201 { token, id, username } with a #hex4-suffixed username from a nickname alone", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/guest",
+      payload: { username: "guestnick" },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = JSON.parse(res.body);
+    expect(typeof body.token).toBe("string");
+    expect(body.token.length).toBeGreaterThan(0);
+    expect(body).toHaveProperty("id");
+    expect(typeof body.username).toBe("string");
+    // Server appends "#" + 4 hex chars to the base nickname.
+    expect(body.username).toMatch(/#[0-9a-f]{4}$/);
+    expect(body.username.startsWith("guestnick#")).toBe(true);
+    expect(Object.keys(body).sort()).toEqual(["id", "token", "username"]);
+  });
+
+  it("the issued guest token passes a protected write (POST /communities)", async () => {
+    const guest = await app.inject({
+      method: "POST",
+      url: "/auth/guest",
+      payload: { username: "writer" },
+    });
+    expect(guest.statusCode).toBe(201);
+    const { token } = JSON.parse(guest.body);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/communities",
+      headers: authHeader(token),
+      payload: {
+        name: `Guest Community ${Date.now()}`,
+        slug: `guest-c-${Date.now()}`,
+        personaPrompt: "You are a helpful persona.",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+  });
+
+  it("returns 400 when the nickname contains #", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/guest",
+      payload: { username: "bad#name" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 400 when the nickname exceeds 16 chars", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/guest",
+      payload: { username: "a".repeat(17) },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Auth: sliding refresh (both modes)
+// ---------------------------------------------------------------------------
+
+describe("auth/refresh", () => {
+  it("a valid Bearer token (from createUser) returns 200 { token } with a new token string", async () => {
+    const user = await createUser(app);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/refresh",
+      headers: authHeader(user.token),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(typeof body.token).toBe("string");
+    expect(body.token.length).toBeGreaterThan(0);
+  });
+
+  it("returns 401 when no Authorization header is provided", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/refresh",
+    });
+    expect(res.statusCode).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // JWT security gate
 // ---------------------------------------------------------------------------
 
@@ -199,7 +292,7 @@ describe("JWT security gate", () => {
 // ---------------------------------------------------------------------------
 
 describe("key-blindness (L1)", () => {
-  it("ignores a posted apiKey on auth/register and never echoes it", async () => {
+  it.skipIf(!config.signupRequired)("ignores a posted apiKey on auth/register and never echoes it", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/auth/register",
@@ -322,13 +415,15 @@ describe("/context assembly", () => {
     const ctx = JSON.parse(res.body);
     expect(ctx.segmentIndex).toBe(0);
     // First turn is the original post rendered as a user turn (FR-6.1 "#5").
+    // Username comes from the returned value so this holds in both modes
+    // (register: "postauthor"; guest: "postauthor#hex4").
     expect(ctx.contents[0]).toEqual({
       role: "user",
-      text: "「postauthor」: First Post\nPost body text.",
+      text: `「${author.username}」: First Post\nPost body text.`,
     });
     expect(ctx.contents[1]).toEqual({
       role: "user",
-      text: "「human1」: a question",
+      text: `「${commenter.username}」: a question`,
     });
     expect(ctx.contents[2]).toEqual({ role: "model", text: "an AI answer" });
   });
@@ -383,12 +478,12 @@ describe("/context assembly", () => {
     });
     expect(ctx.contents[1]).toEqual({
       role: "user",
-      text: "「auth2」: new seg1 message",
+      text: `「${author.username}」: new seg1 message`,
     });
     // Prior segment-0 history is EXCLUDED.
     const joined = JSON.stringify(ctx.contents);
     expect(joined).not.toContain("old seg0 message");
-    expect(joined).not.toContain("「auth2」: T"); // original post not in seg1
+    expect(joined).not.toContain(`「${author.username}」: T`); // original post not in seg1
   });
 });
 

@@ -1,15 +1,23 @@
 import type { FastifyPluginAsync } from "fastify";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 
 import { prisma } from "../db.js";
 import { config } from "../config.js";
+import { requireAuth } from "../auth.js";
 
-// Auth routes — POST /auth/register and POST /auth/session.
+// Auth routes — POST /auth/register, /auth/session, /auth/guest, /auth/refresh.
 // Server is KEY-BLIND (PLAN L1): no apiKey is ever accepted, stored, or echoed.
 // Identity is established via a server-signed JWT (Authorization: Bearer <token>).
+//
+// Mode is gated by config.signupRequired (env AUTH_SIGNUP_REQUIRED):
+//   ON  (true):  register/session work as usual; guest is disabled (403).
+//   OFF (false): register/session are disabled (403); guest entry is enabled.
 
 const USERNAME_MAX = 32;
 const USERNAME_MIN = 1;
+const GUEST_USERNAME_MAX = 16;
+const GUEST_ID_RETRIES = 8;
 const PASSWORD_MIN = 8;
 const BCRYPT_ROUNDS = 10;
 
@@ -23,12 +31,29 @@ interface SessionBody {
   password?: unknown;
 }
 
+interface GuestBody {
+  username?: unknown;
+}
+
+// Prisma unique-constraint violation code.
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: unknown }).code === "P2002"
+  );
+}
+
 const plugin: FastifyPluginAsync = async (app) => {
   // POST /auth/register — create a new user with a hashed password.
   // Returns 201 { token, id, username } on success.
   // Returns 409 if username already exists.
   // Returns 400 if username or password validation fails.
   app.post("/auth/register", async (request, reply) => {
+    if (!config.signupRequired) {
+      return reply.code(403).send({ error: "Signup is disabled" });
+    }
+
     const body = (request.body ?? {}) as RegisterBody;
 
     if (typeof body.username !== "string") {
@@ -52,6 +77,9 @@ const plugin: FastifyPluginAsync = async (app) => {
       return reply
         .code(400)
         .send({ error: `username must be at most ${USERNAME_MAX} characters` });
+    }
+    if (username.includes("#")) {
+      return reply.code(400).send({ error: "username must not contain #" });
     }
     if (password.length < PASSWORD_MIN) {
       return reply
@@ -83,6 +111,10 @@ const plugin: FastifyPluginAsync = async (app) => {
   // Returns 200 { token, id, username } on success.
   // Returns 401 on unknown user, wrong password, or legacy passwordless rows.
   app.post("/auth/session", async (request, reply) => {
+    if (!config.signupRequired) {
+      return reply.code(403).send({ error: "Signup is disabled" });
+    }
+
     const body = (request.body ?? {}) as SessionBody;
 
     if (typeof body.username !== "string") {
@@ -121,6 +153,94 @@ const plugin: FastifyPluginAsync = async (app) => {
     );
 
     return reply.code(200).send({ token, id: user.id, username: user.username });
+  });
+
+  // POST /auth/guest — passwordless guest entry (only when signupRequired is false).
+  // body { username }. Server appends "#" + 4 hex chars to the base nickname to form
+  // a unique stored username. Returns 201 { token, id, username }.
+  // Returns 403 when signup mode is ON, 400 on invalid username.
+  app.post("/auth/guest", async (request, reply) => {
+    if (config.signupRequired) {
+      return reply.code(403).send({ error: "Guest mode is disabled" });
+    }
+
+    const body = (request.body ?? {}) as GuestBody;
+
+    if (typeof body.username !== "string") {
+      return reply
+        .code(400)
+        .send({ error: "username is required and must be a string" });
+    }
+
+    const base = body.username.trim();
+
+    if (base.length < USERNAME_MIN) {
+      return reply.code(400).send({ error: "username must not be empty" });
+    }
+    if (base.length > GUEST_USERNAME_MAX) {
+      return reply
+        .code(400)
+        .send({ error: `username must be at most ${GUEST_USERNAME_MAX} characters` });
+    }
+    if (base.includes("#")) {
+      return reply.code(400).send({ error: "username must not contain #" });
+    }
+
+    // Append "#" + 4 hex chars; retry on the (rare) @unique collision.
+    let user: { id: string; username: string } | null = null;
+    for (let attempt = 0; attempt < GUEST_ID_RETRIES; attempt++) {
+      const combined = `${base}#${randomBytes(2).toString("hex")}`;
+      try {
+        user = await prisma.user.create({
+          data: { username: combined },
+          select: { id: true, username: true },
+        });
+        break;
+      } catch (err) {
+        if (isUniqueViolation(err)) {
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    if (!user) {
+      return reply
+        .code(409)
+        .send({ error: "Could not allocate a unique guest identifier" });
+    }
+
+    const token = app.jwt.sign(
+      { sub: user.id },
+      { expiresIn: config.jwtExpires },
+    );
+
+    return reply.code(201).send({ token, id: user.id, username: user.username });
+  });
+
+  // POST /auth/refresh — sliding renewal (both modes). Requires a valid Bearer token.
+  // Returns 200 { token } with a freshly signed token. requireAuth sends 401 on
+  // a missing/invalid token; an unknown user also yields 401.
+  app.post("/auth/refresh", async (request, reply) => {
+    const userId = await requireAuth(request, reply);
+    if (!userId) {
+      return reply;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) {
+      return reply.code(401).send({ error: "Invalid or expired token" });
+    }
+
+    const token = app.jwt.sign(
+      { sub: userId },
+      { expiresIn: config.jwtExpires },
+    );
+
+    return reply.code(200).send({ token });
   });
 };
 

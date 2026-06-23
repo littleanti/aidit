@@ -64,6 +64,7 @@ export default function AppLayout() {
   const username = useAuthStore((s) => s.username);
   const googleApiKey = useAuthStore((s) => s.googleApiKey);
   const clearSession = useAuthStore((s) => s.clearSession);
+  const refreshAuth = useAuthStore((s) => s.refresh);
   const resetGeminiStatus = useGeminiStatusStore((s) => s.reset);
   const openLogin = useUiStore((s) => s.openLogin);
   const { t } = useT();
@@ -78,6 +79,16 @@ export default function AppLayout() {
     });
     return () => setOnAuthExpired(null);
   }, [clearSession, openLogin]);
+
+  // 슬라이딩 갱신: 앱을 열 때마다(마운트 시 1회) 토큰이 있으면 refresh()를 호출해
+  // 만료창을 "마지막 활동 + 7일"로 민다(게스트·회원 공통). 실패는 store 내부에서
+  // 조용히 무시되고, 401이면 기존 notifyAuthExpired → clearSession 경로가 처리한다.
+  useEffect(() => {
+    if (useAuthStore.getState().token) {
+      void refreshAuth();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Gemini 연결 표식: 키가 생기거나 바뀔 때(신규 로그인 · 프로필 키 변경 · 지속
   // 세션 로드) 키당 한 번 가벼운 연결 테스트(pingGemini)를 돌려 배지를 즉시

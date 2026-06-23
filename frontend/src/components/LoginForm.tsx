@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { ApiError } from '../api/rest';
 import { useT } from '../i18n/useT';
+import { SIGNUP_REQUIRED } from '../config/auth';
 
 interface LoginFormProps {
   /** called after login() or register() resolves successfully. */
@@ -15,6 +16,7 @@ interface LoginFormProps {
 export default function LoginForm({ onSuccess }: LoginFormProps) {
   const login = useAuthStore((s) => s.login);
   const register = useAuthStore((s) => s.register);
+  const guestLogin = useAuthStore((s) => s.guestLogin);
   const updateKey = useAuthStore((s) => s.updateKey);
   const { t } = useT();
 
@@ -26,11 +28,13 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Guest mode (SIGNUP_REQUIRED=false): only the nickname is required.
   // Register mode also requires the confirm field; login does not.
-  const canSubmit =
-    username.trim().length > 0 &&
-    password.trim().length > 0 &&
-    (mode === 'login' || confirmPassword.length > 0);
+  const canSubmit = !SIGNUP_REQUIRED
+    ? username.trim().length > 0
+    : username.trim().length > 0 &&
+      password.trim().length > 0 &&
+      (mode === 'login' || confirmPassword.length > 0);
 
   // Live mismatch hint (register mode, once the user has typed a confirmation).
   const passwordsMismatch =
@@ -59,6 +63,22 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!canSubmit || submitting) return;
+
+    // Guest mode: nickname-only entry. No password / confirm validation.
+    if (!SIGNUP_REQUIRED) {
+      setSubmitting(true);
+      setError(null);
+      try {
+        await guestLogin(username.trim());
+        if (apiKey.trim()) updateKey(apiKey.trim());
+        onSuccess?.();
+      } catch (err) {
+        setError(localizedError(err));
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
 
     if (mode === 'register') {
       if (password.length < 8) {
@@ -105,12 +125,22 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           type="text"
           autoComplete="username"
           value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          maxLength={!SIGNUP_REQUIRED ? 16 : undefined}
+          onChange={(e) =>
+            setUsername(
+              !SIGNUP_REQUIRED ? e.target.value.replace(/#/g, '') : e.target.value,
+            )
+          }
           className="w-full rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 text-sm text-term-bright caret-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright"
           placeholder={t('auth.usernamePlaceholder')}
         />
+        {!SIGNUP_REQUIRED && (
+          <p className="mt-1 text-xs text-term-dim">{t('auth.guestNameNote')}</p>
+        )}
       </div>
 
+      {SIGNUP_REQUIRED && (
+      <>
       <div>
         <label
           htmlFor="password"
@@ -158,6 +188,8 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           )}
         </div>
       )}
+      </>
+      )}
 
       <div>
         <label
@@ -190,6 +222,12 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
 
       {error && <p className="text-sm text-term-danger">{error}</p>}
 
+      {!SIGNUP_REQUIRED && (
+        <p className="rounded-[2px] border border-term-amber bg-term-info px-3 py-2 text-xs leading-relaxed text-term-amber">
+          {t('auth.guestEphemeralWarning')}
+        </p>
+      )}
+
       <button
         type="submit"
         disabled={!canSubmit || submitting}
@@ -197,21 +235,25 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       >
         {submitting
           ? t('auth.submitting')
-          : isLogin
-            ? t('auth.loginBtn')
-            : t('auth.registerBtn')}
+          : !SIGNUP_REQUIRED
+            ? t('auth.guestStartBtn')
+            : isLogin
+              ? t('auth.loginBtn')
+              : t('auth.registerBtn')}
       </button>
 
-      <p className="text-center text-xs text-term-dim">
-        {isLogin ? t('auth.switchToRegister') : t('auth.switchToLogin')}{' '}
-        <button
-          type="button"
-          onClick={toggleMode}
-          className="text-term-bright underline"
-        >
-          {isLogin ? t('auth.switchToRegisterLink') : t('auth.switchToLoginLink')}
-        </button>
-      </p>
+      {SIGNUP_REQUIRED && (
+        <p className="text-center text-xs text-term-dim">
+          {isLogin ? t('auth.switchToRegister') : t('auth.switchToLogin')}{' '}
+          <button
+            type="button"
+            onClick={toggleMode}
+            className="text-term-bright underline"
+          >
+            {isLogin ? t('auth.switchToRegisterLink') : t('auth.switchToLoginLink')}
+          </button>
+        </p>
+      )}
     </form>
   );
 }
