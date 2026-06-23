@@ -38,6 +38,10 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
   const register = useAuthStore((s) => s.register);
   const guestLogin = useAuthStore((s) => s.guestLogin);
   const updateKey = useAuthStore((s) => s.updateKey);
+  // A key may already be in localStorage (e.g. saved before, kept across logout).
+  // We only flag its presence here — never prefill the value into the field.
+  const storedKey = useAuthStore((s) => s.googleApiKey);
+  const hasStoredKey = !!storedKey && storedKey.length > 0;
   const { t } = useT();
 
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
@@ -153,7 +157,11 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     <div>
       <label htmlFor="apiKey" className={labelClass}>
         {t('auth.apiKeyLabel')}{' '}
-        <span className="text-term-faint">{t('auth.apiKeyOptional')}</span>
+        {hasStoredKey ? (
+          <span className="text-term-green">{t('auth.apiKeyStoredBadge')}</span>
+        ) : (
+          <span className="text-term-faint">{t('auth.apiKeyOptional')}</span>
+        )}
       </label>
       <input
         id="apiKey"
@@ -162,10 +170,10 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         value={apiKey}
         onChange={(e) => setApiKey(e.target.value)}
         className={inputClass}
-        placeholder="AIza..."
+        placeholder={hasStoredKey ? t('auth.apiKeyStoredPlaceholder') : 'AIza...'}
       />
       <p className="mt-2 rounded-[2px] border border-term-amber bg-term-info px-3 py-2 text-xs leading-relaxed text-term-amber">
-        {t('auth.apiKeyNote')}
+        {hasStoredKey ? t('auth.apiKeyStoredHint') : t('auth.apiKeyNote')}
       </p>
       <a
         href="https://aistudio.google.com/app/apikey"

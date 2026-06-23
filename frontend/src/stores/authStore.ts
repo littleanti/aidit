@@ -35,7 +35,8 @@ interface AuthState {
   /** clear identity + token but KEEP the local Gemini key. Used for an expired /
    *  rejected token and for clearing a tokenless "zombie" session on load. */
   clearSession: () => void;
-  /** clear all identity + token + key from memory and localStorage. */
+  /** clear identity + token from memory and localStorage, but KEEP the local
+   *  Gemini key (BYOK key persists across an explicit logout). */
   logout: () => void;
 }
 
@@ -111,7 +112,9 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         setAuthToken(null);
-        set({ userId: null, username: null, token: null, googleApiKey: null });
+        // keep googleApiKey: the BYOK local key should survive an explicit
+        // logout (cleared only via Settings' remove-key action → updateKey('')).
+        set({ userId: null, username: null, token: null });
       },
     }),
     {

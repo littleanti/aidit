@@ -96,7 +96,7 @@ export default function Profile() {
             <circle cx="12" cy="12" r="3" />
             <path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19" />
           </svg>
-          <span className="hidden sm:inline">{t('profile.settingsLink')}</span>
+          <span>{t('profile.settingsLink')}</span>
         </Link>
       </header>
 

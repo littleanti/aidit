@@ -1,7 +1,7 @@
 # Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
 
 > 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
-> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-23 (i18n 커버리지 감사 — 하드코딩 문자열 3건 t()/tn() 라우팅)
+> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-23 (로그아웃 시 BYOK Gemini 키 보존 + 로그인 폼 저장된 키 표시 + 프로필 설정 버튼 라벨 항상 노출)
 > 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
 
 ---
@@ -11,6 +11,9 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-23
+- **[fix]** **프로필 설정 버튼 — 라벨("설정")을 가로·세로(좁은 화면) 모두 항상 노출**: `Profile.tsx` 헤더의 `/me/settings` 링크가 톱니바퀴 아이콘 + 라벨 구성인데, 라벨 `<span>`에 `hidden sm:inline`이 걸려 있어 **`sm`(640px) 미만(세로/좁은 화면)에서는 톱니바퀴 아이콘만** 보였다. 사용자 요청에 따라 `hidden sm:inline`을 제거해 화면 폭과 무관하게 "톱니바퀴 + 설정"을 일관되게 표시한다. 링크 컨테이너는 이미 `inline-flex items-center gap-1.5`라 아이콘-라벨 간격은 그대로 유지. (`frontend/src/pages/Profile.tsx`)
+- **[fix]** **로그아웃 시 BYOK Gemini 키 보존 — `logout()`이 키를 지우던 동작 제거**: 명시적 로그아웃(`logout()`)이 `set({ ..., googleApiKey: null })`로 로컬 Gemini 키까지 비웠다. persist `partialize`가 `googleApiKey`를 localStorage에 저장하므로, 이 시점에 **저장된 키가 localStorage에서도 `null`로 덮어써졌고**, 이후 재로그인 시 키를 다시 입력해야 했다. 사용자 요청(로그아웃해도 키 보존)에 따라 `logout()`에서 `googleApiKey: null`을 제거해 `clearSession()`과 동일하게 **식별자·토큰만 비우고 키는 유지**하도록 변경. 토큰 만료(401→`clearSession`)·명시적 로그아웃(`logout`) 두 경로 모두 이제 BYOK 키를 보존한다. 키를 의도적으로 지우는 경로는 설정 화면의 키 삭제 버튼(`updateKey('')`, `Settings.tsx`)으로 단일화. `AuthState.logout`의 JSDoc도 "키 유지"로 정정. ⚠️ 게스트 정체성은 비밀번호가 없어 로그아웃 후 복구 불가라는 점(`auth.guestEphemeralWarning`)은 불변 — 이번 변경은 **로컬 키 보존**일 뿐 게스트 계정 복구와는 무관. (`frontend/src/stores/authStore.ts`)
+- **[feat]** **로그인 폼 — 저장된 Gemini 키가 있으면 입력창에 "저장됨" 표시**: localStorage에 키가 이미 있으면(`useAuthStore.googleApiKey`) 키 입력 필드 라벨 옆에 녹색 배지(`auth.apiKeyStoredBadge`)를 띄우고, placeholder를 "저장된 키 유지 (변경하려면 입력)"(`auth.apiKeyStoredPlaceholder`)로 바꾸며, 안내문을 "비워두면 기존 키를 그대로 사용 / 새 키 입력 시 교체"(`auth.apiKeyStoredHint`)로 교체한다. 키를 평문 prefill하지 않고(비밀번호 타입 필드) **표시만** 한다 — 비워두고 로그인하면 `LoginForm`의 `if (apiKey.trim()) updateKey(...)` 가드에 의해 기존 키가 그대로 유지되고, 새 키를 입력하면 교체된다. 신규 i18n 키 3종(`apiKeyStoredBadge`·`apiKeyStoredPlaceholder`·`apiKeyStoredHint`)을 ko/en 대칭으로 추가. (`frontend/src/components/LoginForm.tsx`, `frontend/src/i18n/dicts/auth.ts`)
 - **[fix]** **i18n 커버리지 감사 — 하드코딩 사용자 노출 문자열 3건을 t()/tn()으로 라우팅**: KO/EN 전수 검사(사전 키 대칭·미번역·dangling 참조·하드코딩) 결과, 사전 11개 네임스페이스의 ko↔en 키는 **완전 일치**(미번역·dangling 0건)였고 `t()`를 거치지 않은 사용자 노출 문자열 3곳만 발견되어 정정한다.
   - `pages/CreatePost.tsx` 이미지 드롭존 하단 헬퍼 `PNG · JPG` → `t('post.image_attach_hint')`. dict `post`에 `image_attach_hint`(ko/en 동일 `'PNG · JPG'`) 신설.
   - `pages/CreateCommunity.tsx` slug 입력 placeholder `home-cooking` → `t('community.fieldSlugPlaceholder')`. dict `community`에 `fieldSlugPlaceholder`(ko/en 동일 `'home-cooking'` — slug는 ASCII) 신설.
