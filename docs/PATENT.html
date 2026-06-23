@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>특허출원 명세서 — 다중 사용자 공유 대화 컨텍스트의 클라이언트 위임형 분산 요약 시스템 및 방법</title>
+<style>
+  :root{
+    --ink:#111;
+    --line:#222;
+    --muted:#555;
+    --accent:#0b3d91;
+    --emph:#b00020;
+    --bg:#fff;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);}
+  body{
+    font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+    line-height:1.75;
+    font-size:15px;
+    max-width:980px;
+    margin:0 auto;
+    padding:32px 28px 96px;
+    word-break:keep-all;
+  }
+  h1{font-size:22px;line-height:1.5;text-align:center;margin:8px 0 4px;letter-spacing:-0.3px;}
+  .docmeta{text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:28px;border-bottom:2px solid var(--line);padding-bottom:14px;}
+  h2{font-size:18px;border-left:5px solid var(--accent);padding:4px 0 4px 12px;margin:40px 0 12px;background:#f4f6fb;}
+  h3{font-size:15.5px;margin:24px 0 8px;color:var(--accent);}
+  h4{font-size:14.5px;margin:16px 0 6px;}
+  p{margin:8px 0;text-align:justify;}
+  ol,ul{margin:8px 0 8px 4px;padding-left:24px;}
+  li{margin:5px 0;text-align:justify;}
+  .lead{font-weight:600;}
+  .muted{color:var(--muted);}
+  .emph{color:var(--emph);font-weight:700;}
+  .secref{font-weight:700;color:var(--accent);}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid #999;padding:7px 9px;vertical-align:top;text-align:left;}
+  th{background:#eef1f7;}
+  .num{font-variant-numeric:tabular-nums;}
+  .fig{margin:26px 0;padding:14px;border:1px solid #ccc;border-radius:6px;background:#fafafa;page-break-inside:avoid;}
+  .fig figcaption{font-weight:700;text-align:center;margin-bottom:10px;font-size:14.5px;}
+  .fig svg{width:100%;height:auto;display:block;background:#fff;border:1px solid #e3e3e3;border-radius:4px;}
+  svg text{font-family:"Malgun Gothic","맑은 고딕","Noto Sans KR",sans-serif;}
+  .claims{counter-reset:none;}
+  .claim{margin:14px 0;padding-left:0;}
+  .claim .cn{font-weight:700;}
+  .claim.dep{margin-left:22px;}
+  .badge{display:inline-block;border:1px solid #888;border-radius:3px;padding:0 6px;font-size:11.5px;color:var(--muted);margin-left:6px;}
+  .toc{font-size:13.5px;background:#f7f7f7;border:1px solid #ddd;border-radius:6px;padding:12px 18px;}
+  .toc ol{margin:0;}
+  .abstract{border:1px dashed #888;padding:14px 18px;border-radius:6px;background:#fcfcf7;}
+  code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-size:12.5px;word-break:break-all;}
+  hr{border:none;border-top:1px solid #ddd;margin:32px 0;}
+  .ref-table td:first-child{white-space:nowrap;font-weight:700;color:var(--accent);}
+  @media print{
+    body{max-width:none;font-size:11pt;padding:0 14mm;}
+    h2{background:none;border-left:4px solid #000;}
+    .fig{background:none;border:1px solid #000;}
+    .toc,.abstract{background:none;}
+    a{color:#000;text-decoration:none;}
+  }
+  @media (max-width:640px){
+    body{padding:18px 14px 64px;}
+    h1{font-size:18px;}
+  }
+</style>
+</head>
+<body>
+
+<h1>다중 사용자 공유 대화 컨텍스트의 클라이언트 위임형 분산 요약 시스템 및 방법</h1>
+<div class="docmeta">
+  대한민국 특허출원 명세서 (초안) · 발명의 분야: 컴퓨터·통신 / 인공지능 협업 시스템<br>
+  국제특허분류(IPC) 제안: G06F 16/00, G06F 40/40, H04L 67/00, G06F 21/00
+</div>
+
+<div class="toc">
+<strong>목 차</strong>
+<ol>
+  <li>발명의 명칭</li>
+  <li>기술분야</li>
+  <li>배경기술</li>
+  <li>발명의 내용 (해결하려는 과제 / 과제의 해결 수단 / 발명의 효과)</li>
+  <li>도면의 간단한 설명</li>
+  <li>발명을 실시하기 위한 구체적인 내용</li>
+  <li>특허청구범위</li>
+  <li>요약서</li>
+  <li>부호의 설명</li>
+</ol>
+</div>
+
+<!-- ===================== 1. 명칭 ===================== -->
+<h2>【발명의 명칭】</h2>
+<p class="lead">다중 사용자 공유 대화 컨텍스트의 클라이언트 위임형 분산 요약 시스템 및 방법
+(System and Method for Client-Delegated Distributed Summarization of a Multi-User Shared Conversational Context)</p>
+
+<!-- ===================== 2. 기술분야 ===================== -->
+<h2>【기술분야】</h2>
+<p>본 발명은 복수의 사용자가 단일 대화 스레드 내에서 하나의 누적된 인공지능(AI) 대화 컨텍스트를 공동으로 형성·이용하는 협업형 통신 시스템에 관한 것이다. 보다 구체적으로, 본 발명은 누적 컨텍스트의 토큰 수가 임계치를 초과한 경우 대규모 언어모델(LLM)을 이용한 컨텍스트 요약 연산을 중앙 서버가 아닌 트리거 이벤트를 발생시킨 클라이언트 단말에 위임하여 해당 단말이 보유한 사용자 자격증명(API 키)으로 수행하게 함으로써, 서버 운영주체에 LLM 추론 호출 비용이 귀속되지 않도록 하고 서버측 공격 표면을 축소하며, 상호 불신하는 복수 클라이언트의 동시 압축을 멱등 가드 및 낙관적 동시성으로 조정하는, 클라이언트 위임형 분산 요약 시스템 및 그 방법, 그리고 이를 수행하는 컴퓨터 판독가능 기록매체에 관한 것이다.</p>
+
+<!-- ===================== 3. 배경기술 ===================== -->
+<h2>【배경기술】</h2>
+<p>대규모 언어모델을 활용한 대화형 협업 서비스가 보편화됨에 따라, 다수의 사용자가 동일한 대화 맥락을 공유하면서 AI와 상호작용하는 형태의 서비스가 요구되고 있다. 종래의 기술은 다음과 같은 문제를 가진다.</p>
+
+<h3>(1) 중앙집중형 서버 요약의 비용 집중</h3>
+<p>회의록 자동 요약 서비스나 클라우드 기반 대화 요약 솔루션은 통상 서버 또는 클라우드 측이 대화 데이터를 수집하고, 서버가 보유한 자격증명으로 LLM 추론(요약)을 수행한다. 구체적 선행기술로, Otter.ai의 미국 공개특허 US20240395254A1(스트리밍 서버 및 라이브 요약 처리부가 전사 데이터를 수신하여 요약 데이터를 생성·반환하는 서버측 라이브 요약 구성), IBM의 미국등록특허 US8914452B2(회의 다이제스트 서버 장치가 자연어 분석을 서버측에서 수행), Canon의 미국등록특허 US11281707B2(범용 PC 또는 클라우드 서버인 회의 서버가 음성·영상 데이터를 서버측에서 분석·처리하여 회의록을 생성) 등이 중앙집중형 서버 요약을 개시한다. 또한 상용 배포 시스템으로 Samsung Galaxy AI의 Transcript Assist는 전사는 온디바이스로, 요약은 클라우드 처리를 기본값으로 하면서 온디바이스 처리 토글을 제공하는 하이브리드 시스템이다. 이러한 중앙집중형(또는 클라우드 기본) 구조에서는 대화 컨텍스트가 길어질수록 요약을 위한 추론 연산이 서비스 제공자 측에 누적되어, 사용자 수와 대화량에 비례하여 서버의 추론 비용이 증가하는 경향이 있다. 특히 다수의 스레드가 동시에 임계치를 초과하는 경우 비용 집중과 처리 지연이 발생할 수 있다.</p>
+
+<h3>(2) 검증되지 않은 BYOK 서버 프록시의 SSRF 위험</h3>
+<p>사용자가 자신의 API 키를 가져와 사용하는 이른바 BYOK(Bring Your Own Key) 방식의 종래 오픈소스 셀프호스트 챗 프론트엔드 중 일부는, LLM 엔드포인트로의 요청을 서버 측에서 중계하는 프록시(예: 클라이언트가 지정한 목적지 URL 또는 헤더로 서버가 대신 요청을 발신하는 구성)를 둔다. 이러한 서버 프록시는 클라이언트가 지정한 목적지로 서버가 대리 요청을 발신하므로, 목적지를 엄격히 검증하지 아니하는 경우 공격자가 내부망 주소나 메타데이터 엔드포인트를 목적지로 지정하는 서버측 요청 위조(SSRF, Server-Side Request Forgery)의 공격 표면을 유발하는 경향이 있다. 실제로 동종 셀프호스트 챗 UI에서 다수의 등록 취약점이 보고되었는바, 예컨대 LobeChat의 CVE-2024-32964(검증 없는 프록시의 미인증 SSRF, 0.150.6에서 URL 검증으로 보완), NextChat/ChatGPT-Next-Web의 CVE-2026-7177(검증되지 않은 x-base-url 헤더에 의존하는 프로바이더 프록시) 및 CVE-2023-49785(개방형 프록시) 등이 이에 해당한다. 다만 이러한 SSRF는 프록시 자체가 아니라 <em>검증되지 않은(unvalidated)</em> 프록싱에서 비롯되는 것으로, 허용목록(allowlist)·DNS 리바인딩 방어 등으로 완화될 수 있는 경향적 위험이며 프록시의 논리적 필연은 아니다.</p>
+
+<h3>(3) 단일 주체 전제의 컨텍스트 압축 기법</h3>
+<p>컨텍스트 윈도우 한계를 극복하기 위한 종래의 재귀적 요약·압축 기법은 통상 단일 사용자·단일 세션·서버측 단일 프로세스를 전제로 한다. 구체적 선행기술로, 재귀적 요약의 정전(定典)에 해당하는 Wu 외, "Recursively Summarizing Books with Human Feedback"(OpenAI, arXiv:2109.10862, 2021)은 작은 단락을 요약한 뒤 그 요약문을 다시 재귀적으로 요약하는 방식을 개시하나 서버측 단일 사용자(model-as-service)를 전제로 한다. 또한 Wu 외의 재귀 전략을 제로샷 프롬프팅으로 적응시킨 Context-Aware Hierarchical Merging(arXiv:2502.00977, 2025) 및 단일 그룹의 2024년 프리프린트인 Hierarchical Aggregate Tree(HAT, Aadhithya 외, arXiv:2406.06124, 2024)가 계층적 집계를 다루며, map-reduce/refine 요약은 LangChain 등 엔지니어링 구현 관행으로 문서화되어 있다. 위 기법들은 모두 컨텍스트를 소유·갱신하는 주체가 하나이고 요약 연산을 수행하는 주체도 동일하다는 가정 위에서 설계된다(상기 HAT는 2024년 단일 프리프린트로서 확립된 표준이 아님). 이러한 기법은 복수의 사용자가 동시에 하나의 컨텍스트에 기여하고 동시에 요약 트리거를 발생시킬 수 있는, 상호 불신하는 복수 클라이언트의 다중 사용자 환경에 그대로 적용될 수 없으며, 요약의 중복 수행·경쟁 상태(race condition)·컨텍스트 경계의 불일치 등의 문제를 야기한다. 본 발명은 이들의 단일 주체 가정을 복수 클라이언트의 동시 압축 조정으로 극복하는 점에서 구별된다.</p>
+
+<h3>(4) 공유 컨텍스트 유지비용의 귀속 불명확</h3>
+<p>복수 사용자가 공유하는 단일 대화 컨텍스트(공공재적 자원)의 유지를 위해 발생하는 추론·전송 비용을, 어느 주체에게 귀속시킬 것인가에 대한 합리적·시스템적 설계가 부재하다. 비용을 서비스 제공자에게 집중시키면 (1)의 문제가 발생하고, 비용 귀속이 불명확하면 무분별한 자원 소모를 통제하기 어렵다.</p>
+
+<h3>(5) 가장 근접한 선행기술과 본 발명의 구별</h3>
+<p>본 발명에 가장 근접한 선행기술로 미국등록특허 US9569428B2("Providing an electronic summary of source content")가 있다. 동 문헌은 (i) 요약의 적어도 일부를 하나 이상의 클라이언트 장치가 수행하여 온라인 회의 서버의 작업을 경감(offload)하고, (ii) 그 대상이 복수 참가자가 공유하는 온라인 회의 콘텐츠이며, (iii) 온라인 회의 서버는 생성된 요약을 저장만 한다는 점, 즉 "클라이언트측 요약 + 다중 사용자 공유 컨텍스트 + 저장 전용 서버"를 개시한다. 또한 클라이언트/엣지로의 LLM 추론 위임(PFID, WebLLM, EdgeShard, Federated Attention 등), 다중 사용자 그룹 대화의 LLM 요약(US11315568, US11238236, US11558334, WO2025042780A1 등), 사용자 자신의 API 키를 사용하는 BYOK(GitHub Models, GitHub Copilot, Portkey 등) 역시 각각 공지의 기술 또는 상용 패턴이다.</p>
+<p>다만, US9569428B2의 요약기는 LLM이 아닌 메타데이터·휴리스틱 기반이고, 위 선행기술 중 어느 단일 문헌도 (a) 최종 사용자 자신의 API 키로 비용을 부담하면서 (b) 그 사용자의 클라이언트/엣지 단말에서 LLM이 (c) 다중 사용자 공유 대화를 (d) 요약·압축하고 (e) 서버는 텍스트 CRUD만 담당하는 결합을, 특히 <span class="emph">상호 불신하는 복수 클라이언트가 각자 상이한 자격증명·모델로 동일 활성 세그먼트를 독립적으로 압축하려 할 때의 공유상태 조정(멱등 가드 및 낙관적 동시성)</span>과 함께 개시하지 아니한다. 본 발명은 이 공유상태 조정 메커니즘 및 서버가 모델 출력을 보관 외에는 관여하지 아니하는 키-블라인드 직접호출 계약을 진보적 핵심으로 한다.</p>
+
+<!-- ===================== 4. 발명의 내용 ===================== -->
+<h2>【발명의 내용】</h2>
+
+<h3>【해결하려는 과제】</h3>
+<p>본 발명은 상기 종래기술의 문제를 해결하기 위한 것으로, 다음을 과제로 한다.</p>
+<ol>
+  <li>다중 사용자가 단일 스레드의 누적 컨텍스트를 공유하는 환경에서, 서비스 제공자 측에 LLM 추론 호출 비용이 귀속되지 않도록 하는 것(전송·저장 인프라 비용은 별도).</li>
+  <li>BYOK 환경에서 서버 프록시를 배제하여 서버측 SSRF 공격 표면을 제거하는 것(다만 자격증명이 브라우저에 상주하는 데 따른 위험은 별도의 클라이언트측 보안수단으로 다룸).</li>
+  <li>교차사이트 스크립팅(XSS) 등으로 자격증명이 탈취되더라도, 스크립트 구동 연결 채널(fetch/XHR/WebSocket/EventSource)을 통한 외부 유출(exfiltration) 경로를 차단하는 것.</li>
+  <li>상호 불신하는 복수 클라이언트가 각자 상이한 자격증명·모델로 동시에 요약을 트리거하는 경쟁 상황에서도 컨텍스트 경계의 정합성을 보장하고 중복 요약을 방지하는 것.</li>
+  <li>컨텍스트 길이의 증가에 대하여, 사람 입력의 무손실을 보장하면서 활성 컨텍스트를 일정 규모로 유지하여 대화를 지속 가능하게 압축·유지하는 것.</li>
+</ol>
+
+<h3>【과제의 해결 수단】</h3>
+<p>상기 과제를 해결하기 위하여 본 발명은, 복수의 클라이언트 단말이 접속한 단일 대화 스레드의 누적 텍스트 토큰 수가 임계치를 초과한 경우, <span class="emph">중앙 서버는 텍스트의 생성·조회·갱신(CRUD)과 컨텍스트 경계의 단일 출처(Single Source of Truth) 관리 및 실시간 중계만을 담당</span>하고, LLM 기반의 재귀적 요약 연산은 <span class="emph">다음 트리거 이벤트를 발생시킨 클라이언트 단말로 위임</span>하여, 해당 단말이 보유한 사용자 자격증명으로 LLM 엔드포인트에 직접(프록시리스) 호출하여 수행한 뒤, 그 <span class="emph">결과 텍스트만을 서버로 반환</span>하여 컨텍스트를 압축하는 구성을 채택한다.</p>
+<p>구체적으로 본 발명은 (i) 서버가 자격증명을 보유·대납·경유하지 않는 키-블라인드(key-blind) 구조, (ii) 콘텐츠 보안 정책(CSP)의 connect-src 허용목록 기반의 스크립트 연결 채널(fetch/XHR/WebSocket/EventSource) 유출 차단, (iii) 활성 컨텍스트 세그먼트의 누적 토큰합(tokenSum)을 임계 판정의 단일 출처로 삼는 세그먼트 모델, (iv) 세그먼트당 요약 1건만 허용하는 멱등 가드(winner 201 / loser 409), (v) 임계 초과 후 다음 AI 호출 직전에 수행하는 지연(lazy) 요약 트리거, (vi) 페르소나를 시스템 지시문으로 격리하는 프롬프트 인젝션 가드, (vii) 게시 단위의 서버→클라이언트 단방향 실시간 팬아웃(fan-out) 동기화, (viii) 정확 토큰계수 우선·문자수 기반 폴백의 토큰 카운팅, (ix) 요약 후 요약문과 이후 입력만으로 컨텍스트를 재조립하는 재귀 압축, (x) 트리거 사용자 자격증명 한도로 LLM 추론 호출 비용을 귀속시키는 개별화 과금 중 하나 이상을 포함한다.</p>
+
+<h3>【발명의 효과】</h3>
+<table>
+  <thead><tr><th>효과</th><th>내용</th></tr></thead>
+  <tbody>
+    <tr><td>서버측 LLM 추론비용 비귀속</td><td>모든 LLM 추론(답변·요약)이 트리거 클라이언트의 자격증명으로 외부 서비스에 직접 수행되므로, 서비스 제공자(서버 운영주체)에게 LLM 추론 호출 비용이 귀속되지 않는다. 다만 서버는 SSE 팬아웃·CRUD·DB 등 전송·저장 인프라 비용은 여전히 부담한다. (정량 수치는 본 명세서 작성 시점 기준 설계상 도출되는 예시(illustrative)이며 실측이 아님.)</td></tr>
+    <tr><td>서버측 SSRF 표면 제거(위험 재배치)</td><td>서버 프록시가 존재하지 않으므로 서버를 통한 임의 URL 요청 위조의 서버측 공격 표면은 구조적으로 부재한다. 다만 이는 위험의 제거가 아니라 재배치로서, 자격증명이 브라우저/로컬 저장소에 상주하여 XSS 탈취 위험으로 전환되며 이는 아래 CSP 등 클라이언트측 수단으로 완화된다.</td></tr>
+    <tr><td>스크립트 연결 채널 유출 차단</td><td>CSP의 connect-src 허용목록은 XSS 스크립트가 자격증명을 읽더라도 fetch/XHR/WebSocket/EventSource를 통하여 허용된 LLM 도메인 외부로 전송하는 것을 방지한다. 다만 이미지/리소스 로드(img-src/default-src), 페이지 내비게이션(form-action 등), DNS-prefetch/preconnect·prerender, WebRTC 등 connect-src가 통제하지 못하는 잔여 채널의 차단을 위해서는 default-src 'none'·img-src 제한 등 별도 지시가 추가로 필요하다(잔여 위험).</td></tr>
+    <tr><td>대화의 지속적 압축</td><td>임계 초과 시 재귀적 요약으로 활성 컨텍스트를 일정 규모로 유지하여, 사람 입력을 무손실로 보존하면서 대화를 지속적으로 압축·유지할 수 있다.</td></tr>
+    <tr><td>경쟁 상태 정합성</td><td>세그먼트당 단일 요약 멱등 가드로 동시 트리거 시에도 중복 요약과 경계 불일치를 방지한다.</td></tr>
+  </tbody>
+</table>
+
+<!-- ===================== 5. 도면의 간단한 설명 ===================== -->
+<h2>【도면의 간단한 설명】</h2>
+<ol>
+  <li><strong>도 1</strong>은 본 발명 일 실시예에 따른 전체 시스템 구성도로서, 클라이언트 단말과 서버 및 외부 LLM 서비스 간의 관계와 종래 중앙집중형 구조의 대비를 나타낸다.</li>
+  <li><strong>도 2</strong>는 AI 호출 처리 및 지연 요약 위임 과정을 나타내는 순서도이다.</li>
+  <li><strong>도 3</strong>은 컨텍스트 세그먼트의 상태 전이도로서, 임계 초과에 따른 재귀적 압축 과정을 나타낸다.</li>
+  <li><strong>도 4</strong>는 복수 클라이언트의 동시 요약 트리거에 대한 멱등 처리(winner/loser) 시퀀스도이다.</li>
+  <li><strong>도 5</strong>는 보안 구성도로서, CSP 허용목록에 의한 스크립트 연결 채널의 키 유출 차단 경로와 프록시리스에 의한 서버측 SSRF 표면 제거(및 자격증명이 클라이언트에 상주하는 데 따른 위험 재배치)를 나타낸다.</li>
+  <li><strong>도 6</strong>은 데이터 모델 및 컨텍스트 조립 관계를 나타내는 블록 다이어그램이다.</li>
+</ol>
+
+<!-- ============== 도 1 ============== -->
+<figure class="fig">
+  <figcaption>[도 1] 클라이언트 위임형 분산 요약 시스템 전체 구성도</figcaption>
+  <svg viewBox="0 0 980 560" role="img" aria-label="전체 시스템 구성도">
+    <defs>
+      <marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#222"/>
+      </marker>
+      <marker id="ahb" markerWidth="12" markerHeight="12" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L9,3.5 L0,7 Z" fill="#b00020"/>
+      </marker>
+      <marker id="ahg" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#888"/>
+      </marker>
+    </defs>
+
+    <!-- 클라이언트 박스 -->
+    <rect x="20" y="40" width="300" height="370" rx="8" fill="#eef4ff" stroke="#0b3d91" stroke-width="2"/>
+    <text x="170" y="64" text-anchor="middle" font-size="15" font-weight="bold" fill="#0b3d91">클라이언트 단말 (브라우저) 100</text>
+
+    <rect x="40" y="80" width="120" height="44" rx="5" fill="#fff" stroke="#333"/>
+    <text x="100" y="100" text-anchor="middle" font-size="12">UI / 채팅 뷰</text>
+    <text x="100" y="116" text-anchor="middle" font-size="11" fill="#555">110</text>
+
+    <rect x="180" y="80" width="120" height="44" rx="5" fill="#fff" stroke="#333"/>
+    <text x="240" y="98" text-anchor="middle" font-size="11">AuthStore</text>
+    <text x="240" y="112" text-anchor="middle" font-size="10" fill="#555">localStorage 키 120</text>
+
+    <rect x="40" y="140" width="120" height="50" rx="5" fill="#fff7e8" stroke="#a06000"/>
+    <text x="100" y="160" text-anchor="middle" font-size="11">ContextEngine</text>
+    <text x="100" y="175" text-anchor="middle" font-size="10" fill="#555">요약 오케스트레이터 130</text>
+
+    <rect x="180" y="140" width="120" height="50" rx="5" fill="#fff7e8" stroke="#a06000"/>
+    <text x="240" y="160" text-anchor="middle" font-size="11">GeminiClient</text>
+    <text x="240" y="175" text-anchor="middle" font-size="10" fill="#555">직접호출 140</text>
+
+    <rect x="40" y="206" width="260" height="44" rx="5" fill="#fff" stroke="#333"/>
+    <text x="170" y="226" text-anchor="middle" font-size="11">ThreadStream / SSE 수신기 150</text>
+    <text x="170" y="241" text-anchor="middle" font-size="10" fill="#555">EventSource</text>
+
+    <text x="170" y="300" text-anchor="middle" font-size="12" font-weight="bold" fill="#0b3d91">토큰계수 · 재귀요약 · 컨텍스트 재조립</text>
+    <text x="170" y="322" text-anchor="middle" font-size="11" fill="#555">추론 연산 주체 = 클라이언트</text>
+    <rect x="40" y="338" width="260" height="54" rx="5" fill="#ffecec" stroke="#b00020"/>
+    <text x="170" y="360" text-anchor="middle" font-size="11" fill="#b00020" font-weight="bold">사용자 API 키 (메모리 일시 보유)</text>
+    <text x="170" y="378" text-anchor="middle" font-size="10" fill="#b00020">서버에 절대 전송하지 않음</text>
+
+    <!-- 서버 박스 -->
+    <rect x="400" y="60" width="280" height="340" rx="8" fill="#f1f7f1" stroke="#226622" stroke-width="2"/>
+    <text x="540" y="84" text-anchor="middle" font-size="15" font-weight="bold" fill="#226622">Aidit 서버 200 (LLM 추론 비보유)</text>
+
+    <rect x="420" y="100" width="240" height="40" rx="5" fill="#fff" stroke="#333"/>
+    <text x="540" y="124" text-anchor="middle" font-size="11">REST API (텍스트 CRUD) 210</text>
+
+    <rect x="420" y="152" width="240" height="40" rx="5" fill="#fff" stroke="#333"/>
+    <text x="540" y="176" text-anchor="middle" font-size="11">SSE Hub (게시단위 fan-out) 220</text>
+
+    <rect x="420" y="204" width="240" height="40" rx="5" fill="#fff" stroke="#333"/>
+    <text x="540" y="228" text-anchor="middle" font-size="11">도메인 / 멱등 가드 230</text>
+
+    <rect x="420" y="256" width="240" height="46" rx="5" fill="#e8f0e8" stroke="#226622"/>
+    <text x="540" y="276" text-anchor="middle" font-size="11" font-weight="bold">세그먼트 SoT (tokenSum) 240</text>
+    <text x="540" y="292" text-anchor="middle" font-size="10" fill="#555">컨텍스트 경계 단일 출처</text>
+
+    <rect x="450" y="330" width="180" height="44" rx="5" fill="#fff" stroke="#999" stroke-dasharray="4 3"/>
+    <text x="540" y="350" text-anchor="middle" font-size="11" fill="#b00020" font-weight="bold">LLM 키 미보유 · 미경유</text>
+    <text x="540" y="366" text-anchor="middle" font-size="10" fill="#555">(key-blind)</text>
+
+    <!-- DB -->
+    <ellipse cx="540" cy="438" rx="70" ry="16" fill="#eee" stroke="#555"/>
+    <rect x="470" y="430" width="140" height="40" fill="#eee" stroke="#555"/>
+    <ellipse cx="540" cy="470" rx="70" ry="16" fill="#eee" stroke="#555"/>
+    <text x="540" y="454" text-anchor="middle" font-size="11">DB 250 (텍스트만)</text>
+
+    <!-- 외부 LLM -->
+    <rect x="760" y="120" width="200" height="120" rx="10" fill="#fff3f3" stroke="#b00020" stroke-width="2"/>
+    <text x="860" y="150" text-anchor="middle" font-size="13" font-weight="bold" fill="#b00020">외부 LLM 서비스 300</text>
+    <text x="860" y="176" text-anchor="middle" font-size="11">Google Gemini</text>
+    <text x="860" y="196" text-anchor="middle" font-size="10" fill="#555">generateContent</text>
+    <text x="860" y="214" text-anchor="middle" font-size="10" fill="#555">countTokens</text>
+
+    <!-- 화살표: 클라 <-> 서버 REST/SSE -->
+    <line x1="320" y1="120" x2="420" y2="120" stroke="#222" stroke-width="1.6" marker-end="url(#ah)"/>
+    <line x1="420" y1="172" x2="320" y2="225" stroke="#222" stroke-width="1.6" marker-end="url(#ah)"/>
+    <text x="370" y="112" text-anchor="middle" font-size="10" fill="#222">REST(쓰기)</text>
+    <text x="368" y="210" text-anchor="middle" font-size="10" fill="#222">SSE(읽기)</text>
+
+    <!-- 서버 -> DB -->
+    <line x1="540" y1="302" x2="540" y2="424" stroke="#226622" stroke-width="1.4" marker-end="url(#ah)"/>
+
+    <!-- 굵은 강조: 클라 -> 외부 LLM 직접호출 -->
+    <path d="M300,160 C520,30 660,40 800,120" fill="none" stroke="#b00020" stroke-width="3.2" marker-end="url(#ahb)"/>
+    <text x="560" y="46" text-anchor="middle" font-size="12" font-weight="bold" fill="#b00020">직접 호출 (프록시리스, 사용자 키) — 서버 미경유</text>
+
+    <!-- 종래 대비 (점선) -->
+    <line x1="680" y1="350" x2="800" y2="240" stroke="#888" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#ahg)"/>
+    <text x="770" y="320" text-anchor="middle" font-size="10" fill="#888">(종래 중앙집중형:</text>
+    <text x="770" y="334" text-anchor="middle" font-size="10" fill="#888">서버가 키 보유·추론 — 본 발명 배제)</text>
+  </svg>
+</figure>
+
+<!-- ============== 도 2 ============== -->
+<figure class="fig">
+  <figcaption>[도 2] AI 호출 처리 및 지연 요약 위임 순서도</figcaption>
+  <svg viewBox="0 0 760 880" role="img" aria-label="AI 처리 및 지연 요약 순서도">
+    <defs>
+      <marker id="f-ah" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#222"/></marker>
+    </defs>
+    <!-- S1 -->
+    <rect x="230" y="20" width="300" height="46" rx="6" fill="#eef4ff" stroke="#0b3d91"/>
+    <text x="380" y="40" text-anchor="middle" font-size="12">① 사용자 "@AI…" 댓글 전송</text>
+    <text x="380" y="56" text-anchor="middle" font-size="10" fill="#555">type=HUMAN, COMPLETE로 먼저 등록 (즉시 표시)</text>
+
+    <rect x="230" y="92" width="300" height="42" rx="6" fill="#fff" stroke="#333"/>
+    <text x="380" y="112" text-anchor="middle" font-size="12">② GET /context — 활성 세그먼트 조립</text>
+    <text x="380" y="127" text-anchor="middle" font-size="10" fill="#555">{ contents[], tokenSum, summaryNeeded }</text>
+
+    <!-- 분기 -->
+    <path d="M380,160 l130,40 l-130,40 l-130,-40 Z" fill="#fff7e8" stroke="#a06000"/>
+    <text x="380" y="196" text-anchor="middle" font-size="12" font-weight="bold">summaryNeeded?</text>
+    <text x="380" y="212" text-anchor="middle" font-size="10" fill="#555">(tokenSum &gt; 임계치 128K)</text>
+
+    <!-- YES 분기: 지연 요약 -->
+    <text x="540" y="195" font-size="11" fill="#b00020" font-weight="bold">YES</text>
+    <line x1="510" y1="200" x2="620" y2="200" stroke="#222" stroke-width="1.4"/>
+    <line x1="620" y1="200" x2="620" y2="300" stroke="#222" stroke-width="1.4" marker-end="url(#f-ah)"/>
+
+    <rect x="480" y="306" width="270" height="46" rx="6" fill="#ffecec" stroke="#b00020"/>
+    <text x="615" y="326" text-anchor="middle" font-size="11">(a) 클라이언트 키로 요약 호출</text>
+    <text x="615" y="342" text-anchor="middle" font-size="10" fill="#555">systemInstruction=persona+요약지시</text>
+
+    <rect x="480" y="366" width="270" height="46" rx="6" fill="#ffecec" stroke="#b00020"/>
+    <text x="615" y="386" text-anchor="middle" font-size="11">(b) AI_SUMMARY POST</text>
+    <text x="615" y="402" text-anchor="middle" font-size="10" fill="#555">segmentExpected=현재 index → 새 세그먼트 개시</text>
+
+    <rect x="480" y="426" width="270" height="46" rx="6" fill="#ffecec" stroke="#b00020"/>
+    <text x="615" y="446" text-anchor="middle" font-size="11">(c) GET /context 재조회</text>
+    <text x="615" y="462" text-anchor="middle" font-size="10" fill="#555">요약문 + 이후 버블로 재조립</text>
+
+    <line x1="615" y1="472" x2="615" y2="520" stroke="#222" stroke-width="1.4"/>
+    <line x1="615" y1="520" x2="380" y2="520" stroke="#222" stroke-width="1.4"/>
+    <line x1="380" y1="520" x2="380" y2="546" stroke="#222" stroke-width="1.4" marker-end="url(#f-ah)"/>
+
+    <!-- NO 분기 -->
+    <text x="222" y="195" font-size="11" fill="#226622" font-weight="bold">NO</text>
+    <line x1="250" y1="200" x2="120" y2="200" stroke="#222" stroke-width="1.4"/>
+    <line x1="120" y1="200" x2="120" y2="575" stroke="#222" stroke-width="1.4"/>
+    <line x1="120" y1="575" x2="226" y2="575" stroke="#222" stroke-width="1.4" marker-end="url(#f-ah)"/>
+
+    <!-- S4 -->
+    <rect x="230" y="552" width="300" height="46" rx="6" fill="#fff" stroke="#333"/>
+    <text x="380" y="572" text-anchor="middle" font-size="12">④ AI_REPLY 버블 PENDING POST</text>
+    <text x="380" y="588" text-anchor="middle" font-size="10" fill="#555">replyToId=사람댓글 → "로딩" 표시(SSE)</text>
+
+    <rect x="230" y="616" width="300" height="46" rx="6" fill="#ffecec" stroke="#b00020"/>
+    <text x="380" y="636" text-anchor="middle" font-size="12">⑤ 클라이언트 키로 generateContent</text>
+    <text x="380" y="652" text-anchor="middle" font-size="10" fill="#555">systemInstruction=persona, contents=조립결과</text>
+
+    <rect x="230" y="680" width="300" height="46" rx="6" fill="#fff" stroke="#333"/>
+    <text x="380" y="700" text-anchor="middle" font-size="12">⑥ PATCH /comments/:id — 응답 본문</text>
+    <text x="380" y="716" text-anchor="middle" font-size="10" fill="#555">status=COMPLETE (실패 시 FAILED, 사람댓글 무손실)</text>
+
+    <rect x="230" y="744" width="300" height="46" rx="6" fill="#f1f7f1" stroke="#226622"/>
+    <text x="380" y="764" text-anchor="middle" font-size="12">⑦ 서버 SSE fan-out</text>
+    <text x="380" y="780" text-anchor="middle" font-size="10" fill="#555">모든 시청자 실시간 갱신</text>
+
+    <line x1="380" y1="66" x2="380" y2="90" stroke="#222" stroke-width="1.4" marker-end="url(#f-ah)"/>
+    <line x1="380" y1="134" x2="380" y2="158" stroke="#222" stroke-width="1.4" marker-end="url(#f-ah)"/>
+    <line x1="380" y1="598" x2="380" y2="614" stroke="#222" stroke-width="1.4" marker-end="url(#f-ah)"/>
+    <line x1="380" y1="662" x2="380" y2="678" stroke="#222" stroke-width="1.4" marker-end="url(#f-ah)"/>
+    <line x1="380" y1="726" x2="380" y2="742" stroke="#222" stroke-width="1.4" marker-end="url(#f-ah)"/>
+    <text x="640" y="290" text-anchor="middle" font-size="11" fill="#b00020" font-weight="bold">[지연 요약 위임]</text>
+  </svg>
+</figure>
+
+<!-- ============== 도 3 ============== -->
+<figure class="fig">
+  <figcaption>[도 3] 컨텍스트 세그먼트 상태 전이도 (재귀적 압축)</figcaption>
+  <svg viewBox="0 0 940 380" role="img" aria-label="컨텍스트 세그먼트 상태 전이도">
+    <defs><marker id="s-ah" markerWidth="11" markerHeight="11" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#222"/></marker></defs>
+
+    <!-- seg#0 -->
+    <rect x="30" y="80" width="240" height="200" rx="8" fill="#eef4ff" stroke="#0b3d91" stroke-width="2"/>
+    <text x="150" y="104" text-anchor="middle" font-size="13" font-weight="bold" fill="#0b3d91">세그먼트 #0 (활성)</text>
+    <rect x="50" y="118" width="200" height="30" rx="4" fill="#fff" stroke="#333"/>
+    <text x="150" y="138" text-anchor="middle" font-size="11">글 원본(Post body)</text>
+    <rect x="50" y="154" width="200" height="26" rx="4" fill="#fff" stroke="#999"/>
+    <text x="150" y="172" text-anchor="middle" font-size="10">버블 #1 (HUMAN)</text>
+    <rect x="50" y="184" width="200" height="26" rx="4" fill="#fff" stroke="#999"/>
+    <text x="150" y="202" text-anchor="middle" font-size="10">버블 #2 (AI_REPLY)</text>
+    <rect x="50" y="214" width="200" height="26" rx="4" fill="#fff" stroke="#999"/>
+    <text x="150" y="232" text-anchor="middle" font-size="10">… 버블 누적</text>
+    <text x="150" y="262" text-anchor="middle" font-size="11" fill="#b00020">tokenSum 증가</text>
+
+    <!-- 전이 -->
+    <line x1="270" y1="180" x2="360" y2="180" stroke="#222" stroke-width="2" marker-end="url(#s-ah)"/>
+    <text x="315" y="160" text-anchor="middle" font-size="11" font-weight="bold" fill="#b00020">tokenSum &gt; 128K</text>
+    <text x="315" y="200" text-anchor="middle" font-size="10" fill="#555">다음 @AI 직전</text>
+
+    <!-- 요약버블 생성 -->
+    <rect x="365" y="130" width="160" height="100" rx="8" fill="#fff7e8" stroke="#a06000" stroke-width="2"/>
+    <text x="445" y="156" text-anchor="middle" font-size="12" font-weight="bold" fill="#a06000">요약 연산</text>
+    <text x="445" y="178" text-anchor="middle" font-size="10">AI_SUMMARY 생성</text>
+    <text x="445" y="196" text-anchor="middle" font-size="10" fill="#555">(클라이언트 키)</text>
+    <text x="445" y="214" text-anchor="middle" font-size="10" fill="#555">seg#0 → isActive=false</text>
+
+    <line x1="525" y1="180" x2="615" y2="180" stroke="#222" stroke-width="2" marker-end="url(#s-ah)"/>
+
+    <!-- seg#1 -->
+    <rect x="620" y="80" width="290" height="200" rx="8" fill="#eafaea" stroke="#226622" stroke-width="2"/>
+    <text x="765" y="104" text-anchor="middle" font-size="13" font-weight="bold" fill="#226622">세그먼트 #1 (신규 활성)</text>
+    <rect x="640" y="118" width="250" height="34" rx="4" fill="#fff7e8" stroke="#a06000"/>
+    <text x="765" y="139" text-anchor="middle" font-size="11">요약 버블(AI_SUMMARY) — 세그먼트 개시</text>
+    <rect x="640" y="160" width="250" height="26" rx="4" fill="#fff" stroke="#999"/>
+    <text x="765" y="178" text-anchor="middle" font-size="10">이후 버블만 누적</text>
+    <rect x="640" y="192" width="250" height="26" rx="4" fill="#fff" stroke="#999"/>
+    <text x="765" y="210" text-anchor="middle" font-size="10">…</text>
+    <text x="765" y="246" text-anchor="middle" font-size="11" fill="#226622">활성 세그먼트는 항상 정확히 1개</text>
+    <text x="765" y="264" text-anchor="middle" font-size="10" fill="#555">요약 이전 원본/히스토리는 컨텍스트에서 제외</text>
+
+    <text x="470" y="40" text-anchor="middle" font-size="13" font-weight="bold" fill="#0b3d91">컨텍스트 = (활성 세그먼트의 요약문 + 이후 버블들) — 재귀 압축으로 지속적 유지</text>
+    <line x1="765" y1="280" x2="765" y2="320" stroke="#226622" stroke-width="1.5"/>
+    <line x1="765" y1="320" x2="150" y2="320" stroke="#226622" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <line x1="150" y1="320" x2="150" y2="284" stroke="#226622" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#s-ah)"/>
+    <text x="460" y="338" text-anchor="middle" font-size="10" fill="#226622">다시 임계 초과 시 동일 절차 반복(세그먼트 #2, #3 …)</text>
+  </svg>
+</figure>
+
+<!-- ============== 도 4 ============== -->
+<figure class="fig">
+  <figcaption>[도 4] 동시 요약 경쟁 시퀀스도 (멱등 가드: winner 201 / loser 409)</figcaption>
+  <svg viewBox="0 0 880 520" role="img" aria-label="동시 요약 경쟁 시퀀스도">
+    <defs><marker id="q-ah" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#222"/></marker></defs>
+    <!-- lifelines -->
+    <text x="150" y="34" text-anchor="middle" font-size="13" font-weight="bold" fill="#0b3d91">클라이언트 A 100a</text>
+    <text x="440" y="34" text-anchor="middle" font-size="13" font-weight="bold" fill="#226622">서버 200</text>
+    <text x="730" y="34" text-anchor="middle" font-size="13" font-weight="bold" fill="#b00020">클라이언트 B 100b</text>
+    <line x1="150" y1="46" x2="150" y2="500" stroke="#999" stroke-width="1.2"/>
+    <line x1="440" y1="46" x2="440" y2="500" stroke="#999" stroke-width="1.2"/>
+    <line x1="730" y1="46" x2="730" y2="500" stroke="#999" stroke-width="1.2"/>
+
+    <!-- A POST -->
+    <line x1="150" y1="90" x2="440" y2="90" stroke="#222" stroke-width="1.6" marker-end="url(#q-ah)"/>
+    <text x="295" y="80" text-anchor="middle" font-size="11">POST AI_SUMMARY (segmentExpected=0)</text>
+    <!-- B POST 거의동시 -->
+    <line x1="730" y1="120" x2="440" y2="120" stroke="#222" stroke-width="1.6" marker-end="url(#q-ah)"/>
+    <text x="585" y="110" text-anchor="middle" font-size="11">POST AI_SUMMARY (segmentExpected=0)</text>
+
+    <!-- 서버 가드 -->
+    <rect x="350" y="150" width="180" height="56" rx="6" fill="#f1f7f1" stroke="#226622"/>
+    <text x="440" y="172" text-anchor="middle" font-size="11" font-weight="bold">멱등 가드 230</text>
+    <text x="440" y="190" text-anchor="middle" font-size="10" fill="#555">세그먼트당 요약 1건만 허용</text>
+
+    <!-- winner -->
+    <line x1="440" y1="240" x2="150" y2="240" stroke="#226622" stroke-width="2" marker-end="url(#q-ah)"/>
+    <text x="295" y="230" text-anchor="middle" font-size="11" fill="#226622" font-weight="bold">201 Created (winner) — seg#1 개시</text>
+
+    <!-- loser -->
+    <line x1="440" y1="290" x2="730" y2="290" stroke="#b00020" stroke-width="2" marker-end="url(#q-ah)"/>
+    <text x="585" y="280" text-anchor="middle" font-size="11" fill="#b00020" font-weight="bold">409 Conflict (loser) + 최신 세그먼트</text>
+
+    <!-- B 정정 -->
+    <rect x="640" y="320" width="180" height="56" rx="6" fill="#ffecec" stroke="#b00020"/>
+    <text x="730" y="342" text-anchor="middle" font-size="10">loser는 새 세그먼트(seg#1)</text>
+    <text x="730" y="360" text-anchor="middle" font-size="10">기준으로 답변 진행</text>
+
+    <!-- A 답변 -->
+    <line x1="150" y1="410" x2="440" y2="410" stroke="#222" stroke-width="1.4" marker-end="url(#q-ah)"/>
+    <text x="295" y="400" text-anchor="middle" font-size="10">AI_REPLY POST (seg#1)</text>
+    <line x1="730" y1="440" x2="440" y2="440" stroke="#222" stroke-width="1.4" marker-end="url(#q-ah)"/>
+    <text x="585" y="430" text-anchor="middle" font-size="10">AI_REPLY POST (seg#1)</text>
+
+    <text x="440" y="488" text-anchor="middle" font-size="11" fill="#226622">→ 중복 요약 없음, 컨텍스트 경계 정합성 보장 (낙관적 동시성)</text>
+  </svg>
+</figure>
+
+<!-- ============== 도 5 ============== -->
+<figure class="fig">
+  <figcaption>[도 5] 보안 구성도 — CSP 허용목록에 의한 스크립트 연결 채널 유출 차단 및 프록시리스 서버측 SSRF 표면 제거</figcaption>
+  <svg viewBox="0 0 940 420" role="img" aria-label="보안 구성도">
+    <defs>
+      <marker id="sec-ah" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#226622"/></marker>
+      <marker id="sec-x" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto"><path d="M1,1 L9,9 M9,1 L1,9" stroke="#b00020" stroke-width="2"/></marker>
+    </defs>
+
+    <!-- 브라우저 경계 -->
+    <rect x="30" y="60" width="380" height="300" rx="8" fill="#eef4ff" stroke="#0b3d91" stroke-width="2"/>
+    <text x="220" y="84" text-anchor="middle" font-size="13" font-weight="bold" fill="#0b3d91">브라우저 보안 경계 100</text>
+
+    <rect x="55" y="100" width="150" height="50" rx="5" fill="#ffecec" stroke="#b00020"/>
+    <text x="130" y="120" text-anchor="middle" font-size="11" fill="#b00020">API 키 (localStorage</text>
+    <text x="130" y="136" text-anchor="middle" font-size="11" fill="#b00020">+ 메모리) 120</text>
+
+    <rect x="235" y="100" width="150" height="50" rx="5" fill="#fff3f3" stroke="#b00020" stroke-dasharray="4 3"/>
+    <text x="310" y="120" text-anchor="middle" font-size="11">악성 스크립트(XSS)</text>
+    <text x="310" y="136" text-anchor="middle" font-size="10" fill="#555">키 탈취 시도</text>
+
+    <rect x="120" y="200" width="200" height="64" rx="6" fill="#fff" stroke="#0b3d91" stroke-width="2"/>
+    <text x="220" y="224" text-anchor="middle" font-size="12" font-weight="bold" fill="#0b3d91">CSP connect-src 허용목록</text>
+    <text x="220" y="244" text-anchor="middle" font-size="10" fill="#555">'self' https://generativelanguage.googleapis.com</text>
+    <text x="220" y="258" text-anchor="middle" font-size="9" fill="#555">default-src 'none'; img-src 'self'; script-src 'self'</text>
+
+    <!-- 탈취 시도 -> CSP -->
+    <line x1="310" y1="150" x2="250" y2="198" stroke="#b00020" stroke-width="1.4"/>
+
+    <!-- 허용: Gemini -->
+    <rect x="700" y="100" width="200" height="60" rx="8" fill="#eafaea" stroke="#226622" stroke-width="2"/>
+    <text x="800" y="126" text-anchor="middle" font-size="12" font-weight="bold" fill="#226622">허용 목적지 300</text>
+    <text x="800" y="146" text-anchor="middle" font-size="10">generativelanguage.googleapis.com</text>
+    <line x1="320" y1="230" x2="700" y2="135" stroke="#226622" stroke-width="2.4" marker-end="url(#sec-ah)"/>
+    <text x="520" y="178" text-anchor="middle" font-size="11" fill="#226622" font-weight="bold">정당한 직접호출 (허용)</text>
+
+    <!-- 차단: 공격자 도메인 -->
+    <rect x="700" y="250" width="200" height="60" rx="8" fill="#fff3f3" stroke="#b00020" stroke-width="2"/>
+    <text x="800" y="276" text-anchor="middle" font-size="12" font-weight="bold" fill="#b00020">공격자 수집 서버</text>
+    <text x="800" y="296" text-anchor="middle" font-size="10">evil.example.com</text>
+    <line x1="320" y1="250" x2="690" y2="280" stroke="#b00020" stroke-width="2.4" stroke-dasharray="6 5"/>
+    <line x1="500" y1="263" x2="520" y2="263" stroke="#b00020" stroke-width="2" marker-end="url(#sec-x)"/>
+    <text x="520" y="248" text-anchor="middle" font-size="11" fill="#b00020" font-weight="bold">스크립트 연결 채널 유출 차단 (CSP)</text>
+
+    <!-- 서버 SSRF 부재 -->
+    <rect x="380" y="340" width="500" height="60" rx="8" fill="#f1f7f1" stroke="#226622" stroke-width="2"/>
+    <text x="630" y="364" text-anchor="middle" font-size="12" font-weight="bold" fill="#226622">서버 프록시 부재 → 서버측 SSRF 표면 제거(위험은 클라이언트로 재배치)</text>
+    <text x="630" y="384" text-anchor="middle" font-size="10" fill="#555">서버는 임의 URL로 대리 요청을 발신하지 않음 (key-blind) · 키는 브라우저 상주</text>
+  </svg>
+</figure>
+
+<!-- ============== 도 6 ============== -->
+<figure class="fig">
+  <figcaption>[도 6] 데이터 모델 및 컨텍스트 조립 관계 블록 다이어그램</figcaption>
+  <svg viewBox="0 0 940 340" role="img" aria-label="데이터 모델 블록 다이어그램">
+    <defs><marker id="d-ah" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#222"/></marker></defs>
+    <rect x="30" y="40" width="180" height="80" rx="6" fill="#eef4ff" stroke="#0b3d91"/>
+    <text x="120" y="62" text-anchor="middle" font-size="12" font-weight="bold">Community 410</text>
+    <text x="120" y="82" text-anchor="middle" font-size="10">slug, name</text>
+    <text x="120" y="100" text-anchor="middle" font-size="10" fill="#b00020">personaPrompt</text>
+
+    <rect x="280" y="40" width="180" height="90" rx="6" fill="#fff" stroke="#333"/>
+    <text x="370" y="62" text-anchor="middle" font-size="12" font-weight="bold">Post 420</text>
+    <text x="370" y="82" text-anchor="middle" font-size="10">title, body</text>
+    <text x="370" y="100" text-anchor="middle" font-size="10">score, hotScore</text>
+    <text x="370" y="118" text-anchor="middle" font-size="10">commentCount</text>
+
+    <rect x="540" y="30" width="180" height="120" rx="6" fill="#eafaea" stroke="#226622"/>
+    <text x="630" y="52" text-anchor="middle" font-size="12" font-weight="bold">ContextSegment 440</text>
+    <text x="630" y="72" text-anchor="middle" font-size="10">index, isActive</text>
+    <text x="630" y="90" text-anchor="middle" font-size="10" fill="#b00020">tokenSum (임계 SoT)</text>
+    <text x="630" y="108" text-anchor="middle" font-size="10">summaryCommentId?</text>
+    <text x="630" y="128" text-anchor="middle" font-size="10" fill="#226622">활성 = 정확히 1개</text>
+
+    <rect x="760" y="40" width="160" height="120" rx="6" fill="#fff7e8" stroke="#a06000"/>
+    <text x="840" y="62" text-anchor="middle" font-size="12" font-weight="bold">Comment(버블) 430</text>
+    <text x="840" y="82" text-anchor="middle" font-size="10">type{HUMAN,</text>
+    <text x="840" y="98" text-anchor="middle" font-size="10">AI_REPLY,AI_SUMMARY}</text>
+    <text x="840" y="116" text-anchor="middle" font-size="10">status, tokenCount</text>
+    <text x="840" y="134" text-anchor="middle" font-size="10">segmentId, seq</text>
+
+    <line x1="210" y1="80" x2="278" y2="80" stroke="#222" stroke-width="1.4" marker-end="url(#d-ah)"/>
+    <line x1="460" y1="90" x2="538" y2="90" stroke="#222" stroke-width="1.4" marker-end="url(#d-ah)"/>
+    <line x1="720" y1="100" x2="758" y2="100" stroke="#222" stroke-width="1.4" marker-end="url(#d-ah)"/>
+
+    <rect x="120" y="210" width="700" height="100" rx="8" fill="#f7f7f7" stroke="#555"/>
+    <text x="470" y="234" text-anchor="middle" font-size="13" font-weight="bold" fill="#0b3d91">활성 컨텍스트 조립 규칙</text>
+    <text x="470" y="258" text-anchor="middle" font-size="11">seg#0: 컨텍스트 = 글 원본 + seg#0의 모든 버블</text>
+    <text x="470" y="278" text-anchor="middle" font-size="11">seg#N(N≥1): 컨텍스트 = (seg#N을 여는 AI_SUMMARY 버블) + (seg#N의 버블들)</text>
+    <text x="470" y="298" text-anchor="middle" font-size="11" fill="#b00020">summaryNeeded = (활성 세그먼트.tokenSum &gt; 128000)</text>
+    <line x1="630" y1="150" x2="470" y2="208" stroke="#226622" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#d-ah)"/>
+  </svg>
+</figure>
+
+<!-- ===================== 6. 실시예 ===================== -->
+<h2>【발명을 실시하기 위한 구체적인 내용】</h2>
+<p>이하 첨부된 도면을 참조하여 본 발명의 바람직한 실시예를 상세히 설명한다. 다만 본 발명이 이 실시예에 한정되는 것은 아니며, 당해 기술분야에서 통상의 지식을 가진 자가 균등 범위 내에서 다양하게 변형하여 실시할 수 있다.</p>
+
+<h3>1. 시스템 전체 구성 (도 1)</h3>
+<p>도 1을 참조하면, 본 발명의 시스템은 복수의 클라이언트 단말(100)과, LLM 추론 측면에서 무상태인(추론 자격증명·세션을 보유하지 아니하는) 서버(200)와, 외부 LLM 서비스(300)를 포함한다. 여기서 서버(200)는 컨텍스트 경계·누적 토큰합·세그먼트 활성 상태에 관하여는 권위 있는 단일 출처(Source of Truth)로서 상태를 보유·관리하므로, 본 명세서에서 "무상태"란 LLM 추론에 관한 자격증명·세션을 보유하지 아니함을 의미하고 텍스트·경계 상태 일반의 비보유를 의미하지 아니한다. 클라이언트 단말(100)은 사용자 인터페이스(110), 사용자의 자격증명(API 키)을 단말의 로컬 저장소에 보관하는 인증저장부(120), 컨텍스트 엔진(130), LLM 직접호출부(140), 및 서버로부터의 단방향 이벤트를 수신하는 스트림 수신부(150)를 포함한다.</p>
+<p>서버(200)는 텍스트의 생성·조회·갱신·삭제를 처리하는 REST API부(210)와, 스레드별로 변경 이벤트를 모든 시청자에게 발송하는 SSE 허브(220)와, 동시성 멱등 가드를 포함하는 도메인부(230)와, 컨텍스트 경계를 정의하는 세그먼트 단일 출처부(240)와, 텍스트만을 저장하는 데이터베이스(250)를 포함한다. <span class="emph">서버(200)는 어떠한 경우에도 LLM 자격증명을 보유·대납·경유하지 아니한다(key-blind)</span>. 즉 서버가 수신하는 것은 이미 생성이 완료된 텍스트(사람 댓글, AI 답변, 요약문)뿐이다.</p>
+<p>클라이언트 단말(100)의 LLM 직접호출부(140)는 서버(200)를 경유하지 아니하고 외부 LLM 서비스(300)의 엔드포인트로 직접 통신한다(도 1의 굵은 화살표). 일 실시예에서 호출은 <code>https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={USER_KEY}</code> 형태로 이루어지며, 사용자 자격증명은 해당 직접호출의 순간에만 단말 메모리상에서 사용된다. 여기서 자격증명 전달 방식은 위와 같은 <code>?key=</code> 쿼리 파라미터 형식 외에 <code>x-goog-api-key</code> 헤더 형식으로도 구현될 수 있으며, 양자 모두 제공자 문서에 기재된 방식이다. 한편 브라우저에서의 직접호출은 본 발명의 BYOK 배포 선택으로서, 제공자가 권장하는 패턴이 아니라 오히려 제공자 문서는 운영 환경에서 백엔드 프록시 사용 및 클라이언트측 키 노출 회피를 권고하는바, 본 발명은 이러한 트레이드오프(서버측 SSRF 표면 제거 대 클라이언트 상주 키의 XSS 위험)를 전제로 한 의도적 설계이다. 모델 식별자 <code>{MODEL}</code>은 일 실시예에서 2026년 정식 출시(GA)된 <code>gemini-3.1-flash-lite</code>(입력 토큰 한도 약 1,048,576) 등을 적용할 수 있으나 이에 한정되지 아니하며, 다른 언어모델로도 실시 가능하다. 종래의 중앙집중형 구조(도 1의 점선)는 서버가 자격증명을 보유하고 추론을 수행하는 것과 대비된다.</p>
+
+<h3>2. 데이터 모델 및 활성 컨텍스트의 정의 (도 6)</h3>
+<p>도 6을 참조하면, 커뮤니티(410)는 해당 커뮤니티의 AI 페르소나의 기반이 되는 페르소나 프롬프트(personaPrompt)를 가진다. 게시물(Post)(420)이 생성될 때 인덱스 0의 컨텍스트 세그먼트(440)가 자동으로 생성되며 이것이 최초의 활성 세그먼트가 된다. 각 댓글(버블)(430)은 사람 입력(HUMAN), AI 답변(AI_REPLY), AI 요약(AI_SUMMARY) 중 하나의 유형과, 대기/완료/실패(PENDING/COMPLETE/FAILED) 중 하나의 상태와, 토큰 수(tokenCount)와, 소속 세그먼트 식별자(segmentId)와, 게시물 내 단조 증가 정렬키(seq)를 가진다. 정렬키(seq)는 SSE 재생 및 멱등 판정의 기준이 된다.</p>
+<p>세그먼트(440)는 누적 토큰합(tokenSum)을 가지며, 이 값이 임계 판정의 단일 출처이다. 활성 세그먼트는 항상 정확히 하나만 존재한다(isActive=true가 1개). 활성 컨텍스트는 다음과 같이 정의된다.</p>
+<ul>
+  <li>세그먼트 0의 경우: 컨텍스트 = 게시물 원본 + 세그먼트 0의 모든 버블.</li>
+  <li>세그먼트 N(N≥1)의 경우: 컨텍스트 = 세그먼트 N을 여는 요약 버블(AI_SUMMARY) + 세그먼트 N의 버블들. 요약 이전의 원본·히스토리는 컨텍스트에서 제외된다(재귀적 압축).</li>
+</ul>
+<p>요약 필요 여부는 <code>summaryNeeded = (활성 세그먼트.tokenSum &gt; 128000)</code>로 판정된다. 여기서 128,000은 일 실시예의 제품 정책 임계치로서, 적용 모델의 입력 컨텍스트 윈도우(예: 약 1,048,576 토큰)의 약 1/8 수준에 해당하는 모델 한계 미만의 값이다. 즉 본 임계치는 모델의 아키텍처적·문서상 한계가 아니라 비용·응답성 등을 고려한 정책값이며, 본 발명의 임계치는 이에 한정되지 아니하고 임의의 양의 정수로 설정될 수 있다.</p>
+
+<h3>3. AI 호출 처리 및 지연 요약 위임 (도 2)</h3>
+<p>도 2를 참조하여 클라이언트(100)가 오케스트레이션하는 처리 흐름을 설명한다.</p>
+<ol>
+  <li><strong>사람 댓글 선등록:</strong> 사용자가 AI 호출 표지(예: "@AI")를 포함한 댓글을 전송하면, 클라이언트는 우선 REST API부(210)에 해당 댓글을 HUMAN·COMPLETE 상태로 등록한다. 따라서 사람의 입력은 AI 처리 성패와 무관하게 즉시 표시되고 절대 손실되지 않는다.</li>
+  <li><strong>컨텍스트 조회:</strong> 클라이언트는 활성 세그먼트의 조립된 컨텍스트와 누적 토큰합 및 요약 필요 플래그를 서버로부터 수신한다. 서버는 활성 세그먼트만을 조립하며 자격증명을 사용하지 않는다.</li>
+  <li><strong>지연 요약 분기:</strong> 요약 필요 플래그가 참이면, (a) 호출자 단말의 자격증명으로 외부 LLM 서비스(300)에 요약을 호출하고(시스템 지시문 = 페르소나 + 요약 지시), (b) 결과 요약문을 AI_SUMMARY 버블로 현재 활성 인덱스를 기대값으로 하여 게시하여 서버가 새 세그먼트(N+1)를 개시·활성 전환하게 하며, (c) 컨텍스트를 재조회하여 요약문과 이후 버블로 재조립된 컨텍스트를 획득한다. 여기서 "지연(lazy)"이란, 평범한 사람 댓글의 누적으로 임계치를 초과하더라도 그 즉시 요약하지 않고, 다음 AI 호출 직전에 비로소 요약을 수행함을 의미한다. 이는 서버가 자격증명을 보유하지 않아 매 입력마다 즉시 요약을 수행할 수 없는 구조에서 비롯되는 본 발명 고유의 위임 시점 설계이다.</li>
+  <li><strong>AI 답변 자리표시:</strong> 클라이언트는 AI_REPLY 버블을 PENDING 상태로 게시한다(사람 댓글을 회신 대상으로 지정). 이로써 모든 시청자에게 "로딩" 상태가 즉시 표시된다.</li>
+  <li><strong>답변 추론:</strong> 호출자 단말의 자격증명으로 외부 LLM 서비스(300)에 답변을 호출한다(시스템 지시문 = 페르소나, 콘텐츠 = 조립된 컨텍스트).</li>
+  <li><strong>결과 반영:</strong> 클라이언트는 PATCH 요청으로 AI_REPLY 버블의 본문을 채우고 상태를 COMPLETE로 전환한다(실패 시 FAILED). 이 과정에서 사람 댓글은 결코 손실되지 않는다.</li>
+  <li><strong>실시간 동기화:</strong> 서버는 위 각 단계의 변경을 SSE 허브(220)를 통해 모든 시청자에게 게시 단위로 발송하여 실시간으로 갱신한다. 여기서 SSE 이벤트 스트림은 서버→클라이언트 방향의 이벤트 푸시(단방향)이며, 클라이언트가 최초 HTTP GET으로 스트림을 개시하고 재접속 시 Last-Event-ID 헤더를 송신할 수 있다는 점을 제외하면 스트림 상의 메시지 흐름은 서버로부터 클라이언트로만 전달된다. 클라이언트로부터 서버로의 쓰기(댓글·요약·답변의 등록·갱신)는 상기 스트림과 분리된 별도의 REST 요청-응답으로 수행된다.</li>
+</ol>
+
+<h3>4. 컨텍스트 세그먼트 상태 전이 (도 3)</h3>
+<p>도 3을 참조하면, 세그먼트 0은 게시물 원본과 버블이 누적되며 tokenSum이 증가한다. tokenSum이 임계치를 초과하면 다음 AI 호출 직전에 요약 연산이 클라이언트 자격증명으로 수행되어 요약 버블(AI_SUMMARY)이 생성되고, 이를 경계로 세그먼트 0은 비활성화(isActive=false)되며 새로운 세그먼트 1이 개시되어 활성화된다. 세그먼트 1의 컨텍스트는 요약문과 그 이후 버블만으로 구성되므로 활성 컨텍스트의 크기가 일정 수준으로 유지된다. 이 절차는 임계 초과 시마다 반복되어(세그먼트 2, 3, …) 대화가 사실상 제한 없이 지속될 수 있게 한다.</p>
+
+<h3>5. 동시 요약 경쟁의 멱등 처리 (도 4)</h3>
+<p>도 4를 참조하면(이하 클라이언트 단말(100) 중 임의의 두 단말을 각각 100a, 100b로 지칭한다), 상호 불신할 수 있는 둘 이상의 클라이언트(100a, 100b)가 각자 상이한 자격증명·모델로 거의 동시에 동일 활성 세그먼트를 기대값(segmentExpected)으로 하여 요약 버블을 게시할 수 있다. 서버의 멱등 가드(230)는 활성 세그먼트당 AI_SUMMARY를 정확히 하나만 허용한다. 따라서 먼저 처리된 게시(winner)에 대해서만 201(생성)을 반환하며 새 세그먼트를 개시하고, 나중의 게시(loser)에 대해서는 409(충돌)와 함께 갱신된 최신 세그먼트 정보를 반환한다. loser 클라이언트는 반환된 새 세그먼트를 기준으로 후속 답변을 진행한다. 기대 세그먼트 값이 서버 상태와 불일치하는 경우 서버가 이를 정정하는 낙관적 동시성 제어가 적용된다. 이로써 중복 요약과 컨텍스트 경계 불일치가 방지된다.</p>
+
+<h3>6. 보안 구성 (도 5)</h3>
+<p>도 5를 참조하면, 사용자 자격증명(120)은 단말의 로컬 저장소 및 호출 직전 메모리에서만 다루어지며, 서버로의 요청 바디·헤더·로그 어디에도 포함되지 않는다. 콘텐츠 보안 정책(CSP)의 connect-src 지시는 스크립트 구동 연결(fetch, XMLHttpRequest, WebSocket, EventSource 등)의 허용 목적지를 자기 출처(self) 및 허용된 LLM 도메인으로 한정한다(예: <code>connect-src 'self' https://generativelanguage.googleapis.com</code>). 따라서 교차사이트 스크립팅(XSS) 등으로 악성 스크립트가 자격증명을 읽더라도, 위 네 가지 스크립트 연결 채널을 통하여 허용 목록 외의 공격자 수집 서버로 전송하는 통로가 차단된다. 다만 connect-src는 이미지/리소스 로드, 페이지 내비게이션, DNS-prefetch·preconnect·prerender, WebRTC(RTCPeerConnection) 등의 채널을 통제하지 못하므로, 이들 잔여 유출 채널을 함께 차단하기 위해서는 <code>default-src 'none'</code> 및 <code>img-src</code> 제한 등 별도의 지시를 추가로 적용함이 바람직하다. 일 실시예에서는 <code>default-src 'none'</code>을 기본으로 두고 필요한 출처만 개별 허용하며, 추가로 <code>img-src 'self'</code>, <code>script-src 'self'</code>, <code>object-src 'none'</code>, <code>base-uri 'self'</code>, <code>form-action 'self'</code>, <code>frame-ancestors 'none'</code> 등의 지시를 함께 적용한다. 또한 서버 프록시가 존재하지 않으므로(클라이언트 직접호출) 서버를 통한 임의 URL 요청 위조(SSRF)의 서버측 공격 표면은 부재한다. 다만 이는 위험을 제거하는 것이 아니라 재배치하는 것으로서, 자격증명이 브라우저/로컬 저장소에 상주함에 따른 XSS 탈취 위험이 잔존하며 이는 상기 CSP 및 일반적 XSS 방어수단으로 완화된다.</p>
+<p><strong>프롬프트 인젝션 가드:</strong> 커뮤니티의 페르소나 프롬프트만이 시스템 지시문(systemInstruction)으로 격리되며, 모든 사용자·댓글 콘텐츠는 항상 사용자 역할(role:'user')의 데이터 턴으로만 매핑되어 시스템 역할로 승격될 수 없다. 일 실시예에서 LLM 요청을 구성하는 요청 빌더가 이 매핑이 일어나는 유일한 지점이며, 페르소나 이외에 덧붙는 모든 턴은 사용자 역할로 강제된다.</p>
+
+<h3>7. 토큰 카운팅 및 다국어</h3>
+<p>버블 게시 시 토큰 수는 1순위로 외부 LLM 서비스의 정확 토큰계수 기능(countTokens)으로 산정하고, 이를 사용할 수 없는 경우 문자수 기반 근사(예: <code>Math.ceil(문자수/4)</code>)로 폴백한다. 서버는 세그먼트의 tokenSum에 tokenCount를 누적하며, 컨텍스트 조회 시 이 tokenSum을 그대로 임계 판정에 사용한다. 또한 AI 답변 및 요약은 활성 사용자 인터페이스 언어를 따르도록 시스템 지시문에 언어 지시를 부가할 수 있다.</p>
+
+<h3>8. 과금의 개별화</h3>
+<p>공유된 단일 대화 컨텍스트를 유지하기 위한 LLM 추론비는 상호작용을 트리거한 개별 사용자의 로컬 자격증명 한도로 전가된다. 모든 추론(답변 및 요약)이 트리거 클라이언트의 자격증명으로 외부 서비스에 직접 수행되므로, 서비스 제공자(서버 운영주체)에게는 LLM 추론 호출 비용이 귀속되지 아니한다. 다만 서버는 SSE 팬아웃·CRUD·DB 등 전송·저장 인프라 비용을 여전히 부담하므로, 본 효과는 "서버 운영비 전부의 영(零)"이 아니라 "LLM 추론 호출 비용에 한정한 비귀속"을 의미한다. 비용 절감의 구체적 수치는 본 명세서 작성 시점 기준 설계상 도출되는 예시(illustrative)로서 정량 실측치가 아니며, 사용 모델·트래픽·인프라 구성에 따라 달라질 수 있다.</p>
+
+<!-- ===================== 7. 청구범위 ===================== -->
+<h2>【특허청구범위】</h2>
+<div class="claims">
+
+<p class="claim"><span class="cn">【청구항 1】</span> <span class="badge">독립항 · 시스템</span><br>
+상호 불신할 수 있는 복수의 클라이언트 단말이 접속한 단일 대화 스레드의 누적된 공유 대화 컨텍스트를 관리하는 시스템으로서,<br>
+텍스트의 생성·조회·갱신을 처리하는 텍스트 처리부와, 상기 대화 컨텍스트의 경계를 복수의 세그먼트로 정의하되 활성 세그먼트가 정확히 하나만 존재하도록 관리하고 해당 활성 세그먼트의 누적 토큰합을 단일 출처로서 보유하는 세그먼트 관리부와, 상기 스레드의 변경을 상기 복수의 클라이언트 단말에 서버→클라이언트 방향으로 푸시하는 단방향 이벤트 중계부(클라이언트로부터 서버로의 쓰기는 별도의 요청-응답으로 수행됨)와, 활성 세그먼트당 요약 텍스트를 하나만 허용하는 멱등 가드를 포함하되, 대규모 언어모델을 위한 자격증명을 보유·대납·경유하지 아니하는 서버; 및<br>
+각자 사용자의 자격증명을 자신의 로컬 저장소에 보관하고, 상기 서버를 경유하지 아니하고 외부 언어모델 서비스의 엔드포인트로 직접 호출을 수행하는 복수의 클라이언트 단말;<br>
+을 포함하며,<br>
+상기 활성 세그먼트의 누적 토큰합이 미리 정해진 임계치를 초과한 상태에서, 다음 트리거 이벤트를 발생시킨 클라이언트 단말이 자신의 자격증명으로 상기 외부 언어모델 서비스를 직접 호출하여 상기 활성 컨텍스트에 대한 재귀적 요약 연산을 수행하고, 그 결과로 생성된 요약 텍스트만을, 자신이 인식하는 활성 세그먼트의 인덱스를 기대값(segmentExpected)으로 하여 상기 서버로 반환하며,<br>
+상기 멱등 가드는, 둘 이상의 클라이언트 단말이 각자 상이한 자격증명 또는 모델로 동일 활성 세그먼트를 기대값으로 하여 요약 텍스트를 동시에 반환하는 경우, 먼저 처리된 반환에 대하여만 생성 응답(201)을 반환하여 새로운 활성 세그먼트를 개시하고, 나중의 반환에 대하여는 충돌 응답(409)과 함께 갱신된 최신 세그먼트 정보를 반환하여, 상기 나중의 클라이언트 단말이 상기 갱신된 세그먼트를 기준으로 컨텍스트를 재조립하여 후속 호출을 수행하도록 하는 낙관적 동시성 제어를 수행함으로써, 중복 요약이 방지되고 컨텍스트 경계의 정합성이 보장된 채 상기 대화 컨텍스트가 압축되는 것을 특징으로 하는, 다중 사용자 공유 대화 컨텍스트의 클라이언트 위임형 분산 요약 시스템.</p>
+
+<p class="claim dep"><span class="cn">【청구항 2】</span> <span class="badge">종속 (a)</span><br>
+제1항에 있어서, 상기 서버는 상기 자격증명을 보유하지 아니하는 키-블라인드(key-blind) 구조이고, 상기 클라이언트 단말의 상기 직접 호출은 중간 서버 프록시를 경유하지 아니하는 프록시리스(proxyless) 직접 호출이어서, 상기 서버를 통한 임의 목적지로의 요청 위조 공격 표면이 부재하는 것을 특징으로 하는 시스템.</p>
+
+<p class="claim dep"><span class="cn">【청구항 3】</span> <span class="badge">종속 (b)</span><br>
+제1항에 있어서, 상기 클라이언트 단말에는 콘텐츠 보안 정책의 연결 출처 허용목록(connect-src allowlist)이 적용되어, 상기 허용목록에 자기 출처 및 상기 외부 언어모델 서비스의 도메인만이 포함됨으로써, 악성 스크립트가 상기 자격증명을 판독하더라도 상기 허용목록 외의 목적지로 스크립트 구동 연결(fetch, XMLHttpRequest, WebSocket, 서버-발신 이벤트 수신을 포함함)을 통하여 전송하는 네트워크 통로가 차단되며, 이미지·리소스 로드, 페이지 내비게이션, DNS-prefetch 및 WebRTC를 포함하는 잔여 채널을 통한 유출의 차단을 위하여 default-src 및 img-src를 제한하는 지시가 더 적용되는 것을 특징으로 하는 시스템.</p>
+
+<p class="claim dep"><span class="cn">【청구항 4】</span> <span class="badge">종속 (c)</span><br>
+제1항에 있어서, 상기 대화 컨텍스트는 복수의 세그먼트로 구획되되 그 중 활성 세그먼트는 정확히 하나만 존재하며, 상기 세그먼트 관리부는 상기 활성 세그먼트의 상기 누적 토큰합을 상기 임계치와 비교하여 요약 필요 여부를 단일 출처로서 판정하고, 인덱스 0의 세그먼트의 활성 컨텍스트는 게시물 원본과 해당 세그먼트의 모든 버블로 구성되며, 인덱스 N(N≥1)의 세그먼트의 활성 컨텍스트는 해당 세그먼트를 개시하는 요약 버블과 해당 세그먼트의 버블들로만 구성되는 것을 특징으로 하는 시스템.</p>
+
+<p class="claim dep"><span class="cn">【청구항 5】</span> <span class="badge">종속 (d)</span><br>
+제4항에 있어서, 상기 서버는 활성 세그먼트당 요약 버블을 하나만 허용하는 멱등 가드를 구비하여, 둘 이상의 클라이언트 단말이 동일 활성 세그먼트를 기대값으로 하여 요약 버블을 동시에 게시하는 경우, 먼저 처리된 게시에 대하여만 생성 응답(201)을 반환하고 새 세그먼트를 개시하며, 나중의 게시에 대하여는 충돌 응답(409)과 함께 갱신된 최신 세그먼트 정보를 반환하여 상기 나중의 게시를 발생시킨 클라이언트 단말이 상기 갱신된 세그먼트를 기준으로 후속 처리를 진행하도록 하는 것을 특징으로 하는 시스템.</p>
+
+<p class="claim dep"><span class="cn">【청구항 6】</span> <span class="badge">종속 (e)</span><br>
+제1항에 있어서, 상기 요약 연산은, 상기 누적 토큰합이 상기 임계치를 초과한 직후 즉시 수행되지 아니하고, 상기 임계치 초과 이후 발생하는 최초의 언어모델 호출 직전에 해당 호출을 발생시킨 클라이언트 단말에 의하여 수행되는 지연(lazy) 트리거 방식인 것을 특징으로 하는 시스템.</p>
+
+<p class="claim dep"><span class="cn">【청구항 7】</span> <span class="badge">종속 (f)</span><br>
+제1항에 있어서, 상기 외부 언어모델 서비스로의 호출 시, 커뮤니티별 페르소나 프롬프트만이 시스템 지시문으로 격리되어 매핑되고, 모든 사용자 입력 및 댓글 콘텐츠는 사용자 역할의 데이터 턴으로만 매핑되어 시스템 역할로 승격되지 아니하도록, 요청 구성 단계가 상기 매핑이 일어나는 단일 지점으로서 페르소나 이외에 부가되는 모든 턴을 사용자 역할로 강제하는 것을 특징으로 하는 시스템.</p>
+
+<p class="claim dep"><span class="cn">【청구항 8】</span> <span class="badge">종속 (g)</span><br>
+제1항에 있어서, 상기 실시간 중계부는 서버-발신 이벤트(SSE) 방식으로 게시 단위마다 변경 사항을 상기 복수의 클라이언트 단말에 팬아웃(fan-out)하여 시청 중인 모든 사용자에게 동기화하고, 클라이언트로부터 서버로의 쓰기는 별도의 요청-응답 방식으로 수행되는 것을 특징으로 하는 시스템.</p>
+
+<p class="claim dep"><span class="cn">【청구항 9】</span> <span class="badge">종속 (h)</span><br>
+제1항에 있어서, 각 버블의 토큰 수는 상기 외부 언어모델 서비스의 토큰 계수 기능을 1순위로 사용하여 산정하고, 해당 기능을 사용할 수 없는 경우 문자수에 기반한 근사값으로 폴백하여 산정하며, 상기 세그먼트 관리부는 산정된 토큰 수를 상기 활성 세그먼트의 상기 누적 토큰합에 누적하는 것을 특징으로 하는 시스템.</p>
+
+<p class="claim dep"><span class="cn">【청구항 10】</span> <span class="badge">종속 (i)</span><br>
+제1항에 있어서, 상기 요약 연산 이후 상기 클라이언트 단말은 상기 요약 텍스트와 그 이후에 추가된 버블만으로 상기 활성 컨텍스트를 재조립하고, 요약 이전의 원본 및 히스토리는 상기 활성 컨텍스트에서 제외하여 상기 외부 언어모델 서비스로의 후속 답변 호출을 수행하는 것을 특징으로 하는 시스템.</p>
+
+<p class="claim dep"><span class="cn">【청구항 11】</span> <span class="badge">종속 (j)</span><br>
+제1항에 있어서, 상기 공유 대화 컨텍스트를 유지하기 위한 상기 외부 언어모델 서비스에 대한 추론 호출은, 상기 트리거 이벤트를 발생시킨 개별 클라이언트 단말의 자격증명으로 상기 외부 언어모델 서비스에 직접 수행되어, 상기 서버의 운영 주체의 자격증명이 상기 추론 호출에 사용되지 아니하도록 구성된 것을 특징으로 하는 시스템.</p>
+
+<p class="claim dep"><span class="cn">【청구항 12】</span> <span class="badge">종속 (k)</span><br>
+제1항에 있어서, 상기 사용자 입력 댓글은 상기 외부 언어모델 서비스 호출의 성패와 무관하게 상기 서버에 완료 상태로 우선 등록되어 손실되지 아니하고, 상기 클라이언트 단말은 답변 버블을 대기 상태로 먼저 게시하여 시청 중인 모든 사용자에게 로딩 상태를 표시한 후, 답변 결과를 갱신 요청으로 반영하여 완료 또는 실패 상태로 전환하는 것을 특징으로 하는 시스템.</p>
+
+<p class="claim"><span class="cn">【청구항 13】</span> <span class="badge">독립항 · 방법</span><br>
+상호 불신할 수 있는 복수의 클라이언트 단말이 접속한 단일 대화 스레드의 공유 대화 컨텍스트를, 대규모 언어모델을 위한 자격증명을 보유하지 아니하는 서버가 관리하는 방법으로서,<br>
+(가) 상기 서버가 사용자 입력 댓글을 텍스트로 등록하고, 상기 변경을 상기 복수의 클라이언트 단말에 서버→클라이언트 방향으로 푸시하여 중계하되 클라이언트로부터 서버로의 쓰기는 별도의 요청-응답으로 수신하는 단계;<br>
+(나) 트리거 이벤트를 발생시킨 클라이언트 단말이, 활성 컨텍스트와 그 누적 토큰합 및 요약 필요 여부를 상기 서버로부터 수신하는 단계;<br>
+(다) 상기 누적 토큰합이 미리 정해진 임계치를 초과한 경우, 상기 클라이언트 단말이 자신의 자격증명으로 외부 언어모델 서비스를 상기 서버를 경유하지 아니하고 직접 호출하여 상기 활성 컨텍스트에 대한 재귀적 요약 연산을 수행하고, 그 결과 요약 텍스트만을 자신이 인식하는 활성 세그먼트의 인덱스를 기대값으로 하여 상기 서버에 전송하며, 상기 서버는 활성 세그먼트당 하나의 요약만을 허용하여 먼저 처리된 전송에 대하여만 새로운 활성 세그먼트를 개시하는 생성 응답을 반환하고, 둘 이상의 클라이언트 단말이 각자 상이한 자격증명 또는 모델로 동일 활성 세그먼트를 기대값으로 하여 동시에 전송한 경우 나중의 전송에 대하여는 충돌 응답과 함께 갱신된 최신 세그먼트 정보를 반환하여 해당 클라이언트 단말이 상기 갱신된 세그먼트를 기준으로 컨텍스트를 재조립하도록 하는 단계;<br>
+(라) 상기 클라이언트 단말이 상기 요약 텍스트와 이후 버블로 재조립된 활성 컨텍스트로 상기 외부 언어모델 서비스를 직접 호출하여 답변을 생성하고, 그 답변 텍스트를 상기 서버에 반영하는 단계; 및<br>
+(마) 상기 서버가 상기 각 단계의 변경을 상기 복수의 클라이언트 단말에 실시간으로 동기화하는 단계;<br>
+를 포함하는, 다중 사용자 공유 대화 컨텍스트의 클라이언트 위임형 분산 요약 방법.</p>
+
+<p class="claim dep"><span class="cn">【청구항 14】</span> <span class="badge">종속 · 방법(d)</span><br>
+제13항에 있어서, 상기 (다) 단계는, 둘 이상의 클라이언트 단말이 동일 활성 세그먼트를 기대값으로 하여 상기 요약 텍스트를 동시에 전송하는 경우, 상기 서버가 활성 세그먼트당 하나의 요약만을 허용하여 먼저 처리된 전송에 대하여만 새 세그먼트를 개시하는 생성 응답을 반환하고, 나중의 전송에 대하여는 충돌 응답과 함께 갱신된 최신 세그먼트 정보를 반환하는 단계를 포함하는 것을 특징으로 하는 방법.</p>
+
+<p class="claim dep"><span class="cn">【청구항 15】</span> <span class="badge">종속 · 방법(e,f)</span><br>
+제13항에 있어서, 상기 (다) 단계의 요약 연산은 상기 임계치 초과 직후가 아니라 상기 임계치 초과 이후 최초의 언어모델 호출 직전에 수행되는 지연 트리거 방식이고, 상기 (라) 단계의 직접 호출 시 커뮤니티별 페르소나 프롬프트만이 시스템 지시문으로 격리되며 사용자 입력 및 댓글 콘텐츠는 사용자 역할의 데이터 턴으로만 매핑되는 것을 특징으로 하는 방법.</p>
+
+<p class="claim dep"><span class="cn">【청구항 16】</span> <span class="badge">종속 · 방법(b)</span><br>
+제13항에 있어서, 상기 클라이언트 단말에 콘텐츠 보안 정책의 연결 출처 허용목록을 적용하여 자기 출처 및 상기 외부 언어모델 서비스의 도메인으로만 스크립트 구동 연결(fetch, XMLHttpRequest, WebSocket, 서버-발신 이벤트 수신을 포함함)을 한정함으로써 상기 자격증명이 해당 연결 채널을 통하여 외부로 유출되는 통로를 차단하고, 이미지·리소스 로드, 페이지 내비게이션, DNS-prefetch 및 WebRTC를 포함하는 잔여 채널의 차단을 위하여 default-src 및 img-src를 제한하는 지시를 더 적용하는 단계를 포함하는 것을 특징으로 하는 방법.</p>
+
+<p class="claim"><span class="cn">【청구항 17】</span> <span class="badge">독립항 · 기록매체</span><br>
+클라이언트 단말의 하나 이상의 프로세서에 의하여 실행될 때, 상기 프로세서로 하여금,<br>
+사용자의 자격증명을 로컬 저장소에 보관하는 동작과;<br>
+트리거 이벤트 발생 시, 대규모 언어모델 자격증명을 보유하지 아니하는 서버로부터 단일 대화 스레드의 활성 컨텍스트와 그 누적 토큰합 및 요약 필요 여부를 수신하는 동작과;<br>
+상기 누적 토큰합이 미리 정해진 임계치를 초과한 경우, 상기 서버를 경유하지 아니하고 외부 언어모델 서비스를 상기 자격증명으로 직접 호출하여 상기 활성 컨텍스트에 대한 재귀적 요약을 수행하고 그 요약 텍스트만을, 자신이 인식하는 활성 세그먼트의 인덱스를 기대값(segmentExpected)으로 하여 상기 서버로 반환하는 동작과;<br>
+상기 반환에 대하여 상기 서버로부터 충돌 응답(409)과 갱신된 세그먼트 정보를 수신한 경우, 다른 클라이언트 단말이 먼저 개시한 상기 갱신된 세그먼트를 기준으로 컨텍스트를 재조립하여 후속 호출을 수행하는 동작과;<br>
+상기 요약 텍스트 또는 상기 갱신된 세그먼트와 이후 버블로 재조립된 활성 컨텍스트로 상기 외부 언어모델 서비스를 직접 호출하여 답변을 생성하고 이를 상기 서버에 반영하는 동작;<br>
+을 수행하게 하는 컴퓨터 프로그램을 저장한, 컴퓨터 판독가능 기록매체.</p>
+
+</div>
+
+<!-- ===================== 8. 요약서 ===================== -->
+<h2>【요약서】</h2>
+<div class="abstract">
+<h4>【요약】</h4>
+<p>본 발명은 상호 불신할 수 있는 복수의 사용자가 단일 대화 스레드의 누적된 공유 대화 컨텍스트를 함께 형성하는 협업형 인공지능 시스템에 관한 것이다. 본 발명에서 서버는 대규모 언어모델을 위한 자격증명을 보유하지 아니하고(key-blind, LLM 추론 측면에서 무상태) 텍스트의 생성·조회·갱신, 컨텍스트 경계 세그먼트의 단일 출처 관리, 및 서버-발신 이벤트 기반의 단방향 실시간 중계를 담당한다. 활성 컨텍스트의 누적 토큰합이 임계치를 초과하면, 언어모델 기반 재귀적 요약 연산을 서버가 아니라 다음 트리거 이벤트를 발생시킨 클라이언트 단말로 위임하여, 해당 단말이 자신의 자격증명으로 외부 언어모델 서비스를 프록시 없이 직접 호출하여 수행하고 그 결과 요약 텍스트만을, 자신이 인식하는 활성 세그먼트의 인덱스를 기대값으로 하여 서버로 반환하여 컨텍스트를 압축한다. 특히 둘 이상의 클라이언트가 각자 상이한 자격증명·모델로 동일 활성 세그먼트를 동시에 압축하려는 경우, 서버는 세그먼트당 단일 요약 멱등 가드(winner 201 / loser 409)와 기대값 기반 낙관적 동시성 제어로 중복 요약을 방지하고 컨텍스트 경계의 정합성을 보장한다. 이로써 서버 운영주체에 LLM 추론 호출 비용이 귀속되지 아니하고(전송·저장 인프라 비용은 별도), 서버 프록시 부재로 서버측 요청 위조(SSRF) 공격 표면이 제거되며(다만 자격증명이 브라우저에 상주하는 위험은 클라이언트측 수단으로 완화함), 콘텐츠 보안 정책의 연결 출처 허용목록으로 스크립트 연결 채널을 통한 자격증명 유출을 차단하면서, 사람 입력의 무손실을 유지한 채 대화를 지속적으로 압축·유지할 수 있다.</p>
+<h4>【대표도】</h4>
+<p>도 1</p>
+</div>
+
+<!-- ===================== 9. 부호의 설명 ===================== -->
+<h2>【부호의 설명】</h2>
+<table class="ref-table">
+<tbody>
+  <tr><td>100, 100a, 100b</td><td>클라이언트 단말(브라우저)</td></tr>
+  <tr><td>110</td><td>사용자 인터페이스 / 채팅 뷰</td></tr>
+  <tr><td>120</td><td>인증저장부(localStorage 자격증명)</td></tr>
+  <tr><td>130</td><td>컨텍스트 엔진(요약 오케스트레이터)</td></tr>
+  <tr><td>140</td><td>LLM 직접호출부</td></tr>
+  <tr><td>150</td><td>스트림 수신부(SSE/EventSource)</td></tr>
+  <tr><td>200</td><td>서버(LLM 추론 비보유; 텍스트·경계 상태는 단일 출처로 보유)</td></tr>
+  <tr><td>210</td><td>REST API부(텍스트 CRUD)</td></tr>
+  <tr><td>220</td><td>SSE 허브(게시단위 fan-out)</td></tr>
+  <tr><td>230</td><td>도메인부 / 멱등 가드</td></tr>
+  <tr><td>240</td><td>세그먼트 단일 출처부(tokenSum)</td></tr>
+  <tr><td>250</td><td>데이터베이스(텍스트 저장)</td></tr>
+  <tr><td>300</td><td>외부 언어모델 서비스</td></tr>
+  <tr><td>410</td><td>커뮤니티(personaPrompt 보유)</td></tr>
+  <tr><td>420</td><td>게시물(Post)</td></tr>
+  <tr><td>430</td><td>댓글/버블(Comment)</td></tr>
+  <tr><td>440</td><td>컨텍스트 세그먼트(ContextSegment)</td></tr>
+</tbody>
+</table>
+
+<hr>
+<p class="muted" style="font-size:12px;text-align:center;">본 문서는 발명의 기술적 사상을 설명하기 위한 명세서 초안이며, 출원 전 변리사 검토 및 청구범위 보정을 권장합니다.</p>
+
+</body>
+</html>
