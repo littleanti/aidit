@@ -2,17 +2,37 @@ import { useState, type FormEvent } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { ApiError } from '../api/rest';
 import { useT } from '../i18n/useT';
-import { SIGNUP_REQUIRED } from '../config/auth';
 
 interface LoginFormProps {
-  /** called after login() or register() resolves successfully. */
+  /** called after guestLogin() / login() / register() resolves successfully. */
   onSuccess?: () => void;
 }
 
-// Extracted login/register form.
-// Mode toggle: "처음이신가요? 회원가입" / "이미 계정이 있으신가요? 로그인"
-// Gemini key: still BYOK, stored locally only (L1). Optional field shown in
-// both modes so users can set it right away; stored via updateKey().
+type Tab = 'guest' | 'login';
+type LoginMode = 'login' | 'register';
+
+// Read the persisted identity (zustand persist key 'aidit-auth') to pick the
+// default tab: if a previous username is on record, open [Login]; otherwise
+// [Guest]. Parse failures fall back to 'guest'.
+function defaultTab(): Tab {
+  try {
+    const raw = localStorage.getItem('aidit-auth');
+    if (!raw) return 'guest';
+    const parsed = JSON.parse(raw) as { state?: { username?: unknown } };
+    const u = parsed?.state?.username;
+    return typeof u === 'string' && u.length > 0 ? 'login' : 'guest';
+  } catch {
+    return 'guest';
+  }
+}
+
+// Runtime dual-mode login. The card has two top tabs:
+//   [Guest] — nickname only (POST /auth/guest). Server appends '#hex4'.
+//   [Login] — username + password. A bottom link flips between login
+//             (POST /auth/session) and register (POST /auth/register);
+//             register reveals the confirm-password field.
+// The Gemini API key is orthogonal to the mode: optional in both tabs, stored
+// locally only (L1) via updateKey().
 export default function LoginForm({ onSuccess }: LoginFormProps) {
   const login = useAuthStore((s) => s.login);
   const register = useAuthStore((s) => s.register);
@@ -20,30 +40,44 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
   const updateKey = useAuthStore((s) => s.updateKey);
   const { t } = useT();
 
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
+  const [loginMode, setLoginMode] = useState<LoginMode>('login');
+
+  // Guest tab field.
+  const [nickname, setNickname] = useState('');
+  // Login tab fields.
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  // Shared across both tabs.
   const [apiKey, setApiKey] = useState('');
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Guest mode (SIGNUP_REQUIRED=false): only the nickname is required.
-  // Register mode also requires the confirm field; login does not.
-  const canSubmit = !SIGNUP_REQUIRED
-    ? username.trim().length > 0
+  const isGuest = activeTab === 'guest';
+  const isLogin = loginMode === 'login';
+
+  const canSubmit = isGuest
+    ? nickname.trim().length > 0
     : username.trim().length > 0 &&
       password.trim().length > 0 &&
-      (mode === 'login' || confirmPassword.length > 0);
+      (isLogin || confirmPassword.length > 0);
 
   // Live mismatch hint (register mode, once the user has typed a confirmation).
   const passwordsMismatch =
-    mode === 'register' &&
+    !isGuest &&
+    loginMode === 'register' &&
     confirmPassword.length > 0 &&
     password !== confirmPassword;
 
-  function toggleMode() {
-    setMode((m) => (m === 'login' ? 'register' : 'login'));
+  function switchTab(tab: Tab) {
+    setActiveTab(tab);
+    setError(null);
+  }
+
+  function toggleLoginMode() {
+    setLoginMode((m) => (m === 'login' ? 'register' : 'login'));
     setConfirmPassword('');
     setError(null);
   }
@@ -64,12 +98,12 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     e.preventDefault();
     if (!canSubmit || submitting) return;
 
-    // Guest mode: nickname-only entry. No password / confirm validation.
-    if (!SIGNUP_REQUIRED) {
+    // Guest tab: nickname-only entry. No password / confirm validation.
+    if (isGuest) {
       setSubmitting(true);
       setError(null);
       try {
-        await guestLogin(username.trim());
+        await guestLogin(nickname.trim());
         if (apiKey.trim()) updateKey(apiKey.trim());
         onSuccess?.();
       } catch (err) {
@@ -80,7 +114,8 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       return;
     }
 
-    if (mode === 'register') {
+    // Login tab — register mode validation.
+    if (loginMode === 'register') {
       if (password.length < 8) {
         setError(t('auth.errorPasswordTooShort'));
         return;
@@ -94,7 +129,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     setSubmitting(true);
     setError(null);
     try {
-      if (mode === 'login') {
+      if (loginMode === 'login') {
         await login(username.trim(), password.trim());
       } else {
         await register(username.trim(), password.trim());
@@ -109,151 +144,213 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     }
   }
 
-  const isLogin = mode === 'login';
+  const inputClass =
+    'w-full rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 text-sm text-term-bright caret-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright';
+  const labelClass = 'mb-1 block text-sm font-medium text-term-dim';
+
+  // Shared optional Gemini API-key field (rendered in both tabs).
+  const apiKeyField = (
+    <div>
+      <label htmlFor="apiKey" className={labelClass}>
+        {t('auth.apiKeyLabel')}{' '}
+        <span className="text-term-faint">{t('auth.apiKeyOptional')}</span>
+      </label>
+      <input
+        id="apiKey"
+        type="password"
+        autoComplete="off"
+        value={apiKey}
+        onChange={(e) => setApiKey(e.target.value)}
+        className={inputClass}
+        placeholder="AIza..."
+      />
+      <p className="mt-2 rounded-[2px] border border-term-amber bg-term-info px-3 py-2 text-xs leading-relaxed text-term-amber">
+        {t('auth.apiKeyNote')}
+      </p>
+      <a
+        href="https://aistudio.google.com/app/apikey"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-2 inline-block text-xs text-term-bright underline"
+      >
+        {t('auth.apiKeyLink')}
+      </a>
+    </div>
+  );
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label
-          htmlFor="username"
-          className="mb-1 block text-sm font-medium text-term-dim"
+    <div className="space-y-4">
+      {/* Tabs: [Guest] / [Login] */}
+      <div role="tablist" className="flex gap-1.5">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={isGuest}
+          onClick={() => switchTab('guest')}
+          className={`flex min-h-[40px] flex-1 items-center justify-center rounded-[2px] border text-sm font-bold tracking-wide transition ${
+            isGuest
+              ? 'border-term-amber bg-term-input text-term-amber'
+              : 'border-term-border bg-term-input text-term-dim hover:bg-term-hover'
+          }`}
         >
-          {t('auth.usernameLabel')}
-        </label>
-        <input
-          id="username"
-          type="text"
-          autoComplete="username"
-          value={username}
-          maxLength={!SIGNUP_REQUIRED ? 16 : undefined}
-          onChange={(e) =>
-            setUsername(
-              !SIGNUP_REQUIRED ? e.target.value.replace(/#/g, '') : e.target.value,
-            )
-          }
-          className="w-full rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 text-sm text-term-bright caret-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright"
-          placeholder={t('auth.usernamePlaceholder')}
-        />
-        {!SIGNUP_REQUIRED && (
-          <p className="mt-1 text-xs text-term-dim">{t('auth.guestNameNote')}</p>
-        )}
+          {t('auth.guestTabLabel')}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={!isGuest}
+          onClick={() => switchTab('login')}
+          className={`flex min-h-[40px] flex-1 items-center justify-center rounded-[2px] border text-sm font-bold tracking-wide transition ${
+            !isGuest
+              ? 'border-term-amber bg-term-input text-term-amber'
+              : 'border-term-border bg-term-input text-term-dim hover:bg-term-hover'
+          }`}
+        >
+          {t('auth.loginTabLabel')}
+        </button>
       </div>
 
-      {SIGNUP_REQUIRED && (
-      <>
-      <div>
-        <label
-          htmlFor="password"
-          className="mb-1 block text-sm font-medium text-term-dim"
-        >
-          {mode === 'register' ? t('auth.passwordLabelWithHint') : t('auth.passwordLabel')}
-        </label>
-        <input
-          id="password"
-          type="password"
-          autoComplete={isLogin ? 'current-password' : 'new-password'}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 text-sm text-term-bright caret-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright"
-          placeholder="••••••••"
-        />
-      </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {isGuest ? (
+          <>
+            <div>
+              <label htmlFor="nickname" className={labelClass}>
+                {t('auth.usernameLabel')}
+              </label>
+              <input
+                id="nickname"
+                type="text"
+                autoComplete="off"
+                value={nickname}
+                maxLength={16}
+                onChange={(e) => setNickname(e.target.value.replace(/#/g, ''))}
+                className={inputClass}
+                placeholder={t('auth.usernamePlaceholder')}
+              />
+              <p className="mt-1 text-xs text-term-dim">
+                {t('auth.guestNameNote')}
+              </p>
+            </div>
 
-      {!isLogin && (
-        <div>
-          <label
-            htmlFor="confirmPassword"
-            className="mb-1 block text-sm font-medium text-term-dim"
-          >
-            {t('auth.passwordConfirmLabel')}
-          </label>
-          <input
-            id="confirmPassword"
-            type="password"
-            autoComplete="new-password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            aria-invalid={passwordsMismatch}
-            className={`w-full rounded-[2px] border bg-term-input px-3 py-2.5 text-sm text-term-bright caret-term-bright outline-none placeholder:text-term-faint focus:ring-1 ${
-              passwordsMismatch
-                ? 'border-term-danger focus:border-term-danger focus:ring-term-danger'
-                : 'border-term-border focus:border-term-bright focus:ring-term-bright'
-            }`}
-            placeholder={t('auth.passwordConfirmPlaceholder')}
-          />
-          {passwordsMismatch && (
-            <p className="mt-1 text-xs text-term-danger">
-              {t('auth.errorPasswordMismatch')}
+            {apiKeyField}
+
+            <p className="rounded-[2px] border border-term-amber bg-term-info px-3 py-2 text-xs leading-relaxed text-term-amber">
+              {t('auth.guestEphemeralWarning')}
             </p>
-          )}
-        </div>
-      )}
-      </>
-      )}
 
-      <div>
-        <label
-          htmlFor="apiKey"
-          className="mb-1 block text-sm font-medium text-term-dim"
-        >
-          {t('auth.apiKeyLabel')} <span className="text-term-faint">{t('auth.apiKeyOptional')}</span>
-        </label>
-        <input
-          id="apiKey"
-          type="password"
-          autoComplete="off"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          className="w-full rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 text-sm text-term-bright caret-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright"
-          placeholder="AIza..."
-        />
-        <p className="mt-2 rounded-[2px] border border-term-amber bg-term-info px-3 py-2 text-xs leading-relaxed text-term-amber">
-          {t('auth.apiKeyNote')}
-        </p>
-        <a
-          href="https://aistudio.google.com/app/apikey"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 inline-block text-xs text-term-bright underline"
-        >
-          {t('auth.apiKeyLink')}
-        </a>
-      </div>
+            {error && <p className="text-sm text-term-danger">{error}</p>}
 
-      {error && <p className="text-sm text-term-danger">{error}</p>}
+            <button
+              type="submit"
+              disabled={!canSubmit || submitting}
+              className="min-h-[44px] w-full rounded-[2px] border border-term-cta bg-term-cta py-2.5 text-sm font-bold text-term-bright shadow-glow-cta transition hover:border-term-bright disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {submitting ? t('auth.submitting') : t('auth.guestStartBtn')}
+            </button>
 
-      {!SIGNUP_REQUIRED && (
-        <p className="rounded-[2px] border border-term-amber bg-term-info px-3 py-2 text-xs leading-relaxed text-term-amber">
-          {t('auth.guestEphemeralWarning')}
-        </p>
-      )}
+            <p className="text-center text-xs text-term-dim">
+              {t('auth.switchToLogin')}{' '}
+              <button
+                type="button"
+                onClick={() => switchTab('login')}
+                className="text-term-bright underline"
+              >
+                {t('auth.switchToLoginLink')}
+              </button>
+            </p>
+          </>
+        ) : (
+          <>
+            <div>
+              <label htmlFor="username" className={labelClass}>
+                {t('auth.usernameLabel')}
+              </label>
+              <input
+                id="username"
+                type="text"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className={inputClass}
+                placeholder={t('auth.usernamePlaceholder')}
+              />
+            </div>
 
-      <button
-        type="submit"
-        disabled={!canSubmit || submitting}
-        className="min-h-[44px] w-full rounded-[2px] border border-term-cta bg-term-cta py-2.5 text-sm font-bold text-term-bright shadow-glow-cta transition hover:border-term-bright disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {submitting
-          ? t('auth.submitting')
-          : !SIGNUP_REQUIRED
-            ? t('auth.guestStartBtn')
-            : isLogin
-              ? t('auth.loginBtn')
-              : t('auth.registerBtn')}
-      </button>
+            <div>
+              <label htmlFor="password" className={labelClass}>
+                {loginMode === 'register'
+                  ? t('auth.passwordLabelWithHint')
+                  : t('auth.passwordLabel')}
+              </label>
+              <input
+                id="password"
+                type="password"
+                autoComplete={isLogin ? 'current-password' : 'new-password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={inputClass}
+                placeholder="••••••••"
+              />
+            </div>
 
-      {SIGNUP_REQUIRED && (
-        <p className="text-center text-xs text-term-dim">
-          {isLogin ? t('auth.switchToRegister') : t('auth.switchToLogin')}{' '}
-          <button
-            type="button"
-            onClick={toggleMode}
-            className="text-term-bright underline"
-          >
-            {isLogin ? t('auth.switchToRegisterLink') : t('auth.switchToLoginLink')}
-          </button>
-        </p>
-      )}
-    </form>
+            {!isLogin && (
+              <div>
+                <label htmlFor="confirmPassword" className={labelClass}>
+                  {t('auth.passwordConfirmLabel')}
+                </label>
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  aria-invalid={passwordsMismatch}
+                  className={`w-full rounded-[2px] border bg-term-input px-3 py-2.5 text-sm text-term-bright caret-term-bright outline-none placeholder:text-term-faint focus:ring-1 ${
+                    passwordsMismatch
+                      ? 'border-term-danger focus:border-term-danger focus:ring-term-danger'
+                      : 'border-term-border focus:border-term-bright focus:ring-term-bright'
+                  }`}
+                  placeholder={t('auth.passwordConfirmPlaceholder')}
+                />
+                {passwordsMismatch && (
+                  <p className="mt-1 text-xs text-term-danger">
+                    {t('auth.errorPasswordMismatch')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {apiKeyField}
+
+            {error && <p className="text-sm text-term-danger">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={!canSubmit || submitting}
+              className="min-h-[44px] w-full rounded-[2px] border border-term-cta bg-term-cta py-2.5 text-sm font-bold text-term-bright shadow-glow-cta transition hover:border-term-bright disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {submitting
+                ? t('auth.submitting')
+                : isLogin
+                  ? t('auth.loginBtn')
+                  : t('auth.registerBtn')}
+            </button>
+
+            <p className="text-center text-xs text-term-dim">
+              {isLogin ? t('auth.switchToRegister') : t('auth.switchToLogin')}{' '}
+              <button
+                type="button"
+                onClick={toggleLoginMode}
+                className="text-term-bright underline"
+              >
+                {isLogin
+                  ? t('auth.switchToRegisterLink')
+                  : t('auth.switchToLoginLink')}
+              </button>
+            </p>
+          </>
+        )}
+      </form>
+    </div>
   );
 }

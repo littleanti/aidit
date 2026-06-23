@@ -8,7 +8,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 
-import { config } from "../src/config.js";
 import {
   authHeader,
   createCommunity,
@@ -38,7 +37,7 @@ beforeEach(async () => {
 // Auth: register + session
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!config.signupRequired)("auth/register", () => {
+describe("auth/register", () => {
   it("returns 201 { token, id, username } with a valid Bearer token", async () => {
     const res = await app.inject({
       method: "POST",
@@ -88,7 +87,7 @@ describe.skipIf(!config.signupRequired)("auth/register", () => {
   });
 });
 
-describe.skipIf(!config.signupRequired)("auth/session", () => {
+describe("auth/session", () => {
   it("returns 200 { token, id, username } with correct credentials", async () => {
     await app.inject({
       method: "POST",
@@ -152,10 +151,10 @@ describe.skipIf(!config.signupRequired)("auth/session", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Auth: guest entry (OFF mode only)
+// Auth: guest entry
 // ---------------------------------------------------------------------------
 
-describe.skipIf(config.signupRequired)("auth/guest (guest mode)", () => {
+describe("auth/guest (guest mode)", () => {
   it("returns 201 { token, id, username } with a #hex4-suffixed username from a nickname alone", async () => {
     const res = await app.inject({
       method: "POST",
@@ -212,6 +211,33 @@ describe.skipIf(config.signupRequired)("auth/guest (guest mode)", () => {
       payload: { username: "a".repeat(17) },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it("a member 'foo' and a guest 'foo' coexist as distinct users (guest gets foo#hex4)", async () => {
+    // Member registers the plain username "foo".
+    const member = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: { username: "foo", password: "password123" },
+    });
+    expect(member.statusCode).toBe(201);
+    const memberBody = JSON.parse(member.body);
+    expect(memberBody.username).toBe("foo");
+
+    // A guest entering the same base nickname is NOT rejected — the server
+    // always assigns a #hex4 suffix, so it never collides with the member.
+    const guest = await app.inject({
+      method: "POST",
+      url: "/auth/guest",
+      payload: { username: "foo" },
+    });
+    expect(guest.statusCode).toBe(201);
+    const guestBody = JSON.parse(guest.body);
+    expect(guestBody.username).toMatch(/^foo#[0-9a-f]{4}$/);
+
+    // Distinct usernames and distinct user rows.
+    expect(guestBody.username).not.toBe(memberBody.username);
+    expect(guestBody.id).not.toBe(memberBody.id);
   });
 });
 
@@ -292,7 +318,7 @@ describe("JWT security gate", () => {
 // ---------------------------------------------------------------------------
 
 describe("key-blindness (L1)", () => {
-  it.skipIf(!config.signupRequired)("ignores a posted apiKey on auth/register and never echoes it", async () => {
+  it("ignores a posted apiKey on auth/register and never echoes it", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/auth/register",

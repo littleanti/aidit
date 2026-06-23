@@ -28,7 +28,6 @@ export interface Config {
   databaseUrl: string;
   jwtSecret: string;
   jwtExpires: string;
-  signupRequired: boolean;
   apiPrefix: string;
   storageBackend: "local" | "s3";
   storageS3Region: string | null;
@@ -42,7 +41,6 @@ export const config: Config = {
   databaseUrl: requireEnv("DATABASE_URL", "file:./dev.db"),
   jwtSecret: process.env.JWT_SECRET ?? DEV_JWT_SECRET,
   jwtExpires: process.env.JWT_EXPIRES ?? "7d",
-  signupRequired: (process.env.AUTH_SIGNUP_REQUIRED ?? "false").toLowerCase() === "true",
   apiPrefix: (process.env.API_PREFIX ?? "/").trim() || "/",
   storageBackend:
     (process.env.STORAGE_BACKEND ?? "local").toLowerCase() === "s3"

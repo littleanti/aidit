@@ -2,6 +2,8 @@
 export const auth = {
   ko: {
     tagline: '커뮤니티에서 함께 만드는 AI 대화',
+    guestTabLabel: '게스트',
+    loginTabLabel: '로그인',
     usernameLabel: '사용자 이름',
     usernamePlaceholder: '닉네임',
     passwordLabel: '비밀번호',
@@ -33,6 +35,8 @@ export const auth = {
   },
   en: {
     tagline: 'AI conversations built together by the community',
+    guestTabLabel: 'Guest',
+    loginTabLabel: 'Login',
     usernameLabel: 'Username',
     usernamePlaceholder: 'Nickname',
     passwordLabel: 'Password',

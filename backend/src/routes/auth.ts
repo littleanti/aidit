@@ -10,9 +10,12 @@ import { requireAuth } from "../auth.js";
 // Server is KEY-BLIND (PLAN L1): no apiKey is ever accepted, stored, or echoed.
 // Identity is established via a server-signed JWT (Authorization: Bearer <token>).
 //
-// Mode is gated by config.signupRequired (env AUTH_SIGNUP_REQUIRED):
-//   ON  (true):  register/session work as usual; guest is disabled (403).
-//   OFF (false): register/session are disabled (403); guest entry is enabled.
+// Runtime dual-mode: all three entry endpoints are ALWAYS active. The mode is
+// chosen by the client from the login input, not by a server flag:
+//   - password empty  → guest entry (POST /auth/guest, nickname only).
+//   - password present → member: new username → POST /auth/register,
+//                                 existing username → POST /auth/session.
+// Google API key is orthogonal to the mode (never sent to the server).
 
 const USERNAME_MAX = 32;
 const USERNAME_MIN = 1;
@@ -50,10 +53,6 @@ const plugin: FastifyPluginAsync = async (app) => {
   // Returns 409 if username already exists.
   // Returns 400 if username or password validation fails.
   app.post("/auth/register", async (request, reply) => {
-    if (!config.signupRequired) {
-      return reply.code(403).send({ error: "Signup is disabled" });
-    }
-
     const body = (request.body ?? {}) as RegisterBody;
 
     if (typeof body.username !== "string") {
@@ -111,10 +110,6 @@ const plugin: FastifyPluginAsync = async (app) => {
   // Returns 200 { token, id, username } on success.
   // Returns 401 on unknown user, wrong password, or legacy passwordless rows.
   app.post("/auth/session", async (request, reply) => {
-    if (!config.signupRequired) {
-      return reply.code(403).send({ error: "Signup is disabled" });
-    }
-
     const body = (request.body ?? {}) as SessionBody;
 
     if (typeof body.username !== "string") {
@@ -155,15 +150,12 @@ const plugin: FastifyPluginAsync = async (app) => {
     return reply.code(200).send({ token, id: user.id, username: user.username });
   });
 
-  // POST /auth/guest — passwordless guest entry (only when signupRequired is false).
-  // body { username }. Server appends "#" + 4 hex chars to the base nickname to form
-  // a unique stored username. Returns 201 { token, id, username }.
-  // Returns 403 when signup mode is ON, 400 on invalid username.
+  // POST /auth/guest — passwordless guest entry. body { username }. Server appends
+  // "#" + 4 hex chars to the base nickname to form a unique stored username; the
+  // #hex4 suffix guarantees uniqueness so no base-nickname reservation check is
+  // needed (and a guest 'base#hex4' never collides with a member 'plain').
+  // Returns 201 { token, id, username }, 400 on invalid username.
   app.post("/auth/guest", async (request, reply) => {
-    if (config.signupRequired) {
-      return reply.code(403).send({ error: "Guest mode is disabled" });
-    }
-
     const body = (request.body ?? {}) as GuestBody;
 
     if (typeof body.username !== "string") {
