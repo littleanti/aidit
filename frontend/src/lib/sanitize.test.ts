@@ -13,11 +13,12 @@ describe('renderMarkdownSafe — XC-3 dangerous-vector stripping', () => {
     expect(out).not.toContain('alert(1)');
   });
 
-  it('strips onerror / on* event-handler attributes', () => {
+  it('strips onerror / on* event-handler attributes (img allowed; handler + non-http src removed)', () => {
     const out = renderMarkdownSafe('![x](https://example.com/a.png "t")\n\n<img src=x onerror=alert(1)>');
     expect(out.toLowerCase()).not.toContain('onerror');
-    // img is not in the allowlist at all, so it is dropped too.
-    expect(out.toLowerCase()).not.toContain('<img');
+    expect(out).not.toContain('alert(1)');
+    // img is now allowlisted: the safe https image survives with its src.
+    expect(out).toMatch(/<img[^>]+src="https:\/\/example\.com\/a\.png"/);
   });
 
   it('drops javascript: URLs on links', () => {
@@ -44,6 +45,43 @@ describe('renderMarkdownSafe — XC-3 dangerous-vector stripping', () => {
     expect(out).toMatch(/<code>code<\/code>/);
     expect(out).toMatch(/<li>one<\/li>/);
     expect(out).toMatch(/href="https:\/\/example\.com"/);
+  });
+
+  it('renders GFM tables and safe images (allowlisted)', () => {
+    const out = renderMarkdownSafe('| a | b |\n| --- | --- |\n| 1 | 2 |');
+    expect(out).toMatch(/<table>/);
+    expect(out).toMatch(/<th[^>]*>a<\/th>/);
+    expect(out).toMatch(/<td[^>]*>1<\/td>/);
+
+    const img = renderMarkdownSafe('![alt](https://example.com/p.png)');
+    expect(img).toMatch(/<img[^>]+src="https:\/\/example\.com\/p\.png"/);
+    expect(img).toMatch(/alt="alt"/);
+  });
+
+  it('bolds "loose" emphasis with stray inner spaces (** text ** -> strong)', () => {
+    expect(renderMarkdownSafe('** 굵게 **')).toMatch(/<strong>굵게<\/strong>/);
+    expect(renderMarkdownSafe('앞 ** 강조 ** 뒤')).toMatch(/<strong>강조<\/strong>/);
+    // proper bold still works (no regression)
+    expect(renderMarkdownSafe('**bold**')).toMatch(/<strong>bold<\/strong>/);
+  });
+
+  it('bolds intraword bold whose content is punctuation-wrapped (앞**\'내용\'**뒤)', () => {
+    // CommonMark leaves these literal (flanking rules); we force them to bold.
+    expect(renderMarkdownSafe("앞**'내용'**뒤")).toMatch(/<strong>[^<]*내용[^<]*<\/strong>/);
+    expect(renderMarkdownSafe("김치는**'적당량'**넣어요")).toMatch(/<strong>[^<]*적당량[^<]*<\/strong>/);
+    // standalone, plain intraword, and bold+italic must NOT regress
+    expect(renderMarkdownSafe("**'내용'**")).toMatch(/<strong>/);
+    expect(renderMarkdownSafe('A**B**C')).toMatch(/A<strong>B<\/strong>C/);
+    expect(renderMarkdownSafe('***굵은기울임***')).toMatch(/<em><strong>굵은기울임<\/strong><\/em>/);
+  });
+
+  it('does NOT corrupt digits or touch ** inside code spans', () => {
+    // plain digits must survive verbatim (regression guard for the mask token)
+    expect(renderMarkdownSafe('숫자 1234567890 입니다')).toContain('1234567890');
+    // ** inside inline code stays literal (e.g. Python kwargs)
+    const out = renderMarkdownSafe('`f(** a **)` 호출');
+    expect(out).toContain('f(** a **)');
+    expect(out).not.toMatch(/<strong>/);
   });
 
   it('returns empty string for empty / non-string input (no throw)', () => {

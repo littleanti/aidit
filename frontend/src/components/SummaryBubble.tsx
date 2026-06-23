@@ -87,7 +87,7 @@ export default function SummaryBubble({
             // XC-3: summary body is untrusted — sanitize before render.
             <SafeMarkdown
               text={comment.body}
-              className="prose-chat whitespace-pre-wrap break-words text-sm leading-relaxed text-term-danger"
+              className="prose-chat break-words text-sm leading-relaxed text-term-danger"
             />
           ) : (
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-term-danger">
@@ -97,7 +97,7 @@ export default function SummaryBubble({
         ) : (
           <SafeMarkdown
             text={comment.body}
-            className="prose-chat whitespace-pre-wrap break-words text-sm leading-relaxed text-term-title"
+            className="prose-chat break-words text-sm leading-relaxed text-term-title"
           />
         )}
       </div>

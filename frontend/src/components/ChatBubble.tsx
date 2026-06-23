@@ -177,7 +177,7 @@ export default function ChatBubble({
 
       {/* bubble cluster */}
       <div
-        className={`flex max-w-[78%] flex-col ${
+        className={`flex min-w-0 max-w-[78%] flex-col ${
           side === 'right' ? 'items-end' : 'items-start'
         }`}
       >
@@ -198,7 +198,7 @@ export default function ChatBubble({
         )}
 
         <div
-          className={`min-h-[44px] px-3 py-2 text-sm leading-relaxed ${bubbleClass}`}
+          className={`min-w-0 max-w-full min-h-[44px] px-3 py-2 text-sm leading-relaxed ${bubbleClass}`}
         >
           {isPending ? (
             <TypingDots isAi={isAi} />
@@ -218,7 +218,7 @@ export default function ChatBubble({
                 // sanitize chokepoint, never as raw HTML.
                 <SafeMarkdown
                   text={comment.body}
-                  className="prose-chat whitespace-pre-wrap break-words"
+                  className="prose-chat break-words"
                 />
               )}
             </>
