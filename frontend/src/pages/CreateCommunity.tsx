@@ -227,7 +227,7 @@ export default function CreateCommunity() {
               className={`w-full rounded-r-[2px] bg-transparent py-2.5 pr-3 text-sm text-term-bright caret-term-bright outline-none placeholder:text-term-faint ${
                 isEdit ? 'cursor-not-allowed text-term-dim' : ''
               }`}
-              placeholder="home-cooking"
+              placeholder={t('community.fieldSlugPlaceholder')}
             />
           </div>
           <p className="mt-1 text-xs text-term-faint">

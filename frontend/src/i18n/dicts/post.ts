@@ -30,6 +30,7 @@ export const post = {
     // CreatePost — image attachment
     image_label: '이미지',
     image_attach_btn: '[+] 이미지 첨부',
+    image_attach_hint: 'PNG · JPG',
     image_attach_name: '첨부 이미지',
     image_preview_alt: '첨부 미리보기',
     image_uploading: '이미지 · 업로드 중…',
@@ -104,6 +105,7 @@ export const post = {
     // CreatePost — image attachment
     image_label: 'Image',
     image_attach_btn: '[+] Attach Image',
+    image_attach_hint: 'PNG · JPG',
     image_attach_name: 'Attached image',
     image_preview_alt: 'Attachment preview',
     image_uploading: 'Image · Uploading…',

@@ -1,7 +1,7 @@
 # Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
 
 > 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
-> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-23 (Composer AI 모드를 트레일링 팝오버로 통합 + 키 기반 기본값)
+> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-23 (i18n 커버리지 감사 — 하드코딩 문자열 3건 t()/tn() 라우팅)
 > 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
 
 ---
@@ -11,6 +11,11 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-23
+- **[fix]** **i18n 커버리지 감사 — 하드코딩 사용자 노출 문자열 3건을 t()/tn()으로 라우팅**: KO/EN 전수 검사(사전 키 대칭·미번역·dangling 참조·하드코딩) 결과, 사전 11개 네임스페이스의 ko↔en 키는 **완전 일치**(미번역·dangling 0건)였고 `t()`를 거치지 않은 사용자 노출 문자열 3곳만 발견되어 정정한다.
+  - `pages/CreatePost.tsx` 이미지 드롭존 하단 헬퍼 `PNG · JPG` → `t('post.image_attach_hint')`. dict `post`에 `image_attach_hint`(ko/en 동일 `'PNG · JPG'`) 신설.
+  - `pages/CreateCommunity.tsx` slug 입력 placeholder `home-cooking` → `t('community.fieldSlugPlaceholder')`. dict `community`에 `fieldSlugPlaceholder`(ko/en 동일 `'home-cooking'` — slug는 ASCII) 신설.
+  - `api/rest.ts` 비-2xx 폴백 메시지 `Request failed: {status} {statusText}`(`request`·`uploadImage` 2곳) → 비-React 모듈이므로 `tn('misc.request_failed', { status, statusText })`로 통합. dict `misc`에 `request_failed`(ko `'요청 실패: {status} {statusText}'` / en `'Request failed: {status} {statusText}'`) 신설. 서버가 사람이 읽을 메시지를 줄 때는 그대로 노출하고, 메시지가 없을 때만 이 폴백에 도달.
+  - 신규 키 3종은 ko/en 양쪽 동시 추가로 대칭 유지. 브랜드명(`Aidit`)·기술 배지(`API KEY`/`PERSONA`)·API 키 포맷 예시(`AIza…`)·장식용 터미널 토큰(`[x]`/`[AI] >`) 등은 의도된 비-번역 문자열로 판단해 제외. (`frontend/src/pages/CreatePost.tsx`, `frontend/src/pages/CreateCommunity.tsx`, `frontend/src/api/rest.ts`, `frontend/src/i18n/dicts/post.ts`, `frontend/src/i18n/dicts/community.ts`, `frontend/src/i18n/dicts/misc.ts`)
 - **[docs]** **README를 소개 글로 전면 갱신**: 소개 단락에 "글 하나=누적 대화 하나" 컨셉 + **설계 목표 4개**(서버 LLM 비용 0·키 노출 면적 최소화·무한 스레드·마찰 없는 진입)를 추가하고, 인증 서술을 위 `[refactor]`의 **런타임 듀얼모드**(비밀번호 유무로 게스트/회원 분기)·**2탭 로그인**·JWT 슬라이딩 갱신에 맞춰 정정(폐기된 `AUTH_SIGNUP_REQUIRED` 플래그 서술을 주요 기능·보안 메모·Pages 배포 절에서 제거). 스레드는 `@AI` 멘션→**입력창 AI 토글** + AI/사람 버블 **GFM 마크다운 렌더링** 명시, 프로필 키 변경/삭제·탭형 무한 스크롤 반영, 빠른 시작 접속 안내를 게스트 진입 기준으로 교체. (`README.md`; commit `4c1136d`)
 - **[refactor]** **회원가입 토글 플래그 제거 → 런타임 듀얼모드 + 2탭 로그인 UI**: 서버 기동 시 모드를 고정하던 `AUTH_SIGNUP_REQUIRED` 플래그를 **완전히 제거**하고, 게스트·회원 두 모드를 **런타임에 공존**시킨다. 핵심 결정:
   - **3엔드포인트 항상 활성**: `POST /auth/register`·`POST /auth/session`·`POST /auth/guest`를 모드 게이팅 없이 **항상 활성**으로 둔다(기존 `describe.skipIf`/403 분기 폐기). `POST /auth/refresh`는 그대로(게스트·회원 공통 슬라이딩 갱신).

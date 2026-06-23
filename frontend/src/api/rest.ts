@@ -13,6 +13,7 @@ import type {
 import { API_BASE } from '../config/api';
 import { getAuthToken } from '../lib/authToken';
 import { notifyAuthExpired } from '../lib/authEvents';
+import { tn } from '../i18n/tn';
 
 // REST client base. In dev (VITE_API_ORIGIN unset), API_BASE is "/api" and
 // Vite proxies /api -> http://localhost:3001 (stripping the prefix). In prod
@@ -92,7 +93,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     const message =
       (obj && typeof obj.message === 'string' && obj.message) ||
       (obj && typeof obj.error === 'string' && obj.error) ||
-      `Request failed: ${res.status} ${res.statusText}`;
+      tn('misc.request_failed', { status: res.status, statusText: res.statusText });
     throw new ApiError(res.status, message, parsed);
   }
 
@@ -442,7 +443,7 @@ export async function uploadImage(
     const message =
       (obj && typeof obj.message === 'string' && obj.message) ||
       (obj && typeof obj.error === 'string' && obj.error) ||
-      `Request failed: ${res.status} ${res.statusText}`;
+      tn('misc.request_failed', { status: res.status, statusText: res.statusText });
     throw new ApiError(res.status, message, parsed);
   }
 

@@ -36,6 +36,7 @@ export const community = {
     fieldName: '이름',
     fieldNamePlaceholder: '예) 집밥 레시피',
     fieldSlug: '주소',
+    fieldSlugPlaceholder: 'home-cooking',
     fieldSlugHintCreate:
       '커뮤니티의 고유 주소입니다. 이름에서 자동 추천되며, 직접 수정할 수 있습니다.',
     fieldSlugHintEdit: '주소(slug)는 생성 후 변경할 수 없어요.',
@@ -86,6 +87,7 @@ export const community = {
     fieldName: 'Name',
     fieldNamePlaceholder: 'e.g. Home Cooking Recipes',
     fieldSlug: 'Address',
+    fieldSlugPlaceholder: 'home-cooking',
     fieldSlugHintCreate:
       'Unique URL for this community. Auto-suggested from the name, but you can edit it.',
     fieldSlugHintEdit: 'The address (slug) cannot be changed after creation.',

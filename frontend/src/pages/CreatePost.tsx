@@ -477,7 +477,7 @@ export default function CreatePost() {
             className="flex flex-col items-center justify-center gap-1 rounded-[2px] border border-dashed border-term-border px-3 py-6 text-sm text-term-dim hover:border-term-bright hover:text-term-bright disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span className="font-bold">{t('post.image_attach_btn')}</span>
-            <span className="text-xs text-term-faint">PNG · JPG</span>
+            <span className="text-xs text-term-faint">{t('post.image_attach_hint')}</span>
           </button>
         )}
         {imageError && (
