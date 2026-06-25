@@ -4,7 +4,7 @@
 export const community = {
   ko: {
     // CommunitySearch
-    searchTitle: '// 커뮤니티 검색',
+    searchTitle: '커뮤니티 검색',
     searchPlaceholder: '커뮤니티 이름으로 검색',
     searchAriaLabel: '커뮤니티 이름으로 검색',
     createCta: '[+] 커뮤니티 만들기',
@@ -55,7 +55,7 @@ export const community = {
   },
   en: {
     // CommunitySearch
-    searchTitle: '// Community Search',
+    searchTitle: 'Community Search',
     searchPlaceholder: 'Search by community name',
     searchAriaLabel: 'Search by community name',
     createCta: '[+] Create Community',
