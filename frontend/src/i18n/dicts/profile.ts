@@ -18,6 +18,7 @@ export const profile = {
 
     // settings entry point + settings page chrome
     settingsLink: '설정',
+    settingsLabel: '[ 설정 ]',
     settingsTitle: '설정',
     settingsBack: '[ ← 프로필 ]',
 
@@ -82,6 +83,7 @@ export const profile = {
 
     // settings entry point + settings page chrome
     settingsLink: 'Settings',
+    settingsLabel: '[ Settings ]',
     settingsTitle: 'Settings',
     settingsBack: '[ ← Profile ]',
 
