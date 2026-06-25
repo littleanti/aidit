@@ -336,15 +336,13 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 ### C. Thread 글 상세 헤더 (Thread.tsx `<header>` 교체)
 기존 `PersonaBadge`만 있던 헤더 → 글 상세 헤더로 교체:
 ```
-[‹ 뒤로]  [ 글 제목(중앙, 1줄 truncate, font-semibold) ]  [🔖 북마크]  [⋯ 메뉴|편집]
+[‹ 뒤로]  [ 글 제목(중앙, 1줄 truncate, font-semibold) ]  [🔖 북마크]
 ```
 - 컨테이너: `flex items-center gap-2 border-b border-slate-200 bg-white px-2 py-2`.
 - 뒤로: `navigate(-1)` 동작, `h-9 w-9` 터치 타깃, ‹ chevron(SVG/문자).
 - 제목: `flex-1 truncate text-center text-base font-semibold text-slate-900` = `post.title`.
 - **북마크 🔖** (VR-3, 2026-06-19 구현됨): **백엔드 연동 완료** — POST/DELETE `/posts/:id/bookmark` 호출. 초기값 `post.bookmarked`(서버 계산). 낙관적 토글, 로그인 필요(`openLogin()`). 실패 시 상태 롤백 + 토스트 "북마크 처리에 실패했습니다."
-- **메뉴 슬롯 (편집 + 삭제, 작성자 전용)**: **작성자만 표시**되며 `[ 편집 ]` 링크와 그 **바로 옆 `[ 삭제 ]` 버튼**이 나란히 놓인다(가드 `myUserId && post.authorId === myUserId`). 비작성자에게는 슬롯이 비어있음(버튼 미표시).
-  - **`[ 편집 ]`**(2026-06-26 라벨 브래킷화): 클릭 시 `/create-post` + state `{editPostId: post.id}`로 편집 모드 진입. **스타일은 커뮤니티 상세의 편집 버튼과 동일**: `border border-term-border px-2 py-1 text-xs text-term-dim hover:border-term-bright hover:text-term-bright`, 라벨 `[ 편집 ]`(i18n `thread.editLabel`).
-  - **`[ 삭제 ]`**(2026-06-26 신설): 같은 버튼 패밀리에 **위험색**(`term-danger`, Settings 키 삭제 버튼과 동일 팔레트), 터치 타깃 min-h 44px, `aria-label`=`thread.deleteAria`(게시글 삭제). **인라인 2단계 확인** — 1차 클릭 시 같은 자리에 `삭제할까요?`(`thread.deleteConfirm`) 문구 + `[ 확인 ]`(`thread.deleteConfirmYes`)·`[ 취소 ]`(`thread.deleteCancel`) 버튼으로 전환, 취소 시 상태 리셋. 확인 시 `DELETE /posts/:id` 호출 → 성공하면 커뮤니티 slug를 알면 `/c/{slug}`로, 모르면 `/`로 이동. 실패 시 토스트 `삭제에 실패했습니다.`(`thread.deleteFailed`). 요청 진행 중 버튼 비활성화.
+- **편집/삭제 슬롯 없음 (2026-06-26 이동)**: 작성자 편집/삭제 액션은 **헤더에 두지 않는다**. 헤더의 역할은 길찾기(뒤로)+정체성(제목)으로 한정하고, 소유자 액션은 글 스코프의 올바른 자리인 **원본 게시글 카드 메타행의 `[⋯]` 오버플로 메뉴**(§6.3-D)로 옮겼다. (직전 2026-06-26 [feat]에서 헤더에 `[ 편집 ]`/`[ 삭제 ]` 알약을 뒀으나 좁은 헤더에서 제목을 잘리게 하고 시각적으로 과해 같은 날 [refactor]로 카드로 이동.)
 
 ### D. 원본 게시글 카드 (Thread.tsx `<article>` 재스타일)
 ```
@@ -354,9 +352,10 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 │ {post.title}              ← text-base font-bold text-slate-900 (mt-1)
 │ {SafeMarkdown(post.body)} ← mt-2 text-sm text-slate-700 (있을 때만)
 │ ─ 메타행(mt-3 flex items-center gap-2 text-xs text-slate-500) ─
-│ (Avatar sm, seed=authorName) u/{authorName} · {상대시간}   [우측 ml-auto] ▲{score} 💬{commentCount}
+│ (Avatar sm, seed=authorName) u/{authorName} · {상대시간}   [우측 ml-auto] ▲{score} 💬{commentCount} [⋯]
 └────────────────────────────────────────────────────────┘
 ```
+- **소유자 오버플로 메뉴 `[⋯]` (2026-06-26)**: 메타행 우측(`▲점수 💬댓글수`) 끝에 **작성자에게만**(`myUserId && post.authorId === myUserId`) `[⋯]` 아이콘 버튼을 둔다(`aria-label`=`thread.moreActionsAria`). 클릭 시 Composer AI 메뉴와 동일한 팝오버 패턴(`relative` 컨테이너 + `absolute` 드롭다운, 바깥 클릭/Esc 닫힘, `aria-expanded`, `role` 지정 `thread.ownerMenuAria`)으로 메뉴를 연다: `✎ [ 편집 ]`(`thread.editLabel` → `/create-post` + state `{editPostId}`) / `⌫ [ 삭제 ]`(`thread.deleteLabel`, danger색). 메뉴 행은 ≥44px 터치 타깃. **삭제는 메뉴 안에서 2단계 확인** — `삭제할까요?`(`thread.deleteConfirm`) + `[ 확인 ]`(`thread.deleteConfirmYes`)·`[ 취소 ]`(`thread.deleteCancel`). 확인 시 `DELETE /posts/:id` → 성공 시 `/c/{slug}`(없으면 `/`)로 이동, 실패 시 `thread.deleteFailed` 토스트. 진행 중 버튼 비활성화.
 - 좋아요/점수: `▲ + post.score`. **(2026-06-19) 이제 인터랙티브 추천 토글 버튼** — PostCard(피드)·Thread(원본 글) 양쪽에서 클릭 시 `POST/DELETE /posts/:id/upvote` 토글. 로그인 필요(`openLogin()`), 낙관적 갱신+실패 롤백, `voted=true`면 `text-term-amber` 강조. `score`는 실시간 vote count. PostCard는 카드 전체가 navigate 대상이므로 버튼이 `stopPropagation`+`preventDefault`.
 - 댓글 수: `post.commentCount`. (Post DTO에 존재.)
 - **카테고리(커뮤니티) 링크 (2026-06-23)**: 코너 라벨 아래·제목 위에 글의 커뮤니티(=카테고리)를 한 줄로 표시한다 — `{personaIcon} {community.name} · r/{slug}` (PostCard 커뮤니티 라인과 동일 패턴: `text-xs text-term-dim hover:text-term-bright`). 문자를 누르면 `/c/{slug}` 커뮤니티 페이지로 이동하는 `<Link>`. `community`가 아직 해결되지 않았으면(폴백) 라인을 생략한다.

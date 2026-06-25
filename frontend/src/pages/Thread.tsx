@@ -110,9 +110,35 @@ export default function Thread() {
   // thread-wide re-render on every keystroke; only the boolean is surfaced).
   const [wantsAI, setWantsAI] = useState(false);
 
-  // Author-only delete: inline 2-step confirm + in-flight guard.
+  // Author-only owner menu (edit/delete), now in the original-post card meta row
+  // instead of the nav header. Overflow [⋯] trigger opens a popover; delete is a
+  // 2-step confirm INSIDE the menu. Mirrors the Composer AI-menu dismiss pattern.
+  const [ownerMenuOpen, setOwnerMenuOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const ownerMenuRef = useRef<HTMLDivElement>(null);
+  // Close the owner menu on outside click or Escape; reset the confirm step too.
+  useEffect(() => {
+    if (!ownerMenuOpen) return;
+    function onPointerDown(e: MouseEvent) {
+      if (ownerMenuRef.current && !ownerMenuRef.current.contains(e.target as Node)) {
+        setOwnerMenuOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOwnerMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [ownerMenuOpen]);
+  // Whenever the menu closes, drop the in-menu delete confirm step.
+  useEffect(() => {
+    if (!ownerMenuOpen) setConfirmingDelete(false);
+  }, [ownerMenuOpen]);
 
   // transient toast for AI-side failures surfaced from the engine.
   const [aiToast, setAiToast] = useState<string | null>(null);
@@ -473,66 +499,8 @@ export default function Thread() {
           >
             🔖
           </button>
-          {/* edit + delete: shown only to the post's author. Edit mirrors the
-              community edit button (Community.tsx); delete sits next to it with
-              the danger palette and an inline 2-step confirm. */}
-          {myUserId && post.authorId === myUserId && (
-            confirmingDelete ? (
-              <span className="flex shrink-0 items-center gap-1">
-                <span className="text-xs text-term-danger">
-                  {t('thread.deleteConfirm')}
-                </span>
-                <button
-                  type="button"
-                  disabled={deleting}
-                  onClick={async () => {
-                    setDeleting(true);
-                    try {
-                      await deletePost(post.id, myUserId);
-                      const slug = community?.slug;
-                      navigate(slug ? `/c/${slug}` : '/');
-                    } catch {
-                      setDeleting(false);
-                      setConfirmingDelete(false);
-                      showAiToast(t('thread.deleteFailed'));
-                    }
-                  }}
-                  className="flex min-h-[44px] shrink-0 items-center rounded-[2px] border border-term-danger px-2 py-1 text-xs text-term-danger transition hover:bg-term-hover disabled:opacity-50"
-                >
-                  {t('thread.deleteConfirmYes')}
-                </button>
-                <button
-                  type="button"
-                  disabled={deleting}
-                  onClick={() => setConfirmingDelete(false)}
-                  className="flex min-h-[44px] shrink-0 items-center rounded-[2px] border border-term-border px-2 py-1 text-xs text-term-dim transition hover:border-term-bright hover:text-term-bright disabled:opacity-50"
-                >
-                  {t('thread.deleteCancel')}
-                </button>
-              </span>
-            ) : (
-              <>
-                <Link
-                  to="/create-post"
-                  state={{ editPostId: post.id }}
-                  className="flex min-h-[44px] shrink-0 items-center rounded-[2px] border border-term-border px-2 py-1 text-xs text-term-dim transition hover:border-term-bright hover:text-term-bright"
-                  aria-label={t('thread.editAria')}
-                  title={t('thread.editAria')}
-                >
-                  {t('thread.editLabel')}
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => setConfirmingDelete(true)}
-                  className="flex min-h-[44px] shrink-0 items-center rounded-[2px] border border-term-danger px-2 py-1 text-xs text-term-danger transition hover:bg-term-hover"
-                  aria-label={t('thread.deleteAria')}
-                  title={t('thread.deleteAria')}
-                >
-                  {t('thread.deleteLabel')}
-                </button>
-              </>
-            )
-          )}
+          {/* edit/delete moved OUT of the header (2026-06-26): owner actions now
+              live in the original-post card meta row as a [⋯] overflow menu. */}
         </div>
       </header>
 
@@ -628,6 +596,90 @@ export default function Thread() {
                 ▲{postScore}
               </button>
               <span>💬{post.commentCount}</span>
+              {/* owner-only overflow menu (edit/delete) — moved here from the
+                  nav header (2026-06-26). [⋯] trigger opens a popover; delete is
+                  a 2-step confirm inside the menu. */}
+              {myUserId && post.authorId === myUserId && (
+                <div ref={ownerMenuRef} className="relative">
+                  <button
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={ownerMenuOpen}
+                    aria-label={t('thread.moreActionsAria')}
+                    title={t('thread.moreActionsAria')}
+                    onClick={() => setOwnerMenuOpen((v) => !v)}
+                    className={`flex h-7 w-7 items-center justify-center rounded-[2px] text-base leading-none transition hover:bg-term-hover hover:text-term-bright ${
+                      ownerMenuOpen ? 'text-term-bright' : 'text-term-dim'
+                    }`}
+                  >
+                    ⋯
+                  </button>
+                  {ownerMenuOpen && (
+                    <div
+                      role="menu"
+                      aria-label={t('thread.ownerMenuAria')}
+                      className="absolute right-0 top-full z-30 mt-1 flex w-36 flex-col rounded-[2px] border border-term-border bg-term-card py-1 shadow-glow-soft"
+                    >
+                      {confirmingDelete ? (
+                        <>
+                          <span className="px-3 py-1 text-xs text-term-danger">
+                            {t('thread.deleteConfirm')}
+                          </span>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            disabled={deleting}
+                            onClick={async () => {
+                              setDeleting(true);
+                              try {
+                                await deletePost(post.id, myUserId);
+                                const slug = community?.slug;
+                                navigate(slug ? `/c/${slug}` : '/');
+                              } catch {
+                                setDeleting(false);
+                                setOwnerMenuOpen(false);
+                                showAiToast(t('thread.deleteFailed'));
+                              }
+                            }}
+                            className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-danger transition hover:bg-term-hover disabled:opacity-50"
+                          >
+                            ⌫ {t('thread.deleteConfirmYes')}
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            disabled={deleting}
+                            onClick={() => setConfirmingDelete(false)}
+                            className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-dim transition hover:bg-term-hover hover:text-term-bright disabled:opacity-50"
+                          >
+                            {t('thread.deleteCancel')}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <Link
+                            to="/create-post"
+                            state={{ editPostId: post.id }}
+                            role="menuitem"
+                            onClick={() => setOwnerMenuOpen(false)}
+                            className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-dim transition hover:bg-term-hover hover:text-term-bright"
+                          >
+                            ✎ {t('thread.editLabel')}
+                          </Link>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => setConfirmingDelete(true)}
+                            className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-danger transition hover:bg-term-hover"
+                          >
+                            ⌫ {t('thread.deleteLabel')}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </span>
           </div>
         </article>
