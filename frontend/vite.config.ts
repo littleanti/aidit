@@ -58,6 +58,10 @@ export default defineConfig(({ mode }) => {
   // read VITE_API_ORIGIN at config time to build the CSP.
   const env = loadEnv(mode, process.cwd(), '');
   const apiOrigin = (env.VITE_API_ORIGIN ?? '').replace(/\/$/, '');
+  // Dev-only: where the /api and /uploads proxy forwards to. Defaults to the
+  // backend's default port (3001); override (e.g. when running the API on a
+  // different port) with VITE_DEV_PROXY_TARGET=http://localhost:3002.
+  const devProxyTarget = (env.VITE_DEV_PROXY_TARGET ?? 'http://localhost:3001').replace(/\/$/, '');
   const backendApiPrefix = (env.API_PREFIX ?? '/').replace(/\/+$/, '');
   const uploadsRewrite =
     backendApiPrefix === '/' || backendApiPrefix === ''
@@ -114,13 +118,13 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         '/api': {
-          target: 'http://localhost:3001',
+          target: devProxyTarget,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, ''),
         },
         // Served image files live at /uploads/<name> on the server.
         '/uploads': {
-          target: 'http://localhost:3001',
+          target: devProxyTarget,
           changeOrigin: true,
           // Align path with API_PREFIX when local storage is mounted under /api.
           rewrite: (path) => path.replace(/^\/uploads/, uploadsRewrite),
