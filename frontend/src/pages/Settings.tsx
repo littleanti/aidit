@@ -5,6 +5,7 @@ import { EmptyState } from '../components/states';
 import { useT } from '../i18n/useT';
 import LangToggle from '../components/LangToggle';
 import ShellPrompt from '../components/ShellPrompt';
+import PageHeaderBar from '../components/PageHeaderBar';
 
 // FE: ⚙️ 설정 — moved out of /me into its own /me/settings page.
 // L1: googleApiKey is LOCAL ONLY. It is shown MASKED here and never logged,
@@ -82,21 +83,22 @@ export default function Settings() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8 py-6 font-mono">
-      <ShellPrompt command="cat ~/.config" className="mb-3" />
-
-      {/* header: title + back link to /me */}
-      <header className="flex items-center justify-between gap-3">
-        <h1 className="truncate text-xl font-bold text-term-title">
+    <div className="mx-auto max-w-2xl space-y-8 pb-6 font-mono">
+      {/* fixed top bar: title + back link to /me */}
+      <PageHeaderBar>
+        <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-term-title glow">
           {t('profile.settingsTitle')}
         </h1>
         <Link
           to="/me"
-          className="inline-flex min-h-[44px] shrink-0 items-center rounded-[2px] border border-term-border px-3 text-sm font-semibold text-term-dim transition hover:border-term-bright hover:text-term-bright"
+          className="inline-flex h-8 shrink-0 items-center rounded-[2px] border border-term-border px-3 text-sm font-semibold text-term-dim transition hover:border-term-bright hover:text-term-bright"
         >
           {t('profile.settingsBack')}
         </Link>
-      </header>
+      </PageHeaderBar>
+
+      {/* terminal prompt line, directly under the fixed bar */}
+      <ShellPrompt command="cat ~/.config" className="mb-3" />
 
       {/* API Key */}
       <section className="relative rounded-[2px] border border-term-border bg-term-card p-4 shadow-term-glow">

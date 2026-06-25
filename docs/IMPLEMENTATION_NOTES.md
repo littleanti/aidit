@@ -11,6 +11,7 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-26
+- **[feat]** **설정 페이지(`/me/settings`)에도 고정 상단바 적용**: 검색·작성·커뮤니티·나와 동일하게 `Settings.tsx`의 헤더(제목 `settingsTitle` + `[ ← 프로필 ]` 뒤로 링크)를 `PageHeaderBar`로 승격하고 ShellPrompt(`cat ~/.config`)를 바 바로 아래로 이동. 제목은 다른 바와 동일한 `text-base font-semibold text-term-title glow` 스타일로 통일, 뒤로 링크는 바 높이에 맞춰 `h-8`. 섹션 간 `space-y-8` 리듬은 유지(외곽 `py-6`→`pb-6`로 바 플러시). (`frontend/src/pages/Settings.tsx`)
 - **[fix]** **`PageHeaderBar` 배경을 Thread 헤더와 동일하게 — 반투명+블러 제거**: 고정 상단바가 `bg-term-screen/95 + backdrop-blur`(글로벌 앱바 스타일)라 Thread 헤더의 **불투명 솔리드 `bg-term-screen`** 과 색감이 달라 보였다. `PageHeaderBar`의 배경을 `bg-term-screen`(블러 제거)로 바꿔 Thread `<header>`와 정확히 동일하게 맞춘다. (`frontend/src/components/PageHeaderBar.tsx`)
 - **[feat]** **검색·작성·커뮤니티·나 페이지에 고정 상단바 추가 + ShellPrompt를 상단바 바로 아래로 이동**: 게시글(Thread) 페이지처럼 페이지 제목을 담은 **고정 상단바**를 글로벌 앱바(`AppLayout`의 `sticky top-0` h-12) 바로 아래에 둔다. 재사용 컴포넌트 `PageHeaderBar`(신규)를 도입 — `sticky top-12 z-10`로 글로벌 앱바 밑에 핀, Thread 헤더와 동일 스타일(`border-b border-term-border bg-term-screen`), 모바일에서 좌우 패딩 위로 풀블리드(`-mx-4 … desktop:mx-0`). 각 페이지는 제목을 이 바에 넣고 **ShellPrompt(꾸미기 쉘)를 바 바로 아래**(스크롤 본문 첫 항목)로 옮겨 Thread와 동일한 순서로 통일한다.
   - **검색(`CommunitySearch`)**: 바 = `community.searchTitle`, 아래 ShellPrompt(`grep -ri`).
