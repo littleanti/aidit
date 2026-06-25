@@ -342,7 +342,9 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 - 뒤로: `navigate(-1)` 동작, `h-9 w-9` 터치 타깃, ‹ chevron(SVG/문자).
 - 제목: `flex-1 truncate text-center text-base font-semibold text-slate-900` = `post.title`.
 - **북마크 🔖** (VR-3, 2026-06-19 구현됨): **백엔드 연동 완료** — POST/DELETE `/posts/:id/bookmark` 호출. 초기값 `post.bookmarked`(서버 계산). 낙관적 토글, 로그인 필요(`openLogin()`). 실패 시 상태 롤백 + 토스트 "북마크 처리에 실패했습니다."
-- **메뉴 슬롯 (⋯ 또는 [편집])**: **작성자만 표시** `✎ 편집` 버튼, 클릭 시 `/create-post` + state `{editPostId: post.id}`로 편집 모드 진입. 비작성자에게는 슬롯이 비어있음(버튼 미표시). **스타일은 커뮤니티 상세의 `✎ 편집` 버튼과 완전 동일**(2026-06-19): `border border-term-border px-2 py-1 text-xs text-term-dim hover:border-term-bright hover:text-term-bright`, 라벨 `✎ 편집`.
+- **메뉴 슬롯 (편집 + 삭제, 작성자 전용)**: **작성자만 표시**되며 `[ 편집 ]` 링크와 그 **바로 옆 `[ 삭제 ]` 버튼**이 나란히 놓인다(가드 `myUserId && post.authorId === myUserId`). 비작성자에게는 슬롯이 비어있음(버튼 미표시).
+  - **`[ 편집 ]`**(2026-06-26 라벨 브래킷화): 클릭 시 `/create-post` + state `{editPostId: post.id}`로 편집 모드 진입. **스타일은 커뮤니티 상세의 편집 버튼과 동일**: `border border-term-border px-2 py-1 text-xs text-term-dim hover:border-term-bright hover:text-term-bright`, 라벨 `[ 편집 ]`(i18n `thread.editLabel`).
+  - **`[ 삭제 ]`**(2026-06-26 신설): 같은 버튼 패밀리에 **위험색**(`term-danger`, Settings 키 삭제 버튼과 동일 팔레트), 터치 타깃 min-h 44px, `aria-label`=`thread.deleteAria`(게시글 삭제). **인라인 2단계 확인** — 1차 클릭 시 같은 자리에 `삭제할까요?`(`thread.deleteConfirm`) 문구 + `[ 확인 ]`(`thread.deleteConfirmYes`)·`[ 취소 ]`(`thread.deleteCancel`) 버튼으로 전환, 취소 시 상태 리셋. 확인 시 `DELETE /posts/:id` 호출 → 성공하면 커뮤니티 slug를 알면 `/c/{slug}`로, 모르면 `/`로 이동. 실패 시 토스트 `삭제에 실패했습니다.`(`thread.deleteFailed`). 요청 진행 중 버튼 비활성화.
 
 ### D. 원본 게시글 카드 (Thread.tsx `<article>` 재스타일)
 ```

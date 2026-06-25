@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { addBookmark, ApiError, getCommunities, getComments, getContext, getPost, removeBookmark, upvotePost, removeUpvote } from '../api/rest';
+import { addBookmark, ApiError, deletePost, getCommunities, getComments, getContext, getPost, removeBookmark, upvotePost, removeUpvote } from '../api/rest';
 import type { Comment, Community, Post } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
@@ -109,6 +109,10 @@ export default function Thread() {
   // live comment TEXT is intentionally NOT mirrored — surfacing it would force a
   // thread-wide re-render on every keystroke; only the boolean is surfaced).
   const [wantsAI, setWantsAI] = useState(false);
+
+  // Author-only delete: inline 2-step confirm + in-flight guard.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // transient toast for AI-side failures surfaced from the engine.
   const [aiToast, setAiToast] = useState<string | null>(null);
@@ -469,18 +473,65 @@ export default function Thread() {
           >
             🔖
           </button>
-          {/* edit: shown only to the post's author. Mirrors the community
-              edit button (Community.tsx) exactly. */}
+          {/* edit + delete: shown only to the post's author. Edit mirrors the
+              community edit button (Community.tsx); delete sits next to it with
+              the danger palette and an inline 2-step confirm. */}
           {myUserId && post.authorId === myUserId && (
-            <Link
-              to="/create-post"
-              state={{ editPostId: post.id }}
-              className="shrink-0 rounded-[2px] border border-term-border px-2 py-1 text-xs text-term-dim transition hover:border-term-bright hover:text-term-bright"
-              aria-label={t('thread.editAria')}
-              title={t('thread.editAria')}
-            >
-              {t('thread.editLabel')}
-            </Link>
+            confirmingDelete ? (
+              <span className="flex shrink-0 items-center gap-1">
+                <span className="text-xs text-term-danger">
+                  {t('thread.deleteConfirm')}
+                </span>
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={async () => {
+                    setDeleting(true);
+                    try {
+                      await deletePost(post.id, myUserId);
+                      const slug = community?.slug;
+                      navigate(slug ? `/c/${slug}` : '/');
+                    } catch {
+                      setDeleting(false);
+                      setConfirmingDelete(false);
+                      showAiToast(t('thread.deleteFailed'));
+                    }
+                  }}
+                  className="flex min-h-[44px] shrink-0 items-center rounded-[2px] border border-term-danger px-2 py-1 text-xs text-term-danger transition hover:bg-term-hover disabled:opacity-50"
+                >
+                  {t('thread.deleteConfirmYes')}
+                </button>
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => setConfirmingDelete(false)}
+                  className="flex min-h-[44px] shrink-0 items-center rounded-[2px] border border-term-border px-2 py-1 text-xs text-term-dim transition hover:border-term-bright hover:text-term-bright disabled:opacity-50"
+                >
+                  {t('thread.deleteCancel')}
+                </button>
+              </span>
+            ) : (
+              <>
+                <Link
+                  to="/create-post"
+                  state={{ editPostId: post.id }}
+                  className="flex min-h-[44px] shrink-0 items-center rounded-[2px] border border-term-border px-2 py-1 text-xs text-term-dim transition hover:border-term-bright hover:text-term-bright"
+                  aria-label={t('thread.editAria')}
+                  title={t('thread.editAria')}
+                >
+                  {t('thread.editLabel')}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(true)}
+                  className="flex min-h-[44px] shrink-0 items-center rounded-[2px] border border-term-danger px-2 py-1 text-xs text-term-danger transition hover:bg-term-hover"
+                  aria-label={t('thread.deleteAria')}
+                  title={t('thread.deleteAria')}
+                >
+                  {t('thread.deleteLabel')}
+                </button>
+              </>
+            )
           )}
         </div>
       </header>

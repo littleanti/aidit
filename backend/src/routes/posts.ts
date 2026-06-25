@@ -546,6 +546,51 @@ const plugin: FastifyPluginAsync = async (app) => {
     });
   });
 
+  // DELETE /posts/:id — only the author may delete. Mirrors PATCH /posts/:id's
+  // auth/ownership gate. The Prisma schema has NO onDelete:Cascade on Post's
+  // children, so we delete them by hand inside a SINGLE transaction in an order
+  // that satisfies every FK constraint:
+  //   1. vote        — Vote.postId FK
+  //   2. bookmark    — Bookmark.postId FK
+  //   3. comment.replyToId = null — break the self-referential ReplyChain FK
+  //                    BEFORE deleting comments so a reply never points at a
+  //                    just-deleted parent.
+  //   4. comment     — delete BEFORE segments (Comment.segmentId FK -> segment).
+  //   5. contextSegment — ContextSegment.postId FK.
+  //   6. post        — finally the row itself.
+  // (ContextSegment.summaryCommentId is a loose String with no FK relation, so
+  //  it needs no action here.)
+  app.delete<{ Params: { id: string } }>("/posts/:id", async (req, reply) => {
+    const userId = await requireAuth(req, reply);
+    if (!userId) return;
+
+    const existing = await prisma.post.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, authorId: true },
+    });
+    if (!existing) {
+      return reply.code(404).send({ error: "Post not found" });
+    }
+    if (existing.authorId !== userId) {
+      return reply.code(403).send({ error: "Only the author may delete" });
+    }
+
+    const id = req.params.id;
+    await prisma.$transaction(async (tx) => {
+      await tx.vote.deleteMany({ where: { postId: id } });
+      await tx.bookmark.deleteMany({ where: { postId: id } });
+      await tx.comment.updateMany({
+        where: { postId: id },
+        data: { replyToId: null },
+      });
+      await tx.comment.deleteMany({ where: { postId: id } });
+      await tx.contextSegment.deleteMany({ where: { postId: id } });
+      await tx.post.delete({ where: { id } });
+    });
+
+    return reply.send({ deleted: true });
+  });
+
   // POST /posts/:id/upvote — idempotent upsert of a Vote; recomputes score + hotScore.
   app.post<{ Params: { id: string } }>(
     "/posts/:id/upvote",

@@ -382,6 +382,19 @@ export function patchPost(
   return request<Post>(`/posts/${id}`, { method: 'PATCH', body, userId });
 }
 
+/**
+ * DELETE /posts/:id — delete a post (author-only).
+ * L1: NO apiKey. Identity carried via Authorization: Bearer JWT.
+ * Server cascades the post's children in one transaction and returns
+ * { deleted: true }.
+ */
+export function deletePost(
+  id: string,
+  userId?: string,
+): Promise<{ deleted: boolean }> {
+  return request(`/posts/${id}`, { method: 'DELETE', userId });
+}
+
 // ---- Comments ----
 
 /**

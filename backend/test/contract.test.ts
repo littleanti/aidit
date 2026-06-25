@@ -680,6 +680,100 @@ describe("PATCH /posts/:id", () => {
 });
 
 // ---------------------------------------------------------------------------
+// DELETE /posts/:id
+// ---------------------------------------------------------------------------
+
+describe("DELETE /posts/:id", () => {
+  it("author deletes -> success and the post is gone (GET -> 404)", async () => {
+    const author = await createUser(app);
+    const community = await createCommunity(author.id);
+    const post = await createPostViaApi(app, author.token, community.id);
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/posts/${post.id}`,
+      headers: authHeader(author.token),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ deleted: true });
+
+    const gone = await app.inject({ method: "GET", url: `/posts/${post.id}` });
+    expect(gone.statusCode).toBe(404);
+  });
+
+  it("a different user deleting -> 403", async () => {
+    const author = await createUser(app);
+    const other = await createUser(app);
+    const community = await createCommunity(author.id);
+    const post = await createPostViaApi(app, author.token, community.id);
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/posts/${post.id}`,
+      headers: authHeader(other.token),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("non-existent post id -> 404", async () => {
+    const author = await createUser(app);
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/posts/nonexistent-id-that-does-not-exist",
+      headers: authHeader(author.token),
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("deletes a post WITH a comment + vote + bookmark (cascade) without FK error", async () => {
+    const author = await createUser(app);
+    const commenter = await createUser(app);
+    const community = await createCommunity(author.id);
+    const post = await createPostViaApi(app, author.token, community.id);
+
+    // A human comment in seg-0.
+    const comment = await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/comments`,
+      headers: authHeader(commenter.token),
+      payload: { type: "HUMAN", body: "a question", clientId: "c1" },
+    });
+    expect(comment.statusCode).toBe(201);
+
+    // A vote and a bookmark on the post.
+    await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/upvote`,
+      headers: authHeader(commenter.token),
+    });
+    await app.inject({
+      method: "POST",
+      url: `/posts/${post.id}/bookmark`,
+      headers: authHeader(commenter.token),
+    });
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/posts/${post.id}`,
+      headers: authHeader(author.token),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ deleted: true });
+
+    // Post and all its children are gone.
+    const gone = await app.inject({ method: "GET", url: `/posts/${post.id}` });
+    expect(gone.statusCode).toBe(404);
+    expect(await prisma.comment.count({ where: { postId: post.id } })).toBe(0);
+    expect(await prisma.vote.count({ where: { postId: post.id } })).toBe(0);
+    expect(await prisma.bookmark.count({ where: { postId: post.id } })).toBe(0);
+    expect(
+      await prisma.contextSegment.count({ where: { postId: post.id } }),
+    ).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Bookmarks
 // ---------------------------------------------------------------------------
 

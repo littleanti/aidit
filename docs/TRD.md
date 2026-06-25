@@ -196,6 +196,7 @@ model Vote {
 | `POST /uploads` | 단일 이미지 업로드(multipart) → `{ imageUrl }`(서버 상대 `/uploads/<name>`) | **`Authorization: Bearer <jwt>`** | 글/댓글 이미지 첨부. 형식 PNG/JPEG/WebP/GIF · 최대 5MB · 정적 서빙 `GET /uploads/*` · 토큰 검증 |
 | `GET /posts/:id` | 글 + 메타 | 선택 **`Authorization: Bearer <jwt>`** | 응답에 `imageUrl`, `bookmarked`, `voted`, `community.personaPrompt`(L6: 클라 AI systemInstruction 소스) 포함 |
 | `PATCH /posts/:id` | **글 수정**(제목/본문/이미지, 작성자만) | **`Authorization: Bearer <jwt>`** | 토큰에서 파생된 `userId`로 작성자 검증 → 비작성자 403 |
+| `DELETE /posts/:id` | **글 삭제**(작성자만) | **`Authorization: Bearer <jwt>`** | 토큰 파생 `userId`로 작성자 검증 → 비작성자 403 · 미존재 404 · 단일 트랜잭션 cascade(vote→bookmark→comment.replyToId 해제→comment→contextSegment→post) · 200 `{deleted:true}` |
 | `GET /posts/:id/comments?afterSeq=` | 버블 페이지네이션 | - | FR-5 |
 | `POST /posts/:id/comments` | **버블 게시**(사람/AI/요약 텍스트) | **`Authorization: Bearer <jwt>`**(사람) | §4.1 · clientId 멱등 · 토큰 검증 |
 | `PATCH /comments/:id` | AI 버블 상태/본문 갱신(PENDING→COMPLETE/FAILED) | **`Authorization: Bearer <jwt>`**(사람)·clientId(AI) | FR-6.2 · 토큰 검증 |
