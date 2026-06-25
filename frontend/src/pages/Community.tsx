@@ -12,6 +12,7 @@ import Avatar from '../components/Avatar';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
 import { useT } from '../i18n/useT';
 import ShellPrompt from '../components/ShellPrompt';
+import PageHeaderBar from '../components/PageHeaderBar';
 
 // Robot persona tile (phosphor stroke line-art) — matches the canonical
 // retro screens. Honors a community's personaIcon when present, otherwise
@@ -103,8 +104,12 @@ export function CommunitySearch() {
 
   return (
     <div className="space-y-4 font-mono">
+      <PageHeaderBar>
+        <h1 className="truncate text-base font-semibold text-term-title glow">
+          {t('community.searchTitle')}
+        </h1>
+      </PageHeaderBar>
       <ShellPrompt command={`grep -ri "${q}"`} className="mb-3" />
-      <h1 className="text-lg font-bold text-term-title glow">{t('community.searchTitle')}</h1>
 
       <div className="flex items-center gap-2 rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 focus-within:border-term-bright">
         <span aria-hidden className="text-term-cta">
@@ -271,6 +276,16 @@ function CommunityDetail({ slug }: { slug: string }) {
 
   return (
     <div className="space-y-5 font-mono">
+      <PageHeaderBar>
+        <RobotTile
+          personaIcon={community.personaIcon}
+          className="h-7 w-7 shrink-0 rounded-[3px]"
+          iconSize={16}
+        />
+        <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-term-title glow">
+          {community.name}
+        </h1>
+      </PageHeaderBar>
       <ShellPrompt command={`feed r/${slug} --sort=${activeSort}`} className="mb-3" />
       {/* header */}
       <header className="space-y-4 border-b border-term-border pb-5">

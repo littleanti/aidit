@@ -8,6 +8,7 @@ import { useUiStore } from '../stores/uiStore';
 import { type AiLength, DEFAULT_AI_LENGTH } from '../engine/length';
 import { useT } from '../i18n/useT';
 import ShellPrompt from '../components/ShellPrompt';
+import PageHeaderBar from '../components/PageHeaderBar';
 import { formatPromptArg } from '../lib/shellArg';
 
 // FE-7: write a post (register-first, FR-4.2).
@@ -297,10 +298,12 @@ export default function CreatePost() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 font-mono">
+      <PageHeaderBar>
+        <h1 className="truncate text-base font-semibold text-term-title glow">
+          {isEdit ? t('post.heading_edit') : t('post.heading_create')}
+        </h1>
+      </PageHeaderBar>
       <ShellPrompt command={promptCommand} className="mb-3" />
-      <h1 className="text-lg font-semibold text-term-title glow">
-        {isEdit ? t('post.heading_edit') : t('post.heading_create')}
-      </h1>
 
       {/* Community target */}
       {isEdit ? (

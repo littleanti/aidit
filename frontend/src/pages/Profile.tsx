@@ -13,6 +13,7 @@ import PersonaBadge from '../components/PersonaBadge';
 import Avatar from '../components/Avatar';
 import { useT } from '../i18n/useT';
 import ShellPrompt from '../components/ShellPrompt';
+import PageHeaderBar from '../components/PageHeaderBar';
 import { usePagedList } from '../hooks/usePagedList';
 
 // FE: 👤 나 — profile page, now a TABBED activity view (WIREFRAME §9 redesign).
@@ -72,24 +73,28 @@ export default function Profile() {
   ];
 
   return (
-    <div className="mx-auto max-w-2xl py-6 font-mono">
-      {/* header: avatar + username + settings entry point */}
-      <header className="mb-4 flex items-center gap-3">
-        <Avatar kind="user" seed={username} size="md" />
-        <h1 className="min-w-0 flex-1 truncate text-xl font-bold text-term-title">
+    <div className="mx-auto max-w-2xl pb-6 font-mono">
+      {/* fixed top bar: avatar + username + settings entry point */}
+      <PageHeaderBar>
+        <Avatar kind="user" seed={username} size="sm" />
+        <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-term-title">
           {username}
         </h1>
         <Link
           to="/me/settings"
           aria-label={t('profile.settingsLink')}
-          className="inline-flex min-h-[44px] shrink-0 items-center rounded-[2px] border border-term-border px-3 text-sm font-semibold text-term-dim transition hover:border-term-bright hover:text-term-bright"
+          className="inline-flex h-8 shrink-0 items-center rounded-[2px] border border-term-border px-3 text-sm font-semibold text-term-dim transition hover:border-term-bright hover:text-term-bright"
         >
           <span>{t('profile.settingsLabel')}</span>
         </Link>
-      </header>
+      </PageHeaderBar>
 
-      {/* tabs — same terminal/amber segmented style as the Home feed */}
-      <div className="sticky top-0 z-10 -mx-4 mb-3 border-b border-term-border bg-term-screen px-4">
+      {/* terminal prompt line — per-tab command, directly under the fixed bar */}
+      <ShellPrompt command={TAB_COMMAND[tab]} className="mt-3 mb-3" />
+
+      {/* tabs — same terminal/amber segmented style as the Home feed; sticks
+          just below the fixed top bar (app bar 3rem + bar 3rem = top-24). */}
+      <div className="sticky top-24 z-10 -mx-4 mb-3 border-b border-term-border bg-term-screen px-4">
         <div className="flex">
           {TABS.map((tabDef) => {
             const active = tab === tabDef.key;
@@ -111,9 +116,6 @@ export default function Profile() {
           })}
         </div>
       </div>
-
-      {/* terminal prompt line — per-tab command */}
-      <ShellPrompt command={TAB_COMMAND[tab]} className="mb-3" />
 
       {/* Only the active tab is mounted, so only it fetches + paginates. */}
       {tab === 'communities' && <CommunitiesTab userId={userId} />}

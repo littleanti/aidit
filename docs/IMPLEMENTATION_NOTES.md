@@ -11,6 +11,14 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-26
+- **[feat]** **검색·작성·커뮤니티·나 페이지에 고정 상단바 추가 + ShellPrompt를 상단바 바로 아래로 이동**: 게시글(Thread) 페이지처럼 페이지 제목을 담은 **고정 상단바**를 글로벌 앱바(`AppLayout`의 `sticky top-0` h-12) 바로 아래에 둔다. 재사용 컴포넌트 `PageHeaderBar`(신규)를 도입 — `sticky top-12 z-10`로 글로벌 앱바 밑에 핀, Thread 헤더와 동일 스타일(`border-b border-term-border bg-term-screen/95 backdrop-blur`), 모바일에서 좌우 패딩 위로 풀블리드(`-mx-4 … desktop:mx-0`). 각 페이지는 제목을 이 바에 넣고 **ShellPrompt(꾸미기 쉘)를 바 바로 아래**(스크롤 본문 첫 항목)로 옮겨 Thread와 동일한 순서로 통일한다.
+  - **검색(`CommunitySearch`)**: 바 = `community.searchTitle`, 아래 ShellPrompt(`grep -ri`).
+  - **작성(`CreatePost`)**: 바 = `post.heading_create`/`heading_edit`, 아래 ShellPrompt.
+  - **커뮤니티(`Community`)**: 바 = 커뮤니티 이름(`RobotTile` 아이콘 + 이름), 아래 ShellPrompt(`feed r/...`). 아바타·설명·페르소나·정렬 등 풍부한 헤더는 스크롤 본문에 그대로 유지(이름 중복 표시는 Thread의 제목 중복과 동일 패턴).
+  - **나(`Profile`)**: 기존 헤더(아바타+사용자명+`[ 설정 ]`)를 바로 승격, 아래 ShellPrompt(탭별 커맨드).
+  - **창 스크롤·무한스크롤 유지**: sticky 방식이라 각 페이지의 window 스크롤과 커뮤니티/나 탭의 IntersectionObserver 무한스크롤이 그대로 동작(내부 스크롤 컨테이너로 재배선하지 않음).
+  - **Thread 미변경**: Thread는 이미 *고정 헤더 + 하단 고정 Composer + 가운데 메시지 내부 스크롤* 모델이라 헤더가 고정 상태이며, 자동 맨아래 스크롤·점프 칩(내부 `scrollRef` 의존)·Composer 하단 핀을 깨지 않기 위해 내부 구조를 바꾸지 않는다(4개 페이지의 바를 Thread 헤더 스타일에 맞춰 시각적 일관성 확보).
+  - **변경 파일**: `frontend/src/components/PageHeaderBar.tsx`(신규), `frontend/src/pages/Community.tsx`(`CommunitySearch`+`Community`), `frontend/src/pages/CreatePost.tsx`, `frontend/src/pages/Profile.tsx`.
 - **[refactor]** **Me 페이지 설정 링크 — 톱니바퀴 아이콘 제거, 라벨만 표시**: `Profile.tsx` 헤더 `/me/settings` 링크에서 톱니바퀴 SVG 아이콘을 제거하고 `[ 설정 ]`(`profile.settingsLabel`) 라벨만 남긴다. 아이콘-라벨 간격용 `gap-1.5`도 제거. `aria-label`(`profile.settingsLink`)·라우팅·나머지 스타일 불변. (`frontend/src/pages/Profile.tsx`)
 - **[refactor]** **Thread 편집/삭제 버튼을 헤더 → 원본 게시글 카드 오버플로 메뉴로 이동(UI/UX 정리)**: 직전 [feat]에서 sticky 네비 헤더에 넣었던 `[ 편집 ]`/`[ 삭제 ]` 알약 버튼(테두리 + `min-h-[44px]`)이 좁은 헤더를 가득 채워 글 제목을 `…`으로 잘리게 만들고, 빨간 테두리 삭제가 화면에서 가장 시끄러운 요소가 되는 문제가 있었다(사용자 스크린샷). 헤더의 일은 *길찾기(뒤로)+정체성(제목)*이므로 소유자 액션을 **네비 헤더에서 제거**하고, 글 스코프 액션의 올바른 자리인 **원본 게시글 카드 메타행**(`▲점수 💬댓글수` 옆)으로 옮겨 작성자 전용 `[⋯]` 오버플로 트리거 + 팝오버 메뉴로 접었다.
   - **헤더 슬림화**: `<header>` 우측 그룹에서 편집/삭제(및 인라인 확인 UI)를 제거 → 헤더는 `뒤로 + 제목(+ 북마크)`만 남는다. 제목이 더 이상 버튼에 밀려 잘리지 않는다.
