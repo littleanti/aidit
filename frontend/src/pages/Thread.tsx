@@ -643,7 +643,7 @@ export default function Thread() {
                             }}
                             className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-danger transition hover:bg-term-hover disabled:opacity-50"
                           >
-                            ⌫ {t('thread.deleteConfirmYes')}
+                            {t('thread.deleteConfirmYes')}
                           </button>
                           <button
                             type="button"
@@ -664,7 +664,7 @@ export default function Thread() {
                             onClick={() => setOwnerMenuOpen(false)}
                             className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-dim transition hover:bg-term-hover hover:text-term-bright"
                           >
-                            ✎ {t('thread.editLabel')}
+                            {t('thread.editLabel')}
                           </Link>
                           <button
                             type="button"
@@ -672,7 +672,7 @@ export default function Thread() {
                             onClick={() => setConfirmingDelete(true)}
                             className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-danger transition hover:bg-term-hover"
                           >
-                            ⌫ {t('thread.deleteLabel')}
+                            {t('thread.deleteLabel')}
                           </button>
                         </>
                       )}
