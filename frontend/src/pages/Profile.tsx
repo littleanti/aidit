@@ -82,20 +82,8 @@ export default function Profile() {
         <Link
           to="/me/settings"
           aria-label={t('profile.settingsLink')}
-          className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-[2px] border border-term-border px-3 text-sm font-semibold text-term-dim transition hover:border-term-bright hover:text-term-bright"
+          className="inline-flex min-h-[44px] shrink-0 items-center rounded-[2px] border border-term-border px-3 text-sm font-semibold text-term-dim transition hover:border-term-bright hover:text-term-bright"
         >
-          <svg
-            aria-hidden
-            viewBox="0 0 24 24"
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="square"
-          >
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19" />
-          </svg>
           <span>{t('profile.settingsLabel')}</span>
         </Link>
       </header>
