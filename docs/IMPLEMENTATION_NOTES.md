@@ -11,6 +11,7 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-06-26
+- **[refactor]** **헤더 LLM 연결 배지에서 `GEMINI` 라벨 제거 + 툴팁 문구를 LLM 일반화**: 글로벌 앱바의 연결 배지(`GeminiStatusBadge`)는 LED 점 + `GEMINI` 텍스트를 함께 표시했으나, 향후 임의의 LLM 엔드포인트를 사용할 수 있도록 개선 예정이라 특정 모델명을 노출하지 않는다. 가시 라벨 `GEMINI` span을 제거하고 LED 점(`●`/`○`)만 남긴다. 툴팁(`misc.gemini_*`, ko/en)도 "Gemini …"→"LLM …"으로 일반화. 상태 스토어 로직·표시 색상은 불변. (`frontend/src/components/GeminiStatusBadge.tsx`, `frontend/src/i18n/dicts/misc.ts`)
 - **[feat]** **홈 인기/최신 토글을 `PageHeaderBar`로 승격 + 고정 상단바↔ShellPrompt 간격 5개 페이지 통일(16px)**: 두 가지 일관성 정리.
   - **홈 탭 = 고정 상단바**: 기존 홈의 `인기/최신` 탭은 `sticky top-0`의 독자적 바(글로벌 앱바와 겹치는 위치, 자체 `border-b`/`bg`)였다. 이를 검색·작성과 **동일한 `PageHeaderBar`**(`sticky top-12`, `h-12`, Thread 헤더 스타일)로 승격한다. 차이는 제목 대신 **두 개의 탭 버튼**(`인기`/`최신`)이 바를 가득 채운다는 점뿐 — 버튼은 `h-full flex-1`로 바 높이에 맞고, 활성 탭은 기존 amber 언더라인(`border-b-2 border-term-amber` + `bg-[rgba(255,207,74,0.06)]`) 유지. 이제 홈 바도 다른 페이지와 동일하게 글로벌 앱바 바로 아래(`top-12`)에 핀. **탭 라벨 폰트도 다른 페이지 상단바 제목과 동일하게 `text-sm`→`text-base`(16px)로 키움**(`font-semibold` 동일, `h-full` + `items-center` 수직 정렬로 위치도 일치).
   - **상단바↔ShellPrompt 간격 통일**: 고정 상단바와 그 아래 꾸미기 쉘(`ShellPrompt`) 사이 간격이 페이지마다 달랐다 — 검색·작성 16px(`space-y-4`/`gap-4`), 홈·나 12px, 설정 32px(`space-y-8`). 검색·작성을 기준(16px)으로 **5개 페이지(홈·검색·작성·나·설정) 모두 16px로 통일**. 나(`Profile`)·홈은 ShellPrompt `mt-4`, 설정(`Settings`)은 루트의 `space-y-8`을 제거하고 섹션들을 별도 `space-y-8` 래퍼로 묶어 섹션 리듬은 유지하면서 바↔쉘 간격만 16px로 맞춤. 검색·작성은 이미 16px라 불변.

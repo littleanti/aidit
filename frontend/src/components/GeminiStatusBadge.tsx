@@ -1,9 +1,10 @@
 import { useT } from '../i18n/useT';
 import { useGeminiStatusStore } from '../stores/geminiStatusStore';
 
-// Header connectivity badge for the BYOK Gemini key (retro green-phosphor LED +
-// label). Reflects geminiStatusStore — the outcome of the most recent real LLM
-// query this session. Presentational only; reads the store, never calls Gemini.
+// Header connectivity badge for the active LLM (retro green-phosphor LED dot).
+// Reflects geminiStatusStore — the outcome of the most recent real LLM query
+// this session. Presentational only; reads the store, never calls the LLM.
+// No model name is shown (any LLM endpoint may be used); tooltip says "LLM …".
 
 const META = {
   connected: {
@@ -38,12 +39,6 @@ export default function GeminiStatusBadge() {
     >
       <span aria-hidden className={`text-[10px] leading-none ${meta.dotClass}`}>
         {meta.glyph}
-      </span>
-      <span
-        aria-hidden
-        className="text-[10px] uppercase tracking-wider text-term-faint"
-      >
-        GEMINI
       </span>
     </span>
   );
