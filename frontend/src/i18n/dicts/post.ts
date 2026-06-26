@@ -3,8 +3,8 @@
 export const post = {
   ko: {
     // CreatePost — page headings
-    heading_create: '글 작성',
-    heading_edit: '글 편집',
+    heading_create: '게시글 작성',
+    heading_edit: '게시글 편집',
 
     // CreatePost — login gate
     login_required: '로그인이 필요해요',
@@ -56,10 +56,10 @@ export const post = {
     btn_saving: '[ 저장 중… ]',
 
     // CreatePost — error messages
-    err_load_post: '글을 불러오지 못했습니다.',
+    err_load_post: '게시글을 불러오지 못했습니다.',
     err_load_communities: '커뮤니티를 불러오지 못했습니다.',
-    err_submit_create: '글 작성에 실패했습니다.',
-    err_submit_edit: '글 수정에 실패했습니다. 다시 시도해 주세요.',
+    err_submit_create: '게시글 작성에 실패했습니다.',
+    err_submit_edit: '게시글 수정에 실패했습니다. 다시 시도해 주세요.',
 
     // PostCard — relative time
     time_just_now: '방금',

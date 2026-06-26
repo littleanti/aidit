@@ -21,11 +21,11 @@ export const community = {
     editAriaLabel: '커뮤니티 편집',
     editTitle: '커뮤니티 편집',
     editButtonLabel: '✎ 편집',
-    writePost: '+ 이 커뮤니티에 글쓰기',
-    postsSection: '// 글',
-    noPostsTitle: '아직 글이 없습니다.',
-    noPostsHint: '첫 글을 작성해 보세요.',
-    firstPost: '+ 첫 글 쓰기',
+    writePost: '+ 이 커뮤니티에 게시글 쓰기',
+    postsSection: '// 게시글',
+    noPostsTitle: '아직 게시글이 없습니다.',
+    noPostsHint: '첫 게시글을 작성해 보세요.',
+    firstPost: '+ 첫 게시글 쓰기',
     postMeta: 'u/{author} · 점수 {score} · 댓글 {count}',
 
     // CreateCommunity

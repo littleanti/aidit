@@ -13,7 +13,7 @@ export const profile = {
 
     // activity tabs (segmented control)
     tabCommunities: '커뮤니티',
-    tabPosts: '글',
+    tabPosts: '게시글',
     tabBookmarks: '북마크',
 
     // settings entry point + settings page chrome
@@ -24,7 +24,7 @@ export const profile = {
 
     // not-logged-in gate
     loginRequired: '로그인이 필요합니다.',
-    loginHint: '로그인하면 내 글과 커뮤니티를 볼 수 있어요.',
+    loginHint: '로그인하면 내 게시글과 커뮤니티를 볼 수 있어요.',
     loginBtn: '[ 로그인 ]',
 
     // API key section
@@ -41,8 +41,8 @@ export const profile = {
 
     // section headings (code-comment style)
     communitiesHeading: '// 내가 만든 커뮤니티',
-    postsHeading: '// 내 글',
-    bookmarksHeading: '// 북마크한 글',
+    postsHeading: '// 내 게시글',
+    bookmarksHeading: '// 북마크한 게시글',
 
     // empty states — communities
     noCommunityTitle: '아직 만든 커뮤니티가 없어요.',
@@ -50,12 +50,12 @@ export const profile = {
     createCommunityBtn: '[ 커뮤니티 만들기 ]',
 
     // empty states — posts
-    noPostTitle: '아직 작성한 글이 없어요.',
-    noPostHint: '커뮤니티에서 첫 글을 남겨 보세요.',
+    noPostTitle: '아직 작성한 게시글이 없어요.',
+    noPostHint: '커뮤니티에서 첫 게시글을 남겨 보세요.',
 
     // empty states — bookmarks
-    noBookmarkTitle: '아직 북마크한 글이 없어요.',
-    noBookmarkHint: '글 상단의 🔖 로 저장한 글이 여기 모여요.',
+    noBookmarkTitle: '아직 북마크한 게시글이 없어요.',
+    noBookmarkHint: '게시글 상단의 🔖 로 저장한 게시글이 여기 모여요.',
 
     // language settings row (added per spec)
     languageSettingLabel: '언어 설정',
