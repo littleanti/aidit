@@ -41,7 +41,7 @@ export const post = {
     image_upload_error: '이미지 업로드에 실패했습니다.',
 
     // CreatePost — AI toggle
-    ai_first_reply: '게시 후 AI 1차 답변 받기',
+    ai_first_reply: '게시 후 AI 1차 답변 받기 (답변 길이)',
 
     // CreatePost — AI response length
     ai_length_short: '짧게',
@@ -116,7 +116,7 @@ export const post = {
     image_upload_error: 'Image upload failed.',
 
     // CreatePost — AI toggle
-    ai_first_reply: 'Get first AI reply after posting',
+    ai_first_reply: 'Get first AI reply after posting (response length)',
 
     // CreatePost — AI response length
     ai_length_short: 'Short',
