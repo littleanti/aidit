@@ -118,11 +118,14 @@ woff2(`tokens/fonts.css`)로 링크하지만, **프로덕션 프론트엔드는 
 - **divergence from dc.html**: CSP(스크립트/connect 잠금) + PWA 오프라인 요건 + 외부 폰트 CDN 차단
   정책상, JetBrains Mono를 CDN으로 불러오지 **않는다.** 대신 **시스템 모노 스택**으로 동일한 고정폭
   인상을 만든다. (별도 woff2를 `frontend/public/fonts/`로 self-host 하기 전까지 시스템 스택이 기본.)
-- **본문/UI 스택** (`font-mono` = 전역 기본):
-  `'JetBrains Mono', 'D2Coding', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
-  'Liberation Mono', 'Noto Sans KR', monospace`
-  — JetBrains Mono / D2Coding은 **로컬에 설치돼 있으면** 사용되고, 없으면 OS 기본 고정폭으로 폴백.
-  한글 폴백으로 `Noto Sans KR`를 스택 끝에 둔다(설치돼 있을 때만).
+- **본문/UI 스택** (`font-mono` = 전역 기본) — 형제 앱 Aidit-Code와 글자단위 동일:
+  `ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono',
+  'D2Coding', 'NanumGothicCoding'`
+  — 라틴은 시스템 고정폭(ui-monospace→Consolas 등), **한글은 고정폭 코딩 폰트**(`D2Coding`→`NanumGothicCoding`,
+  로컬 설치 시). 둘 다 글리프 단위로 매칭돼 라틴=Consolas, 한글=D2Coding으로 렌더된다.
+  - **끝에 `monospace` generic을 두지 않는다(의도적).** Chrome은 스택이 `monospace` generic으로 끝나면
+    앞에 명시한 한글 고정폭 폰트를 건너뛰고 generic의 한글 폴백(Malgun Gothic, **비례폭**)을 쓴다.
+    명시 폰트로 끝내야 한글이 D2Coding(고정폭)으로 렌더된다. 한글 폰트가 모두 미설치면 브라우저 최종 폴백으로 처리.
 - **개성은 글꼴 다운로드가 아니라** 자간·굵기·터미널 관용구로 만든다:
   - 워드마크 `AIDIT`: `font-bold`, `tracking-[0.18em~0.3em]`(넓은 자간), `text-term-glow` + 글로우.
   - 키커/배지: 대문자 + `tracking-[0.1em~0.15em]`, `text-term-faint`/`term-dim-2`.
@@ -131,7 +134,7 @@ woff2(`tokens/fonts.css`)로 링크하지만, **프로덕션 프론트엔드는 
 
 > **i18n 주의 (M17):** 대문자 + 넓은 자간(`tracking-[0.1em~0.15em]`) 관용구는 **라틴 문자 라벨에만** 적용한다.
 > 한글 키커/배지에는 `tracking-normal` 이하로 유지한다(KO 글리프에서 넓은 자간은 가독성을 해침).
-> 현재 지원 로케일은 **한국어(KO) + 영어(EN)** 두 가지이며, 폰트 스택 끝의 `'Noto Sans KR'`이 KO 폴백을 담당한다.
+> 현재 지원 로케일은 **한국어(KO) + 영어(EN)** 두 가지이며, KO 글리프는 스택의 한글 고정폭 폰트(`'D2Coding'`→`'NanumGothicCoding'`)가 담당한다.
 > 향후 일본어·중국어 등 추가 CJK 로케일을 지원할 경우 `'Noto Sans JP'`/`'Noto Sans SC'`를 스택에
 > 추가하고, 해당 로케일에서도 자간·대문자 규칙이 라틴 전용임을 재확인한다.
 

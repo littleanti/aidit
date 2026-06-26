@@ -40,6 +40,10 @@ export default {
         },
       },
       fontFamily: {
+        // 형제 앱 Aidit-Code와 글자단위 동일. 라틴=시스템 고정폭(Consolas 등),
+        // 한글=고정폭 코딩 폰트(D2Coding→NanumGothicCoding, 로컬 설치 시).
+        // 끝에 `monospace` generic을 두지 않는다(의도적): generic으로 끝나면 Chrome이
+        // 한글을 비례폭 Malgun으로 폴백시켜 D2Coding(고정폭)을 건너뛴다. (docs/DESIGN-SYSTEM.md §2)
         mono: [
           'ui-monospace',
           'SFMono-Regular',
@@ -47,7 +51,8 @@ export default {
           'Menlo',
           'Consolas',
           'Liberation Mono',
-          'monospace',
+          'D2Coding',
+          'NanumGothicCoding',
         ],
       },
       backgroundImage: {
