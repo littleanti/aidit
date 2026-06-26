@@ -110,8 +110,11 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-full">
-      {/* top app bar */}
-      <header className="sticky top-0 z-10 border-b border-term-border bg-term-screen/90 backdrop-blur">
+      {/* top app bar — explicit h-12 so the border-b is included in the 48px box
+          (box-border). Without it the header is 48px + border ≈ 48.8px, and the
+          opaque PageHeaderBar (sticky top-12 = 48px) would overlap and hide the
+          bottom border by ~0.8px when the page is scrolled. */}
+      <header className="sticky top-0 z-10 h-12 border-b border-term-border bg-term-screen/90 backdrop-blur">
         <div className="mx-auto flex h-12 max-w-app items-center justify-between px-4 desktop:max-w-5xl">
           <Link to="/">
             <Logo size="sm" />
