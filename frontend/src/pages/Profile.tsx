@@ -89,8 +89,9 @@ export default function Profile() {
         </Link>
       </PageHeaderBar>
 
-      {/* terminal prompt line — per-tab command, directly under the fixed bar */}
-      <ShellPrompt command={TAB_COMMAND[tab]} className="mt-3 mb-3" />
+      {/* terminal prompt line — per-tab command, directly under the fixed bar.
+          mt-4 = unified 16px gap between the bar and the ShellPrompt. */}
+      <ShellPrompt command={TAB_COMMAND[tab]} className="mt-4 mb-3" />
 
       {/* tabs — same terminal/amber segmented style as the Home feed; sticks
           just below the fixed top bar (app bar 3rem + bar 3rem = top-24). */}

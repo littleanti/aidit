@@ -83,7 +83,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8 pb-6 font-mono">
+    <div className="mx-auto max-w-2xl pb-6 font-mono">
       {/* fixed top bar: title + back link to /me */}
       <PageHeaderBar>
         <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-term-title glow">
@@ -97,9 +97,12 @@ export default function Settings() {
         </Link>
       </PageHeaderBar>
 
-      {/* terminal prompt line, directly under the fixed bar */}
-      <ShellPrompt command="cat ~/.config" className="mb-3" />
+      {/* terminal prompt line, directly under the fixed bar. mt-4 = unified
+          16px gap between the bar and the ShellPrompt (same as other pages);
+          the section list keeps its own space-y-8 rhythm in the wrapper below. */}
+      <ShellPrompt command="cat ~/.config" className="mt-4 mb-3" />
 
+      <div className="space-y-8">
       {/* API Key */}
       <section className="relative rounded-[2px] border border-term-border bg-term-card p-4 shadow-term-glow">
         <span className="absolute -top-2 left-3 select-none bg-term-tag px-1.5 text-[11px] font-bold uppercase tracking-wider text-term-faint">
@@ -200,6 +203,7 @@ export default function Settings() {
           {t('profile.logoutBtn')}
         </button>
       </section>
+      </div>
     </div>
   );
 }

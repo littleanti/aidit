@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getPosts, ApiError, type PostSort } from '../api/rest';
 import type { PostListItem } from '../api/types';
+import PageHeaderBar from '../components/PageHeaderBar';
 import PostCard from '../components/PostCard';
 import ShellPrompt from '../components/ShellPrompt';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
@@ -90,9 +91,12 @@ export default function Home() {
 
   return (
     <div className="pb-4">
-      {/* tabs */}
-      <div className="sticky top-0 z-10 -mx-4 mb-3 border-b border-term-border bg-term-screen px-4">
-        <div className="flex">
+      {/* fixed top bar — same size/style as Search/Write (PageHeaderBar),
+          differing only by holding the two 인기/최신 tab buttons instead of a
+          title. Buttons fill the bar (h-full flex-1); active tab keeps the
+          amber underline aligned with the bar's bottom border. */}
+      <PageHeaderBar>
+        <div className="flex h-full w-full">
           {TABS.map((tab) => {
             const active = sort === tab.key;
             return (
@@ -101,7 +105,7 @@ export default function Home() {
                 type="button"
                 onClick={() => setSort(tab.key)}
                 aria-pressed={active}
-                className={`min-h-[44px] flex-1 border-b-2 text-sm font-semibold transition ${
+                className={`flex h-full flex-1 items-center justify-center border-b-2 text-base font-semibold transition ${
                   active
                     ? 'border-term-amber bg-[rgba(255,207,74,0.06)] text-term-amber'
                     : 'border-transparent text-term-dim hover:text-term-bright'
@@ -112,10 +116,11 @@ export default function Home() {
             );
           })}
         </div>
-      </div>
+      </PageHeaderBar>
 
-      {/* terminal prompt line */}
-      <ShellPrompt command={`feed --sort=${sort}`} className="mb-3" />
+      {/* terminal prompt line — directly under the fixed bar, mt-4 = unified
+          16px gap between the bar and the ShellPrompt (same as Search/Write). */}
+      <ShellPrompt command={`feed --sort=${sort}`} className="mt-4 mb-3" />
 
       {error && (
         <ErrorState
