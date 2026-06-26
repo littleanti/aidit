@@ -446,7 +446,7 @@ export default function Thread() {
     <div className="-mx-4 -mt-4 -mb-20 flex h-[calc(100dvh-3rem)] flex-col pb-[calc(3.5rem+var(--safe-bottom,0px))] tablet:pb-0 desktop:mx-0 desktop:mt-0 desktop:mb-0 desktop:h-[calc(100dvh-6rem)]">
       {/* VR-3: post-detail header. The persona is no longer shown here; it
           lives in the original-post card / menu instead. */}
-      <header className="flex items-center gap-2 border-b border-term-border bg-term-screen px-2 py-2">
+      <header className="flex h-12 items-center gap-2 border-b border-term-border bg-term-screen px-2">
         {/* left group (flex-1 mirrors the right group so the title stays centered) */}
         <div className="flex flex-1 items-center justify-start">
           {/* back: returns to the previous route */}
