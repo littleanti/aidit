@@ -10,6 +10,9 @@
 
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
+### 2026-06-27
+- **[feat]** **헤더 LLM 연결 배지에 `AI` 텍스트 라벨 추가(좁은 화면 숨김) + 툴팁 문구 `LLM`→`AI`**: 형제 앱 Aidit-Code 헤더 배지(`● LLM` — 점 + `hidden sm:inline` 라벨)와 디자인을 통일하기 위해, 2026-06-26에 LED 점만 남겼던 `GeminiStatusBadge`에 가시 텍스트 라벨을 다시 추가한다. 단 **특정 모델명을 노출하지 않는다**는 기존 방침(GEMINI 라벨 제거)을 유지하므로 라벨 문구는 일반어 `AI`로 한다. 라벨 클래스는 Aidit-Code와 동일하게 `hidden text-[10px] uppercase tracking-wider text-term-faint sm:inline` — 좁은 화면(<640px)에선 점만, 넓은 화면(≥640px, Tailwind 기본 `sm`)에선 `● AI` 노출. 함께 툴팁(`misc.gemini_*`, ko·en)의 `LLM`→`AI`로 통일(예: `LLM 연결됨 — 최근 응답 성공`→`AI 연결됨 — 최근 응답 성공`). 상태 스토어 로직·LED 색상 불변. (`frontend/src/components/GeminiStatusBadge.tsx`, `frontend/src/i18n/dicts/misc.ts`)
+
 ### 2026-06-26
 - **[fix]** **게시글 작성 AI 토글 카피에 "(답변 길이)" 명시 — `post.ai_first_reply`**: 토글 바로 아래 짧게/보통/길게 길이 선택과의 관계를 분명히 하기 위해 라벨 끝에 길이 힌트를 덧붙임. ko `게시 후 AI 1차 답변 받기` → `게시 후 AI 1차 답변 받기 (답변 길이)`, en `Get first AI reply after posting` → `Get first AI reply after posting (response length)`. 키·동작 불변, 표시 문자열만 변경. (`frontend/src/i18n/dicts/post.ts`)
 - **[fix]** **홈 스크롤 시 글로벌 앱바 아래 실선(`border-b`)이 사라지던 문제 — `<header>`에 명시적 `h-12` 부여**: 홈에서 스크롤하면 인기/최신 바(`PageHeaderBar`) 위의 실선(글로벌 앱바 하단 테두리)이 사라졌다. 원인: 글로벌 앱바(`AppLayout`의 `<header>`)에는 **높이 지정이 없어** 실제 높이가 *안쪽 `h-12` div(48px) + `<header>` 자신의 `border-b`(≈0.8px) = 48.8px*가 됐다(height가 `auto`면 `box-border`여도 테두리가 높이에 가산됨). 그런데 그 아래 고정되는 `PageHeaderBar`는 `sticky top-12`(48px)에 핀 → 불투명 배경(`bg-term-screen`)이 앱바 테두리 구간(48.0–48.8px)을 정확히 **0.8px 덮어** 선을 가렸다(스크롤 0에서는 바가 흐름상 48.8px = 테두리 아래라 보였음). `<header>`에 `h-12`를 부여하면 기본 `border-box`로 테두리가 48px 안에 포함돼 앱바 하단(48.0px) = `PageHeaderBar` 핀 위치(48.0px)로 정확히 일치, 겹침 0 → 선이 항상 보인다(브라우저 측정으로 겹침 0.8px→0px 확인). 안쪽 div·배지·네비 등 시각 변화 없음. (`frontend/src/layout/AppLayout.tsx`)

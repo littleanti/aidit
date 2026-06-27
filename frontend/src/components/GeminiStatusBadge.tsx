@@ -40,6 +40,14 @@ export default function GeminiStatusBadge() {
       <span aria-hidden className={`text-[10px] leading-none ${meta.dotClass}`}>
         {meta.glyph}
       </span>
+      {/* Visible label — sibling-app Aidit-Code parity. Generic "AI" (never a
+          model name); hidden on narrow viewports, shown from `sm` (640px) up. */}
+      <span
+        aria-hidden
+        className="hidden text-[10px] uppercase tracking-wider text-term-faint sm:inline"
+      >
+        AI
+      </span>
     </span>
   );
 }
