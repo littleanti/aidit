@@ -618,7 +618,7 @@ export default function Thread() {
                     <div
                       role="menu"
                       aria-label={t('thread.ownerMenuAria')}
-                      className="absolute right-0 top-full z-30 mt-1 flex w-36 flex-col rounded-[2px] border border-term-border bg-term-card py-1 shadow-glow-soft"
+                      className="absolute right-0 top-full z-30 mt-1 flex w-28 flex-col rounded-[2px] border border-term-border bg-term-card py-1 shadow-glow-soft"
                     >
                       {confirmingDelete ? (
                         <>
