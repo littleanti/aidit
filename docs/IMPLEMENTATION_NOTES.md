@@ -10,6 +10,9 @@
 
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
+### 2026-06-28
+- **[feat]** **게시글 상단 sticky bar를 형제 앱 Aidit-Code와 동일 구성으로 변경 — 제목 좌측 정렬 + ⋯ 메뉴 헤더 복귀**: 기존엔 `‹ 뒤로 · 제목(가운데) · 🔖`였고 작성자 ⋯ 편집/삭제 메뉴는 2026-06-26에 원글 카드 메타행으로 분리돼 있었다. Aidit-Code Thread 상단바(`‹ · 제목(좌측, flex-1) · [상태점] · 북마크 · ⋯`)와 통일하기 위해 다음을 변경: (1) 제목을 가운데→**좌측 정렬**(양옆 `flex-1` spacer div 제거, `<h1>`에 `flex-1` 부여) + 크기/굵기를 Aidit-Code와 동일하게 `text-base font-semibold`→**`text-sm font-bold`**, 명시적 `font-mono` 추가(색 `text-term-title`#7dffa0·`.glow`는 이미 동일). (2) 헤더 패딩 `px-2`→**`px-4`**, 뒤로가기 버튼에 `-ml-2`(셰브론 좌표를 Aidit-Code와 일치). (3) 북마크를 🔖 이모지+opacity → **Aidit-Code SVG 북마크 아이콘**(17×17, `M6 3h12v18l-6-4-6 4z`), 활성 시 `text-term-amber`, 버튼 `h-10 w-10`→`h-9 w-9`. (4) 작성자 ⋯ 편집/삭제 팝오버를 **원글 카드 메타행 → 상단바**(북마크 뒤)로 복귀, 트리거 `h-7 w-7`→`h-9 w-9`(팝오버 `w-28`·키·핸들러 불변). **세션 상태점(StatusBadge)은 Aidit에 세션 개념이 없어 제외.** 폰트 종류/색/글로우 토큰은 양 앱이 이미 글자단위 동일(폰트 스택 `mono`, `text-term-title`=`text-term-glow`=#7dffa0, `.glow`=text-shadow 0 0 4px rgba(125,255,160,.45))이라 변경 없음. **`PageHeaderBar` 컴포넌트로 교체하지 않음**: Aidit Thread는 풀하이트 flex + 내부 스크롤 컨테이너 구조라 헤더는 스크롤 영역 밖 첫 flex 아이템으로 고정되며, window-scroll용 `sticky` PageHeaderBar로 바꾸면 레이아웃이 깨진다. (`frontend/src/pages/Thread.tsx`)
+
 ### 2026-06-27
 - **[feat]** **헤더 LLM 연결 배지에 `AI` 텍스트 라벨 추가(좁은 화면 숨김) + 툴팁 문구 `LLM`→`AI`**: 형제 앱 Aidit-Code 헤더 배지(`● LLM` — 점 + `hidden sm:inline` 라벨)와 디자인을 통일하기 위해, 2026-06-26에 LED 점만 남겼던 `GeminiStatusBadge`에 가시 텍스트 라벨을 다시 추가한다. 단 **특정 모델명을 노출하지 않는다**는 기존 방침(GEMINI 라벨 제거)을 유지하므로 라벨 문구는 일반어 `AI`로 한다. 라벨 클래스는 Aidit-Code와 동일하게 `hidden text-[10px] uppercase tracking-wider text-term-faint sm:inline` — 좁은 화면(<640px)에선 점만, 넓은 화면(≥640px, Tailwind 기본 `sm`)에선 `● AI` 노출. 함께 툴팁(`misc.gemini_*`, ko·en)의 `LLM`→`AI`로 통일(예: `LLM 연결됨 — 최근 응답 성공`→`AI 연결됨 — 최근 응답 성공`). 상태 스토어 로직·LED 색상 불변. (`frontend/src/components/GeminiStatusBadge.tsx`, `frontend/src/i18n/dicts/misc.ts`)
 

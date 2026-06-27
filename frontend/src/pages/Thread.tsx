@@ -446,62 +446,152 @@ export default function Thread() {
     <div className="-mx-4 -mt-4 -mb-20 flex h-[calc(100dvh-3rem)] flex-col pb-[calc(3.5rem+var(--safe-bottom,0px))] tablet:pb-0 desktop:mx-0 desktop:mt-0 desktop:mb-0 desktop:h-[calc(100dvh-6rem)]">
       {/* VR-3: post-detail header. The persona is no longer shown here; it
           lives in the original-post card / menu instead. */}
-      <header className="flex h-12 items-center gap-2 border-b border-term-border bg-term-screen px-2">
-        {/* left group (flex-1 mirrors the right group so the title stays centered) */}
-        <div className="flex flex-1 items-center justify-start">
-          {/* back: returns to the previous route */}
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            aria-label={t('thread.backAria')}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[2px] text-term-dim hover:bg-term-hover"
+      <header className="flex h-12 items-center gap-2 border-b border-term-border bg-term-screen px-4">
+        {/* back: returns to the previous route */}
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          aria-label={t('thread.backAria')}
+          className="-ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-[2px] text-term-dim hover:bg-term-hover"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-6 w-6"
+            aria-hidden
           >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-6 w-6"
-              aria-hidden
-            >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-        </div>
-        <h1 className="min-w-0 truncate px-1 text-center text-base font-semibold text-term-title glow">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        {/* title: left-aligned; flex-1 pushes the action buttons to the far right
+            (Aidit-Code Thread parity). Font/color/glow tokens already identical. */}
+        <h1 className="min-w-0 flex-1 truncate font-mono text-sm font-bold text-term-title glow">
           {post.title}
         </h1>
-        {/* right group */}
-        <div className="flex flex-1 items-center justify-end gap-1">
-          {/* bookmark: backend-wired (persisted via /posts/:id/bookmark). */}
-          <button
-            type="button"
-            onClick={async () => {
-              if (!myUserId) { openLogin(); return; }
-              const next = !bookmarked;
-              setBookmarked(next);
-              try {
-                await (next
-                  ? addBookmark(postId, myUserId)
-                  : removeBookmark(postId, myUserId));
-              } catch {
-                setBookmarked(!next);
-                showAiToast(t('thread.bookmarkError'));
-              }
-            }}
-            aria-pressed={bookmarked}
-            aria-label={bookmarked ? t('thread.bookmarkRemoveAria') : t('thread.bookmarkAddAria')}
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[2px] text-lg text-term-dim hover:bg-term-hover ${
-              bookmarked ? 'opacity-100' : 'opacity-40'
-            }`}
+        {/* bookmark: backend-wired (persisted via /posts/:id/bookmark). SVG icon
+            (not emoji) for Aidit-Code parity; amber when active. */}
+        <button
+          type="button"
+          onClick={async () => {
+            if (!myUserId) { openLogin(); return; }
+            const next = !bookmarked;
+            setBookmarked(next);
+            try {
+              await (next
+                ? addBookmark(postId, myUserId)
+                : removeBookmark(postId, myUserId));
+            } catch {
+              setBookmarked(!next);
+              showAiToast(t('thread.bookmarkError'));
+            }
+          }}
+          aria-pressed={bookmarked}
+          aria-label={bookmarked ? t('thread.bookmarkRemoveAria') : t('thread.bookmarkAddAria')}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[2px] transition hover:bg-term-hover ${
+            bookmarked ? 'text-term-amber' : 'text-term-dim hover:text-term-bright'
+          }`}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="17"
+            height="17"
+            fill={bookmarked ? 'currentColor' : 'none'}
+            stroke="currentColor"
+            strokeWidth={1.8}
+            strokeLinejoin="round"
+            aria-hidden="true"
           >
-            🔖
-          </button>
-          {/* edit/delete moved OUT of the header (2026-06-26): owner actions now
-              live in the original-post card meta row as a [⋯] overflow menu. */}
-        </div>
+            <path d="M6 3h12v18l-6-4-6 4z" />
+          </svg>
+        </button>
+        {/* owner-only overflow menu (edit/delete) — back in the top bar to match
+            Aidit-Code (moved here from the original-post card meta row, 2026-06-28).
+            [⋯] trigger opens a popover; delete is a 2-step confirm inside it. */}
+        {myUserId && post.authorId === myUserId && (
+          <div ref={ownerMenuRef} className="relative">
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={ownerMenuOpen}
+              aria-label={t('thread.moreActionsAria')}
+              title={t('thread.moreActionsAria')}
+              onClick={() => setOwnerMenuOpen((v) => !v)}
+              className={`flex h-9 w-9 items-center justify-center rounded-[2px] text-base leading-none transition hover:bg-term-hover hover:text-term-bright ${
+                ownerMenuOpen ? 'text-term-bright' : 'text-term-dim'
+              }`}
+            >
+              ⋯
+            </button>
+            {ownerMenuOpen && (
+              <div
+                role="menu"
+                aria-label={t('thread.ownerMenuAria')}
+                className="absolute right-0 top-full z-30 mt-1 flex w-28 flex-col rounded-[2px] border border-term-border bg-term-card py-1 shadow-glow-soft"
+              >
+                {confirmingDelete ? (
+                  <>
+                    <span className="px-3 py-1 text-xs text-term-danger">
+                      {t('thread.deleteConfirm')}
+                    </span>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={deleting}
+                      onClick={async () => {
+                        setDeleting(true);
+                        try {
+                          await deletePost(post.id, myUserId);
+                          const slug = community?.slug;
+                          navigate(slug ? `/c/${slug}` : '/');
+                        } catch {
+                          setDeleting(false);
+                          setOwnerMenuOpen(false);
+                          showAiToast(t('thread.deleteFailed'));
+                        }
+                      }}
+                      className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-danger transition hover:bg-term-hover disabled:opacity-50"
+                    >
+                      {t('thread.deleteConfirmYes')}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={deleting}
+                      onClick={() => setConfirmingDelete(false)}
+                      className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-dim transition hover:bg-term-hover hover:text-term-bright disabled:opacity-50"
+                    >
+                      {t('thread.deleteCancel')}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      to="/create-post"
+                      state={{ editPostId: post.id }}
+                      role="menuitem"
+                      onClick={() => setOwnerMenuOpen(false)}
+                      className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-dim transition hover:bg-term-hover hover:text-term-bright"
+                    >
+                      {t('thread.editLabel')}
+                    </Link>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => setConfirmingDelete(true)}
+                      className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-danger transition hover:bg-term-hover"
+                    >
+                      {t('thread.deleteLabel')}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </header>
 
       <OfflineBanner show={degraded} label={bannerLabel} />
@@ -596,90 +686,6 @@ export default function Thread() {
                 ▲{postScore}
               </button>
               <span>💬{post.commentCount}</span>
-              {/* owner-only overflow menu (edit/delete) — moved here from the
-                  nav header (2026-06-26). [⋯] trigger opens a popover; delete is
-                  a 2-step confirm inside the menu. */}
-              {myUserId && post.authorId === myUserId && (
-                <div ref={ownerMenuRef} className="relative">
-                  <button
-                    type="button"
-                    aria-haspopup="menu"
-                    aria-expanded={ownerMenuOpen}
-                    aria-label={t('thread.moreActionsAria')}
-                    title={t('thread.moreActionsAria')}
-                    onClick={() => setOwnerMenuOpen((v) => !v)}
-                    className={`flex h-7 w-7 items-center justify-center rounded-[2px] text-base leading-none transition hover:bg-term-hover hover:text-term-bright ${
-                      ownerMenuOpen ? 'text-term-bright' : 'text-term-dim'
-                    }`}
-                  >
-                    ⋯
-                  </button>
-                  {ownerMenuOpen && (
-                    <div
-                      role="menu"
-                      aria-label={t('thread.ownerMenuAria')}
-                      className="absolute right-0 top-full z-30 mt-1 flex w-28 flex-col rounded-[2px] border border-term-border bg-term-card py-1 shadow-glow-soft"
-                    >
-                      {confirmingDelete ? (
-                        <>
-                          <span className="px-3 py-1 text-xs text-term-danger">
-                            {t('thread.deleteConfirm')}
-                          </span>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            disabled={deleting}
-                            onClick={async () => {
-                              setDeleting(true);
-                              try {
-                                await deletePost(post.id, myUserId);
-                                const slug = community?.slug;
-                                navigate(slug ? `/c/${slug}` : '/');
-                              } catch {
-                                setDeleting(false);
-                                setOwnerMenuOpen(false);
-                                showAiToast(t('thread.deleteFailed'));
-                              }
-                            }}
-                            className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-danger transition hover:bg-term-hover disabled:opacity-50"
-                          >
-                            {t('thread.deleteConfirmYes')}
-                          </button>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            disabled={deleting}
-                            onClick={() => setConfirmingDelete(false)}
-                            className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-dim transition hover:bg-term-hover hover:text-term-bright disabled:opacity-50"
-                          >
-                            {t('thread.deleteCancel')}
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <Link
-                            to="/create-post"
-                            state={{ editPostId: post.id }}
-                            role="menuitem"
-                            onClick={() => setOwnerMenuOpen(false)}
-                            className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-dim transition hover:bg-term-hover hover:text-term-bright"
-                          >
-                            {t('thread.editLabel')}
-                          </Link>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => setConfirmingDelete(true)}
-                            className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-danger transition hover:bg-term-hover"
-                          >
-                            {t('thread.deleteLabel')}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
             </span>
           </div>
         </article>
