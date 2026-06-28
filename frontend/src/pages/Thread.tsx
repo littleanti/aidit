@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useHideOnScroll } from '../hooks/useHideOnScroll';
 import { addBookmark, ApiError, deletePost, getCommunities, getComments, getContext, getPost, removeBookmark, upvotePost, removeUpvote } from '../api/rest';
 import type { Comment, Community, Post } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
@@ -322,66 +323,74 @@ export default function Thread() {
     [postId, community],
   );
 
-  // Auto-scroll the chat list to the newest bubble as it grows.
-  const bottomRef = useRef<HTMLDivElement>(null);
+  // Auto-scroll to the newest bubble as the thread grows. Window-scroll model
+  // (Aidit-Code parity): scrollTo(scrollHeight) reveals the sticky composer's
+  // in-flow height and lands the last bubble just above it, instead of tucking
+  // it behind the composer (which scrollIntoView({block:'end'}) would do).
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    if (bubbles.length === 0) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: reduce ? 'auto' : 'smooth',
+    });
   }, [bubbles.length]);
 
   // FE: jump-to-top / jump-to-bottom for long threads (WIREFRAME §6). A single
-  // square corner chip floats at the scroll region's bottom-right and follows
+  // square corner chip floats just above the composer (bottom-right) and follows
   // the scroll DIRECTION (Option A — direction-only, no velocity threshold):
   // scrolling DOWN shows the ↓ (jump-to-bottom) chip, scrolling UP shows the ↑
   // (jump-to-top) chip. There's only ever one chip in the slot at a time —
   // direction alone decides which one, regardless of distance to either end.
-  // It fades out ~1s after scrolling stops, so a thread
-  // the reader has settled on stays fully unobscured. Honour prefers-reduced-
-  // motion (the CRT-cursor policy) by downgrading smooth → auto.
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // It fades out ~1s after scrolling stops, so a thread the reader has settled
+  // on stays fully unobscured. Honour prefers-reduced-motion (the CRT-cursor
+  // policy) by downgrading smooth → auto. Window-scroll model (Aidit-Code parity).
   const [activeChip, setActiveChip] = useState<'none' | 'top' | 'bottom'>('none');
   const scrollIdleTimer = useRef<number | null>(null);
-  // Last observed scrollTop — used to derive the per-scroll direction delta.
-  const lastScrollTop = useRef(0);
+  // Last observed window scrollY — used to derive the per-scroll direction delta.
+  const lastScrollY = useRef(0);
   // Set while a programmatic jumpTo animation is in flight, so the resulting
   // scroll events don't re-trigger the chip (self-trigger guard).
   const isProgrammatic = useRef(false);
-  // On scroll: derive direction from the scrollTop delta, swap to the matching
-  // chip for that direction, then arm a 1s idle timer to fade out.
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || isProgrammatic.current) return;
-    const { scrollTop } = el;
-    const dY = scrollTop - lastScrollTop.current;
-    lastScrollTop.current = scrollTop;
-    if (dY < -SCROLL_DIR_DEADZONE) setActiveChip('top');
-    else if (dY > SCROLL_DIR_DEADZONE) setActiveChip('bottom');
-    // Otherwise (jitter below the deadzone) keep whatever chip is currently showing.
-    if (scrollIdleTimer.current) window.clearTimeout(scrollIdleTimer.current);
-    scrollIdleTimer.current = window.setTimeout(() => setActiveChip('none'), 1000);
+  // Window scroll listener: derive direction from the scrollY delta, swap to the
+  // matching chip, then arm a 1s idle timer to fade out. Skipped mid-jump.
+  useEffect(() => {
+    lastScrollY.current = window.scrollY;
+    const onScroll = () => {
+      if (isProgrammatic.current) return;
+      const y = window.scrollY;
+      const dY = y - lastScrollY.current;
+      lastScrollY.current = y;
+      if (dY < -SCROLL_DIR_DEADZONE) setActiveChip('top');
+      else if (dY > SCROLL_DIR_DEADZONE) setActiveChip('bottom');
+      // Otherwise (jitter below the deadzone) keep whatever chip is showing.
+      if (scrollIdleTimer.current) window.clearTimeout(scrollIdleTimer.current);
+      scrollIdleTimer.current = window.setTimeout(() => setActiveChip('none'), 1000);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (scrollIdleTimer.current) window.clearTimeout(scrollIdleTimer.current);
+    };
   }, []);
   const jumpTo = useCallback((edge: 'top' | 'bottom') => {
-    const el = scrollRef.current;
-    if (!el) return;
     // Block our own scroll events from re-arming the chip, and hide it instantly.
     isProgrammatic.current = true;
     setActiveChip('none');
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    el.scrollTo({
-      top: edge === 'top' ? 0 : el.scrollHeight,
+    window.scrollTo({
+      top: edge === 'top' ? 0 : document.documentElement.scrollHeight,
       behavior: reduce ? 'auto' : 'smooth',
     });
     window.setTimeout(() => {
       isProgrammatic.current = false;
-      lastScrollTop.current = el.scrollTop;
+      lastScrollY.current = window.scrollY;
     }, reduce ? 0 : 700);
   }, []);
-  // Drop the idle timer on unmount.
-  useEffect(
-    () => () => {
-      if (scrollIdleTimer.current) window.clearTimeout(scrollIdleTimer.current);
-    },
-    [],
-  );
+
+  // Auto-hide the sticky title header on scroll-down, reveal on scroll-up (so a
+  // long comment thread gets the full viewport). Reveals near the very top too.
+  const headerHidden = useHideOnScroll();
 
   // FR-7.4: refresh the active segment's tokenSum from GET /context. Triggered
   // on load, whenever the bubble count changes (a new comment may push the
@@ -443,10 +452,14 @@ export default function Thread() {
   // Full-screen chat column. The page lives inside AppLayout's <main>; we make
   // this region fill the viewport below the app bar (h-12) and bottom tab bar.
   return (
-    <div className="-mx-4 -mt-4 -mb-20 flex h-[calc(100dvh-3rem)] flex-col pb-[calc(3.5rem+var(--safe-bottom,0px))] tablet:pb-0 desktop:mx-0 desktop:mt-0 desktop:mb-0 desktop:h-[calc(100dvh-6rem)]">
+    <div className="-mx-4 -mt-4 -mb-20 flex min-h-[calc(100dvh-3rem)] flex-col desktop:mx-0 desktop:mt-0 desktop:mb-0 desktop:min-h-[calc(100dvh-6rem)]">
       {/* VR-3: post-detail header. The persona is no longer shown here; it
           lives in the original-post card / menu instead. */}
-      <header className="flex h-12 items-center gap-2 border-b border-term-border bg-term-screen px-4">
+      <header
+        className={`sticky top-12 z-0 flex h-12 items-center gap-2 border-b border-term-border bg-term-screen px-4 transition-transform duration-200 ${
+          headerHidden ? '-translate-y-[calc(100%+1px)]' : 'translate-y-0'
+        }`}
+      >
         {/* back: returns to the previous route */}
         <button
           type="button"
@@ -596,8 +609,9 @@ export default function Thread() {
 
       <OfflineBanner show={degraded} label={bannerLabel} />
 
-      {/* scrolling region: pinned original post + chat list */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
+      {/* Window-scroll model (Aidit-Code parity): no inner scroll container — the
+          page scrolls in the window, the title header sticks (auto-hides on
+          scroll-down) and the composer sticks to the bottom. */}
         {/* Live shell prompt reflects the Composer's wantsAI boolean ONLY (toggle
             ON or an @AI mention); the live comment TEXT is intentionally NOT
             mirrored — it would force a thread-wide re-render per keystroke. */}
@@ -709,7 +723,6 @@ export default function Thread() {
                 onRetry={handleRetry}
               />
             ))}
-            <div ref={bottomRef} />
           </div>
         ) : (
           <EmptyState
@@ -719,71 +732,70 @@ export default function Thread() {
           />
         )}
 
-        {/* Option A jump chip (WIREFRAME §6) — a single square button that sticks
-            to the scroll region's bottom-right and follows the scroll DIRECTION:
-            ↓ while scrolling down, ↑ while scrolling up (single slot, no
-            velocity). The wrapper is sticky + h-0 so it adds no trailing scroll
-            space; the inner box is anchored to its bottom edge. The chip fades in
-            only when a direction is active and is non-interactive
-            (pointer-events-none + tabIndex -1) while hidden, so idle threads stay
-            fully unobscured. Label/icon/onClick swap with activeChip. */}
-        <div className="pointer-events-none sticky bottom-3 z-20 h-0">
-          <div className="absolute bottom-0 right-3">
-            <button
-              type="button"
-              onClick={() => jumpTo(activeChip === 'top' ? 'top' : 'bottom')}
-              aria-label={t(activeChip === 'top' ? 'thread.jumpTopAria' : 'thread.jumpBottomAria')}
-              title={t(activeChip === 'top' ? 'thread.jumpTopAria' : 'thread.jumpBottomAria')}
-              aria-hidden={activeChip === 'none'}
-              tabIndex={activeChip === 'none' ? -1 : 0}
-              className={`grid h-10 w-10 place-items-center rounded-[2px] border border-term-border bg-term-card/85 text-term-dim backdrop-blur transition hover:border-term-bright hover:text-term-bright hover:shadow-glow-soft active:scale-95 ${
-                activeChip !== 'none' ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
-              }`}
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="square" aria-hidden>
-                <path d={activeChip === 'top' ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* AI-side failure toast (engine errors; human bubbles are untouched) */}
-      {aiToast && (
-        <div
-          role="alert"
-          className="mx-3 mb-1 rounded-[2px] border border-term-danger bg-term-bg px-3 py-2 text-sm text-term-danger"
-        >
-          {aiToast}
-        </div>
-      )}
-
-      {/* FR-7.4 imminent-summary badge: warns that the NEXT @AI call will run
-          a 128K summary first, on the caller's own key (cost transparency). */}
-      {showSummaryBadge && (
-        <div className="px-3 pb-1">
-          <div
-            className="group relative inline-flex items-center gap-1.5 rounded-[2px] border border-term-border bg-term-info px-3 py-1 text-xs font-medium text-term-title"
-            title={t('thread.summaryBadgeTooltip')}
+      {/* Composer pinned ABOVE the bottom tab bar via sticky (Aidit-Code parity):
+          mobile fixed tab bar (~3.5rem + safe area) on small screens, viewport
+          bottom on tablet+. `mt-auto` keeps it at the column bottom for short
+          threads. The jump chip + AI toast + summary badge ride just above it so
+          they stay visible while the thread scrolls in the window. */}
+      <div className="sticky bottom-[calc(3.5rem+var(--safe-bottom,0px))] z-10 mt-auto tablet:bottom-0">
+        {/* Option A jump chip — floats just above the composer, bottom-right;
+            follows the scroll DIRECTION (↓ down / ↑ up), fades ~1s after scroll
+            stops. Non-interactive (pointer-events-none + tabIndex -1) while hidden
+            so an idle thread stays fully unobscured. */}
+        <div className="pointer-events-none absolute bottom-full right-3 mb-2">
+          <button
+            type="button"
+            onClick={() => jumpTo(activeChip === 'top' ? 'top' : 'bottom')}
+            aria-label={t(activeChip === 'top' ? 'thread.jumpTopAria' : 'thread.jumpBottomAria')}
+            title={t(activeChip === 'top' ? 'thread.jumpTopAria' : 'thread.jumpBottomAria')}
+            aria-hidden={activeChip === 'none'}
+            tabIndex={activeChip === 'none' ? -1 : 0}
+            className={`grid h-10 w-10 place-items-center rounded-[2px] border border-term-border bg-term-card/85 text-term-dim backdrop-blur transition hover:border-term-bright hover:text-term-bright hover:shadow-glow-soft active:scale-95 ${
+              activeChip !== 'none' ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+            }`}
           >
-            <span aria-hidden>🟣</span>
-            <span>{summaryNeeded ? t('thread.summaryNeededBadge') : t('thread.summarySoonBadge')}</span>
-            <span
-              aria-hidden
-              className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-[2px] bg-term-hover text-[10px] text-term-title"
-            >
-              ?
-            </span>
-          </div>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="square" aria-hidden>
+              <path d={activeChip === 'top' ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} />
+            </svg>
+          </button>
         </div>
-      )}
 
-      {/* Composer fixed at the bottom */}
-      <Composer
-        postId={postId}
-        communityPersonaPrompt={community?.personaPrompt ?? ''}
-        onWantsAIChange={setWantsAI}
-      />
+        {/* AI-side failure toast (engine errors; human bubbles are untouched) */}
+        {aiToast && (
+          <div
+            role="alert"
+            className="mx-3 mb-1 rounded-[2px] border border-term-danger bg-term-bg px-3 py-2 text-sm text-term-danger"
+          >
+            {aiToast}
+          </div>
+        )}
+
+        {/* FR-7.4 imminent-summary badge: warns that the NEXT @AI call will run
+            a 128K summary first, on the caller's own key (cost transparency). */}
+        {showSummaryBadge && (
+          <div className="px-3 pb-1">
+            <div
+              className="group relative inline-flex items-center gap-1.5 rounded-[2px] border border-term-border bg-term-info px-3 py-1 text-xs font-medium text-term-title"
+              title={t('thread.summaryBadgeTooltip')}
+            >
+              <span aria-hidden>🟣</span>
+              <span>{summaryNeeded ? t('thread.summaryNeededBadge') : t('thread.summarySoonBadge')}</span>
+              <span
+                aria-hidden
+                className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-[2px] bg-term-hover text-[10px] text-term-title"
+              >
+                ?
+              </span>
+            </div>
+          </div>
+        )}
+
+        <Composer
+          postId={postId}
+          communityPersonaPrompt={community?.personaPrompt ?? ''}
+          onWantsAIChange={setWantsAI}
+        />
+      </div>
     </div>
   );
 }
