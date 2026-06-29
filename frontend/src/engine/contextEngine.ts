@@ -5,9 +5,9 @@
 // guard) + AI-5 (primary reply flow) + AI-7 (@AI reply flow).
 //
 // This is the single orchestration chokepoint that turns a community persona +
-// an assembled ContextResponse into a Gemini request, and drives the two reply
+// an assembled ContextResponse into an LLM request, and drives the two reply
 // flows (post-creation primary reply, and @AI reply). ALL LLM calls are BYOK:
-// the browser calls the caller's own key via gemini.generateContent — the Aidit
+// the browser calls the caller's own key via llm.generateContent — the Aidit
 // server is key-blind and never sees a key here.
 //
 // ---------------------------------------------------------------------------
@@ -16,7 +16,7 @@
 //     systemInstruction.
 //   * EVERY piece of user/comment content stays as role:'user' DATA turns and
 //     is NEVER concatenated into systemInstruction.
-//   * buildGeminiRequest is the SINGLE place this persona->system /
+//   * buildLlmRequest is the SINGLE place this persona->system /
 //     content->user mapping happens, so no user-supplied text can promote
 //     itself to a system role. An appended turn is ALWAYS forced to role:'user'.
 //
@@ -29,13 +29,13 @@
 import type { ContextResponse } from '../api/types';
 import {
   estimateTokens,
-  type GeminiContent,
+  type LlmContent,
   type GenerationConfig,
-  GeminiError,
-} from '../api/gemini';
+  LlmError,
+} from '../api/llm';
 // generateContent is the status-tracked wrapper (records connectivity for the
-// header badge); the underlying browser->Gemini call is unchanged.
-import { generateContent } from './geminiStatus';
+// header badge); the underlying browser->LLM call is unchanged.
+import { generateContent } from './llmStatus';
 import { getContext, postComment, patchComment, ApiError } from '../api/rest';
 import { useAuthStore } from '../stores/authStore';
 import { useLangStore } from '../stores/langStore';
@@ -61,7 +61,7 @@ export const SUMMARY_DIRECTIVE: Record<'ko' | 'en', string> = {
 };
 
 // ---------------------------------------------------------------------------
-// AI-4 + XC-4: buildGeminiRequest — the assembly chokepoint.
+// AI-4 + XC-4: buildLlmRequest — the assembly chokepoint.
 // ---------------------------------------------------------------------------
 
 /** An optional new user turn to append to the context (e.g. an @AI comment
@@ -75,24 +75,24 @@ export interface AppendedTurn {
   image?: { mimeType: string; data: string };
 }
 
-export interface BuildGeminiRequestArgs {
+export interface BuildLlmRequestArgs {
   /** Community persona prompt. L6/XC-4: goes ONLY into systemInstruction. */
   personaPrompt: string;
   /** Assembled context from GET /posts/:id/context (active segment). */
   context: ContextResponse;
   /** Optional extra user turn to append after the context turns. */
   appended?: AppendedTurn;
-  /** Optional generation overrides (merged over defaults by gemini client). */
+  /** Optional generation overrides (merged over defaults by llm client). */
   generationConfig?: GenerationConfig;
   /** Optional AI-response-length level. Omitted => DEFAULT_AI_LENGTH ('normal',
    *  a bounded one-or-two-paragraph answer). */
   length?: AiLength;
 }
 
-export interface GeminiRequest {
+export interface LlmRequest {
   /** Persona only — never any user/comment text (XC-4). undefined if blank. */
   systemInstruction?: string;
-  contents: GeminiContent[];
+  contents: LlmContent[];
   generationConfig?: GenerationConfig;
 }
 
@@ -123,23 +123,23 @@ function responseLengthDirective(len: AiLength): string {
 }
 
 /**
- * Map a ContextResponse (+ optional appended user turn) into a Gemini request.
+ * Map a ContextResponse (+ optional appended user turn) into an LLM request.
  *
  * XC-4: personaPrompt -> systemInstruction ONLY. Every context turn keeps the
  * role the assembler already assigned ('user' for HUMAN/AI_SUMMARY data turns,
  * 'model' for AI_REPLY). The appended turn is FORCED to role:'user' so no
  * caller-supplied content can promote itself to model/system.
  */
-export function buildGeminiRequest(
-  args: BuildGeminiRequestArgs,
-): GeminiRequest {
+export function buildLlmRequest(
+  args: BuildLlmRequestArgs,
+): LlmRequest {
   const { personaPrompt, context, appended, generationConfig } = args;
   const len = args.length ?? DEFAULT_AI_LENGTH;
 
   // Copy context turns verbatim into wire shape. The server-side assembler is
   // the source of truth for role mapping; we do NOT re-derive roles here, only
   // wrap text into { parts: [{ text }] }. This keeps roles immutable.
-  const contents: GeminiContent[] = context.contents.map((turn) => ({
+  const contents: LlmContent[] = context.contents.map((turn) => ({
     role: turn.role,
     parts: [{ text: turn.text }],
   }));
@@ -148,7 +148,7 @@ export function buildGeminiRequest(
   // On a fresh-upload turn it additionally carries the local image bytes as a
   // second inlineData part (still role:'user' — never system).
   if (appended) {
-    const parts: GeminiContent['parts'] = [
+    const parts: LlmContent['parts'] = [
       { text: speakerPrefix(appended.username, appended.body) },
     ];
     if (appended.image) {
@@ -179,7 +179,7 @@ export function buildGeminiRequest(
 
   // Safety-only token cap: merge a per-length maxOutputTokens when defined.
   // (All three levels define a cap; the `!== undefined` guard stays so a future
-  // undefined level would simply fall back to the gemini client default.)
+  // undefined level would simply fall back to the llm client default.)
   const cap = MAX_OUTPUT_TOKENS_BY_LENGTH[len];
   const mergedGenerationConfig: GenerationConfig = {
     ...generationConfig,
@@ -216,26 +216,26 @@ export interface ReplyResult {
   aiCommentId: string | null;
   /** the generated answer text on success. */
   answer?: string;
-  /** UI-safe Korean message on failure (from GeminiError.userMessage). */
+  /** UI-safe Korean message on failure (from LlmError.userMessage). */
   errorMessage?: string;
-  /** error kind when ok === false and the failure was a GeminiError. */
-  errorKind?: GeminiError['kind'];
+  /** error kind when ok === false and the failure was a LlmError. */
+  errorKind?: LlmError['kind'];
 }
 
 /**
  * Resolve the model answer for a freshly-posted PENDING AI bubble, then PATCH it
  * to COMPLETE (with body) on success or FAILED (with the UI message) on a
- * GeminiError. The clientId authorizes the AI-bubble PATCH (BE-8). The human /
+ * LlmError. The clientId authorizes the AI-bubble PATCH (BE-8). The human /
  * original is never mutated here (NFR-5).
  */
 async function resolveAiBubble(args: {
   aiCommentId: string;
   clientId: string;
   apiKey: string;
-  request: GeminiRequest;
+  request: LlmRequest;
 }): Promise<ReplyResult> {
   const { aiCommentId, clientId, apiKey, request } = args;
-  // XC-10: an @AI / primary reply Gemini call is being invoked (KPI: avg @AI per
+  // XC-10: an @AI / primary reply LLM call is being invoked (KPI: avg @AI per
   // post). Non-blocking, no key in props.
   track('ai_reply_invoked');
   try {
@@ -246,8 +246,8 @@ async function resolveAiBubble(args: {
       generationConfig: request.generationConfig,
     });
 
-    // XC-10: Gemini call succeeded (KPI: Gemini success rate, target >= 0.97).
-    track('gemini_success');
+    // XC-10: LLM call succeeded (KPI: LLM success rate, target >= 0.97).
+    track('llm_success');
 
     await patchComment(aiCommentId, {
       status: 'COMPLETE',
@@ -258,15 +258,15 @@ async function resolveAiBubble(args: {
     return { ok: true, aiCommentId, answer };
   } catch (err) {
     const ge =
-      err instanceof GeminiError
+      err instanceof LlmError
         ? err
-        : new GeminiError('unknown', tn('ai.fallback_retry'), {
+        : new LlmError('unknown', tn('ai.fallback_retry'), {
             cause: err,
           });
 
-    // XC-10: Gemini call failed (KPI: Gemini success rate). `kind` is the typed
-    // GeminiError category only — NEVER any key or raw error text.
-    track('gemini_failure', { kind: ge.kind });
+    // XC-10: LLM call failed (KPI: LLM success rate). `kind` is the typed
+    // LlmError category only — NEVER any key or raw error text.
+    track('llm_failure', { kind: ge.kind });
 
     // Mark the bubble FAILED with the UI-safe message; clientId authorizes it.
     // If even this PATCH fails we still surface the original failure.
@@ -298,7 +298,7 @@ export interface RunPrimaryReplyArgs {
   postId: string;
   /** persona of the post's community. */
   communityPersonaPrompt: string;
-  /** the post AUTHOR'S Gemini key (call-time only; never stored/logged). */
+  /** the post AUTHOR'S LLM key (call-time only; never stored/logged). */
   apiKey: string;
   /** Optional inline image bytes (base64, no data: prefix) for a post that was
    *  created with an attached image. The post's title/body is already the first
@@ -346,7 +346,7 @@ export async function runPrimaryReply(
       }
     : undefined;
 
-  const request = buildGeminiRequest({
+  const request = buildLlmRequest({
     personaPrompt: communityPersonaPrompt,
     context,
     appended,
@@ -400,7 +400,7 @@ export interface RunAtAiReplyArgs {
   communityPersonaPrompt: string;
   /** username of the caller (for an appended turn IF context predates it). */
   callerUsername: string;
-  /** the CALLER'S Gemini key (call-time only; never stored/logged). */
+  /** the CALLER'S LLM key (call-time only; never stored/logged). */
   callerApiKey: string;
   /** optional: the @AI text, used only if we must append (context predates it). */
   humanCommentBody?: string;
@@ -429,7 +429,7 @@ export interface EnsureSummaryArgs {
   communityPersonaPrompt: string;
   /** Caller username (unused in the summary request itself, kept for symmetry/logging). */
   callerUsername: string;
-  /** The CALLER'S Gemini key (lazy L3/FR-7.3): the summary runs on this key. */
+  /** The CALLER'S LLM key (lazy L3/FR-7.3): the summary runs on this key. */
   callerApiKey: string;
   /** The pre-summary ContextResponse (summaryNeeded === true) to summarize. */
   currentContext: ContextResponse;
@@ -455,7 +455,7 @@ export interface EnsureSummaryResult {
  *         segment.opened). Re-fetch GET /context -> reassembled context (AI-9).
  *       - 409 loser: a peer already summarized. Do NOT error — re-fetch
  *         GET /context (now scoped to the new active segment) and use it (AI-9).
- *  3. If the summary Gemini call FAILS (GeminiError): graceful fallback (TRD §11)
+ *  3. If the summary LLM call FAILS (LlmError): graceful fallback (TRD §11)
  *     — proceed to answer using the EXISTING pre-summary context. We do NOT lose
  *     the human comment and we never block the answer on a summarization failure.
  *     (Chosen over surfacing a hard error: the @AI answer is the user-visible goal;
@@ -479,7 +479,7 @@ export async function ensureSummary(
   const lang = useLangStore.getState().lang;
   const systemInstruction =
     `${communityPersonaPrompt.trim()}\n\n${SUMMARY_DIRECTIVE[lang]}`.trim();
-  const summaryContents: GeminiContent[] = currentContext.contents.map(
+  const summaryContents: LlmContent[] = currentContext.contents.map(
     (turn) => ({ role: turn.role, parts: [{ text: turn.text }] }),
   );
 
@@ -491,10 +491,10 @@ export async function ensureSummary(
       contents: summaryContents,
     });
   } catch {
-    // (3) Graceful fallback (TRD §11): the summary Gemini call failed (any
-    // GeminiError/unknown). Do NOT block the answer or lose the human comment —
+    // (3) Graceful fallback (TRD §11): the summary LLM call failed (any
+    // LlmError/unknown). Do NOT block the answer or lose the human comment —
     // answer against the existing pre-summary context; the next caller retries.
-    // XC-10: summary attempt failed at the Gemini call (KPI: summary success rate).
+    // XC-10: summary attempt failed at the LLM call (KPI: summary success rate).
     track('summary_failure', { stage: 'generate' });
     return { context: currentContext, outcome: 'summary_failed_fallback' };
   }
@@ -614,7 +614,7 @@ export async function runAtAiReply(
       ? { username: callerUsername, body: humanCommentBody }
       : undefined;
 
-  const request = buildGeminiRequest({
+  const request = buildLlmRequest({
     personaPrompt: communityPersonaPrompt,
     context,
     appended,
@@ -657,6 +657,6 @@ export async function runAtAiReply(
 
 // ---------------------------------------------------------------------------
 // Re-export the token estimator so callers (e.g. Composer) can pre-compute a
-// tokenCount for the bubbles they post without importing gemini directly.
+// tokenCount for the bubbles they post without importing llm directly.
 // ---------------------------------------------------------------------------
 export { estimateTokens };

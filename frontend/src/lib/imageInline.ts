@@ -1,5 +1,5 @@
-// Helpers to turn an image into a Gemini inlineData payload (base64 WITHOUT the
-// data: prefix). Used to ride an image along a BYOK Gemini call (AI multimodal).
+// Helpers to turn an image into an LLM inlineData payload (base64 WITHOUT the
+// data: prefix). Used to ride an image along a BYOK LLM call (AI multimodal).
 // L1: these never touch a key — they only encode image bytes.
 
 import { assetUrl } from '../config/api';
@@ -36,7 +36,7 @@ function blobToInlineData(blob: Blob, mimeFallback: string): Promise<InlineImage
 
 /**
  * Fetch a same-origin image URL (e.g. a "/uploads/<name>" path) and convert it
- * to inline base64 bytes for a Gemini inlineData part. Returns null on ANY
+ * to inline base64 bytes for an LLM inlineData part. Returns null on ANY
  * failure so callers can gracefully fall back to a text-only request rather than
  * blocking the reply. CSP: same-origin fetch is allowed by connect-src 'self'.
  */

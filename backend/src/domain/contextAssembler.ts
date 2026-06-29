@@ -2,7 +2,7 @@
 //
 // Pure-ish builder that turns a post's ACTIVE ContextSegment into the
 // { segmentIndex, contents, tokenSum, summaryNeeded } payload the browser feeds
-// directly to Gemini (BYOK, M3). The server stays KEY-BLIND (L1): no apiKey is
+// directly to the LLM provider (BYOK, M3). The server stays KEY-BLIND (L1): no apiKey is
 // read or returned here — this only shapes conversation turns.
 //
 // CONTEXT MAPPING (TRD §5.1 / §6.1):
@@ -42,7 +42,7 @@ export const ERR_POST_NOT_FOUND = "POST_NOT_FOUND";
 export const ERR_NO_ACTIVE_SEGMENT = "NO_ACTIVE_SEGMENT";
 
 /**
- * Assemble the Gemini-ready context for a post's active segment.
+ * Assemble the LLM-ready context for a post's active segment.
  *
  * Throws Error(ERR_POST_NOT_FOUND) if the post does not exist, or
  * Error(ERR_NO_ACTIVE_SEGMENT) if it has no active ContextSegment.

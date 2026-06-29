@@ -6,7 +6,7 @@ import { create } from 'zustand';
 //
 // `byPost[postId]` holds ONLY an explicit user override. Absent (undefined) means
 // "no choice yet" — the DEFAULT is decided by the CALLER (Composer), which keys it
-// off BYOK key presence: a Gemini key present → default ON, absent → default OFF
+// off BYOK key presence: an LLM key present → default ON, absent → default OFF
 // (2026-06-23). So the toggle writes an explicit value via `set(postId, next)`;
 // don't rely on a hardcoded default in this store.
 //

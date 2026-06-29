@@ -1,8 +1,8 @@
 import { useT } from '../i18n/useT';
-import { useGeminiStatusStore } from '../stores/geminiStatusStore';
+import { useLlmStatusStore } from '../stores/llmStatusStore';
 
 // Header connectivity badge for the active LLM (retro green-phosphor LED dot).
-// Reflects geminiStatusStore — the outcome of the most recent real LLM query
+// Reflects llmStatusStore — the outcome of the most recent real LLM query
 // this session. Presentational only; reads the store, never calls the LLM.
 // No model name is shown (any LLM endpoint may be used); tooltip says "LLM …".
 
@@ -10,23 +10,23 @@ const META = {
   connected: {
     glyph: '●',
     dotClass: 'text-term-bright glow',
-    titleKey: 'misc.gemini_connected' as const,
+    titleKey: 'misc.llm_connected' as const,
   },
   disconnected: {
     glyph: '●',
     dotClass: 'text-term-danger animate-pulse',
-    titleKey: 'misc.gemini_disconnected' as const,
+    titleKey: 'misc.llm_disconnected' as const,
   },
   unknown: {
     glyph: '○',
     dotClass: 'text-term-faint',
-    titleKey: 'misc.gemini_unknown' as const,
+    titleKey: 'misc.llm_unknown' as const,
   },
 } as const;
 
-export default function GeminiStatusBadge() {
+export default function LlmStatusBadge() {
   const { t } = useT();
-  const status = useGeminiStatusStore((s) => s.status);
+  const status = useLlmStatusStore((s) => s.status);
   const meta = META[status];
   const title = t(meta.titleKey);
 

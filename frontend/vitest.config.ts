@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config';
 // Dedicated Vitest config (kept separate from vite.config.ts so the PWA/CSP
 // build plugins never run during unit tests). jsdom gives us a DOM for the
 // sanitize (DOMPurify) and zustand store tests; the engine/contract tests mock
-// rest.ts and gemini.ts so NO real network/LLM call is ever made.
+// rest.ts and llm.ts so NO real network/LLM call is ever made.
 export default defineConfig({
   test: {
     environment: 'jsdom',

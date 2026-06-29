@@ -9,7 +9,7 @@
 
 ## 1. 개요 (Introduction)
 
-Aidit은 모바일 우선 Reddit형 커뮤니티 PWA로, 각 게시글이 채팅방형 댓글 스레드를 열고 여러 사용자가 스레드마다 **하나의 공유 AI 컨텍스트**를 함께 쌓아간다. 모든 LLM 호출은 **BYOK(Bring Your Own Key)** 방식이다: 브라우저가 사용자 본인 키로 Google Gemini를 직접 호출하며, Aidit 서버는 키를 보거나 저장하거나 중계하지 않는다. 활성 컨텍스트 세그먼트가 **128K 토큰**을 초과하면, 다음 `@AI` 호출자의 키로 **지연(lazy)** AI 요약 버블이 생성되고 새 컨텍스트 세그먼트가 열린다.
+Aidit은 모바일 우선 Reddit형 커뮤니티 PWA로, 각 게시글이 채팅방형 댓글 스레드를 열고 여러 사용자가 스레드마다 **하나의 공유 AI 컨텍스트**를 함께 쌓아간다. 모든 LLM 호출은 **BYOK(Bring Your Own Key)** 방식이다: 브라우저가 사용자 본인 키로 LLM 제공자(기본: Google Gemini)를 직접 호출하며, Aidit 서버는 키를 보거나 저장하거나 중계하지 않는다. 활성 컨텍스트 세그먼트가 **128K 토큰**을 초과하면, 다음 `@AI` 호출자의 키로 **지연(lazy)** AI 요약 버블이 생성되고 새 컨텍스트 세그먼트가 열린다.
 
 본 문서는 작업을 **5개 영역**, **57개 작업 패키지(Work Package, WP)** 로 분해하고, PRD §12에 매핑된 **5개 마일스톤(M1→M5)** 에 배치한다. 아키텍처는 **확정(locked)** 되어 있다: 신규 Node 20 + Fastify + Prisma 백엔드(서버는 key-blind, CRUD + post별 SSE 릴레이 + 컨텍스트 경계 SoT만 담당); React 18 + TypeScript + Vite 모바일 우선 PWA 프론트엔드; 128K 활성 컨텍스트 토큰에서의 지연 요약; 생성자 소유 페르소나의 사용자 생성 커뮤니티; 모델 ID `gemini-3.1-flash-lite`; MIT 라이선스; 키 유출 완화책으로 CSP `connect-src`를 Google 도메인으로 제한.
 
@@ -97,13 +97,13 @@ PRD §12.2 · 수용기준 #4 및 FR-5.4 매핑.
 
 **M2 종료 기준**: 한 스레드를 보는 두 브라우저가 새 버블을 P95 < 1.5초에 확인(NFR); 본인 댓글은 우측, 타인/AI는 좌측 렌더; 재접속 시 놓친 버블 재생; clientId 재요청은 동일 버블 반환.
 
-### M3 — AI 코어 (BYOK Gemini 1차 답변 + `@AI` 답변)
+### M3 — AI 코어 (BYOK LLM 1차 답변 + `@AI` 답변)
 PRD §12.3 · 수용기준 #3, #5, BYOK 매핑.
 
 | 순서 | WP | 제목 | 종료 관련 |
 |------|----|------|-----------|
-| 1 | AI-1 | GeminiClient 전송 (fetch→Google, 401/403/429 에러 매핑) | BYOK 호출 |
-| 2 | AI-2 | 모델/config 상수(`gemini-3.1-flash-lite`) | L7 |
+| 1 | AI-1 | LlmClient 전송 (fetch→LLM 제공자, 401/403/429 에러 매핑) | BYOK 호출 |
+| 2 | AI-2 | 모델/config 상수(`LLM_MODEL="gemini-3.1-flash-lite"`) | L7 |
 | 3 | AI-3 | countTokens + `chars/4` 폴백 | FR-7 토큰 기준 |
 | 4 | AI-4 | `buildContents` 조립 chokepoint (역할, 화자 접두) | FR-6.1 |
 | 5 | XC-4 | AI-4 chokepoint에서 프롬프트 인젝션 격리 가드 (deps: AI-4) | TRD §8 |
@@ -208,9 +208,9 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 
 | id | 제목 | 설명 | deps | files | est |
 |----|------|------|------|-------|-----|
-| AI-1 | GeminiClient | fetch→`generativelanguage.googleapis.com` generateContent; 401/403→FAILED("키 확인"), 429→재시도 카피 매핑. 키는 호출 시점 메모리에만. | FE-3 | `frontend/src/api/gemini.ts` | M |
-| AI-2 | 모델 config | `MODEL="gemini-3.1-flash-lite"`, generationConfig 기본값; 단일 출처. | — | `frontend/src/config/model.ts` | S |
-| AI-3 | 토큰 카운팅 | `countTokens` 호출 + `Math.ceil(chars/4)` 폴백; 버블별 tokenCount. | AI-1, AI-2 | `frontend/src/api/gemini.ts` | S |
+| AI-1 | LlmClient | fetch→`generativelanguage.googleapis.com` generateContent; 401/403→FAILED("키 확인"), 429→재시도 카피 매핑. 키는 호출 시점 메모리에만. | FE-3 | `frontend/src/api/llm.ts` | M |
+| AI-2 | 모델 config | `LLM_MODEL="gemini-3.1-flash-lite"`, generationConfig 기본값; 단일 출처. | — | `frontend/src/config/model.ts` | S |
+| AI-3 | 토큰 카운팅 | `countTokens` 호출 + `Math.ceil(chars/4)` 폴백; 버블별 tokenCount. | AI-1, AI-2 | `frontend/src/api/llm.ts` | S |
 | AI-4 | buildContents | 조립 chokepoint: 사람→`user`(`「{username}」:` 접두), AI→`model`, 요약→개시 user turn 매핑; 페르소나는 systemInstruction. | AI-2 | `frontend/src/engine/contextEngine.ts` | M |
 | AI-5 | 1차 답변 흐름 | 글 생성 후: seg#0 조립 → 페르소나 호출 → AI_REPLY PENDING 게시 → PATCH COMPLETE/FAILED. 작성자 키. | AI-1, AI-4, BE-12, BE-8, FE-7 | `frontend/src/engine/contextEngine.ts` | M |
 | AI-6 | 요약 오케스트레이션 | 요약 호출(페르소나+요약 지시) → AI_SUMMARY 게시 → 409 시 현재 세그먼트 재조회 & 재조립 → 진행. | AI-1, AI-4, AI-8, BE-7, BE-12 | `frontend/src/engine/contextEngine.ts` | M |
@@ -230,7 +230,7 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 | XC-9 | 레이트 리미팅 | username별 글 레이트 리밋; 커뮤니티 생성 쿨다운. | BE-3, BE-4, BE-6 | `backend/src/plugins/rateLimit.ts` | S |
 | XC-10 | 지표 계측 | 클라이언트가 §8 KPI에 공급할 이벤트 발행; BE-13(작성자 D1 포함)과 연결. | BE-13, FE-3 | `frontend/src/lib/metrics.ts` | S |
 | XC-11 | 라이선스 | MIT LICENSE + 소스 헤더. | — | `LICENSE`, headers | XS |
-| XC-T | 통합 테스트 | 단일 스위트: contextEngine 토큰/128K/세그먼트 전환 + hotScore(unit); clientId 멱등 + `/context` #5-vs-#7 조립(contract); 다중 클라 SSE fan-out + 동시 @AI/요약(integration); J1/J2/J3(E2E, Gemini 모킹+실키). 겹치는 BE/AI/RT/XC 테스트 범위 대체. | 모든 구현 WP | `backend/test/**`, `frontend/src/**/*.test.ts`, `e2e/**` | L |
+| XC-T | 통합 테스트 | 단일 스위트: contextEngine 토큰/128K/세그먼트 전환 + hotScore(unit); clientId 멱등 + `/context` #5-vs-#7 조립(contract); 다중 클라 SSE fan-out + 동시 @AI/요약(integration); J1/J2/J3(E2E, LLM 모킹+실키). 겹치는 BE/AI/RT/XC 테스트 범위 대체. | 모든 구현 WP | `backend/test/**`, `frontend/src/**/*.test.ts`, `e2e/**` | L |
 
 ---
 
@@ -303,7 +303,7 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 | 지표: 글당 평균 @AI ≥2 | BE-13, XC-10 |
 | 지표: 스레드당 고유 댓글자 ≥3 | BE-13, XC-10 |
 | 지표: 요약 성공률 ≥95% | BE-13, AI-6 |
-| 지표: Gemini 성공률 ≥97% | XC-10, AI-1 |
+| 지표: LLM 성공률 ≥97% | XC-10, AI-1 |
 | 지표: P95 전파 <1.5s | RT-4, XC-T |
 | **지표: 작성자 D1 재방문 ≥25%** | **BE-13(VisitEvent), XC-10** |
 | 라이선스 MIT | XC-11 |
@@ -358,7 +358,7 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 23. 작성자 D1 추적 메커니즘 — **해결됨**: VisitEvent(BE-13).
 24. 지표 저장/보존 — PoC 인-DB, 보존 정책 없음.
 25. CSP report-uri — 선택, 연기.
-26. CI에서 Gemini 모킹 vs 실키 — 양쪽 레인(XC-T).
+26. CI에서 LLM 모킹 vs 실키 — 양쪽 레인(XC-T).
 
 ---
 
@@ -374,7 +374,7 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 - [x] **#5** `@AI` (원본+AI+사람) 기반 신규 버블 — AI-7/AI-4/BE-12. (`/context` seg0 조립 contract 테스트)
 - [x] **#6** >128K → 색 구분 요약 버블 — AI-8/AI-6/BE-7/FE-13a. (요약 전환 + 409 contract 테스트)
 - [x] **#7** 요약 후 `@AI`는 (요약+이후)만 기반 — AI-9/BE-12. (seg≥1 이전 히스토리 제외 contract 테스트)
-- [x] **BYOK** 모든 AI 호출 브라우저→Google, 서버 key-blind — L1/AI-1/XC-3. (서버 src apiKey 0건 + key-blind contract 테스트; gemini 직접 호출 unit)
+- [x] **BYOK** 모든 AI 호출 브라우저→Google, 서버 key-blind — L1/AI-1/XC-3. (서버 src apiKey 0건 + key-blind contract 테스트; llm 직접 호출 unit)
 - [x] **순서** 사람 먼저 → 로딩 → AI 버블 — AI-7/FE-11/FE-12. (runAtAiReply 순서 unit)
 
 ### 엔지니어링 게이트
@@ -383,9 +383,9 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 - [x] **보안**: CSP 강제(`connect-src` Google만 — 헤더+메타), DOMPurify sanitize chokepoint, 로그/소스에 키 없음(XC-3); 프롬프트 인젝션 가드 XC-4. (CSP 헤더 스모크 + sanitize/XC-4 unit; §4 캡슐화 버그 수정 후 헤더 적용 확인)
 - [~] **PWA**: vite-plugin-pwa로 SW+manifest 산출, 모바일 우선/터치 ≥44px(FE-13/NFR-1). **실기기 설치는 수동 확인 권장.**
 - [~] **배포**: 정적 프론트 + Node 서버 구조 확립. **SQLite→Postgres datasource 교체는 미검증**(추상화만, L10).
-- [x] **지표**: §8 KPI 계측 + 작성자 D1(VisitEvent) — BE-13(/metrics, /metrics/visit) + XC-10 클라 계측. (DB 산출 KPI 동작; geminiSuccessRate/p95는 best-effort `null`)
+- [x] **지표**: §8 KPI 계측 + 작성자 D1(VisitEvent) — BE-13(/metrics, /metrics/visit) + XC-10 클라 계측. (DB 산출 KPI 동작; llmSuccessRate/p95는 best-effort `null`)
 - [x] **라이선스**: MIT LICENSE + 엔트리 파일 헤더(XC-11).
-- [~] **테스트**: 통합 스위트 — **unit/contract/integration green(백엔드 22, 프론트 28)**. **E2E(J1/J2/J3)는 Gemini 모킹 스캐폴드 제공, 브라우저 실행은 미수행**(XC-T).
+- [~] **테스트**: 통합 스위트 — **unit/contract/integration green(백엔드 22, 프론트 28)**. **E2E(J1/J2/J3)는 LLM 모킹 스캐폴드 제공, 브라우저 실행은 미수행**(XC-T).
 
 ---
 
@@ -590,23 +590,23 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 
 ---
 
-## 16. M12 — Gemini 연결 표식 + 헤더 UX (v0.9, 2026-06-19)
+## 16. M12 — LLM 연결 표식 + 헤더 UX (v0.9, 2026-06-19)
 
-> 상단바에 BYOK Gemini 연결 상태를 레트로 LED 배지로 노출. **프론트 전용**(신규 API 없음) — 가장 최근 실제 LLM 쿼리 결과를 신뢰.
+> 상단바에 BYOK LLM 연결 상태를 레트로 LED 배지로 노출. **프론트 전용**(신규 API 없음) — 가장 최근 실제 LLM 쿼리 결과를 신뢰.
 
 ### 작업 패키지 (WP)
-- [x] **FE-22 · `geminiStatusStore`**: 세션-한정·비영속 zustand store. `status: 'unknown'|'connected'|'disconnected'`,
+- [x] **FE-22 · `llmStatusStore`**: 세션-한정·비영속 zustand store. `status: 'unknown'|'connected'|'disconnected'`,
   `markSuccess()` / `markFailure(kind?)`. 하드 리로드 시 `unknown` 초기화(`aiModeStore`와 동일 철학).
-- [x] **FE-23 · 추적 래퍼 `engine/geminiStatus.ts`**: `gemini.generateContent`를 감싸 성공→`markSuccess`,
-  `GeminiError`→`markFailure(kind)` 기록 후 re-throw. `contextEngine.ts`·`retryAiBubble.ts`의 `generateContent`
-  import만 래퍼로 교체(1차/@AI/재시도/요약 전 경로를 단일 chokepoint로 커버). `gemini.ts`는 키-blind 유지.
+- [x] **FE-23 · 추적 래퍼 `engine/llmStatus.ts`**: `llm.generateContent`를 감싸 성공→`markSuccess`,
+  `LlmError`→`markFailure(kind)` 기록 후 re-throw. `contextEngine.ts`·`retryAiBubble.ts`의 `generateContent`
+  import만 래퍼로 교체(1차/@AI/재시도/요약 전 경로를 단일 chokepoint로 커버). `llm.ts`는 키-blind 유지.
   `countTokens`는 폴백 보조 호출이라 신호에서 제외.
-- [x] **FE-24 · `GeminiStatusBadge` 컴포넌트**: LED 점 + `GEMINI` 라벨. 연결=`●` 초록 인광(`glow`),
+- [x] **FE-24 · `LlmStatusBadge` 컴포넌트**: LED 점 + `LLM` 라벨. 연결=`●` 초록 인광(`glow`),
   끊김=`●` `text-term-danger`+`animate-pulse`, 미확인=`○` `text-term-faint`. hover 한국어 툴팁(`role="status"`).
 - [x] **FE-25 · AppLayout 배선**: 로그인 상태에서 `[ {username} ]` 바로 좌측에 배지 표시. (겸: 상단바 아이디
   → `/me` 링크화, Thread `✎ 편집` 버튼을 커뮤니티 편집 버튼과 동일 스타일로 통일.)
 - [x] **FE-26 · 검증**: tsc 클린 + 프론트 테스트 30 green(엔진 import 교체 무영향).
-- [x] **FE-27 · 로그인 시 1회 연결 테스트**: `pingGemini(apiKey)`(= `countTokens`, 생성 비용 0)를
+- [x] **FE-27 · 로그인 시 1회 연결 테스트**: `pingLlm(apiKey)`(= `countTokens`, 생성 비용 0)를
   키가 생기거나 바뀔 때(신규 로그인 · 키 변경 · 지속 세션 로드) **키당 한 번** 실행해 배지를 즉시 갱신.
   `AppLayout` effect가 `googleApiKey` 변화를 감지, `useRef`로 동일 키 중복 핑 방지. tsc 클린 + 테스트 30 green.
 
@@ -678,12 +678,12 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 - [x] **I18N-3 · useT 훅**: 신규 `frontend/src/i18n/useT.ts`. `export function useT()` — langStore를 구독하고 `t(key, vars?)` 함수를 반환. `key` 형식은 `'ns.subkey'`(첫 `.` 기준 분리). 해석 우선순위: `DICTS[ns][lang][sub]` → `DICTS[ns].ko[sub]` fallback → raw key fallback. `{x}` 토큰을 `vars`로 치환. `import.meta.env.DEV` 환경에서 키 누락 시 `console.warn`. 반환값은 항상 `string`.
 - [x] **I18N-4 · tn 유틸(비-React)**: 신규 `frontend/src/i18n/tn.ts`. `export function tn(key, vars?)` — I18N-3와 동일한 해석 로직이되 `useLangStore.getState().lang`으로 React 훅 없이 호출. `stores/`, `engine/`, `lib/` 내부 비-React 모듈에서 사용.
 - [x] **I18N-5 · LangToggle 컴포넌트**: 신규 `frontend/src/components/LangToggle.tsx`. `[ KO | EN ]` 세그먼트 컨트롤. 활성 언어: `text-term-amber`; 비활성: `text-term-dim hover:text-term-bright`. 기존 AppLayout 버튼 스타일링과 일치. 선택적 prop `variant: 'header' | 'setting'`(기본 `'header'`).
-- [x] **I18N-6 · 헤더 LangToggle 배선**: `AppLayout` 상단바에 LangToggle(`variant='header'`) 마운트. 기존 `GeminiStatusBadge`·`[ username ]` 레이아웃과 정합.
+- [x] **I18N-6 · 헤더 LangToggle 배선**: `AppLayout` 상단바에 LangToggle(`variant='header'`) 마운트. 기존 `LlmStatusBadge`·`[ username ]` 레이아웃과 정합.
 - [x] **I18N-7 · 프로필/설정 화면 LangToggle 배선**: `Profile.tsx`(설정 화면) "언어 / Language" 행 추가. LangToggle(`variant='setting'`). WIREFRAME §9 설정 화면 행 패턴과 정합.
 - [x] **I18N-8 · 문자열 마이그레이션 — UI 크롬 (~29개 파일)**: 각 화면/컴포넌트의 정적 한국어 문자열을 딕셔너리로 이전하고 `t(...)` 호출로 교체. 대상: `AppLayout`, `Login/LoginModal`, `Home`, `Search`, `Community`, `CreatePost`, `CreateCommunity`, `Thread`, `Composer`, `ChatBubble/SummaryBubble`, `Profile`, `상태 컴포넌트(Empty/Error/Loading/Offline)`, `PostCard`, `PersonaEditor`, `Avatar`. UGC(게시글 제목·본문·댓글·커뮤니티명·username)는 번역하지 않음.
-- [x] **I18N-9 · AI 언어 지시어 — contextEngine.ts**: `buildGeminiRequest`(또는 systemInstruction 조립 지점)에서 `useLangStore.getState().lang`을 읽어 언어 지시어를 `systemInstruction`에 추가. `lang==='en'`이면 `'Respond in English.'`, `lang==='ko'`이면 한국어 동등 문장. systemInstruction 조립: `[persona.trim(), directive].filter(Boolean).join('\n\n')`, persona가 없으면 directive만. **XC-4(프롬프트 인젝션 가드) 불변** — 페르소나 + 앱 통제 지시어만 systemInstruction에 들어가고 사용자·댓글 내용은 data turn 유지.
+- [x] **I18N-9 · AI 언어 지시어 — contextEngine.ts**: `buildLlmRequest`(또는 systemInstruction 조립 지점)에서 `useLangStore.getState().lang`을 읽어 언어 지시어를 `systemInstruction`에 추가. `lang==='en'`이면 `'Respond in English.'`, `lang==='ko'`이면 한국어 동등 문장. systemInstruction 조립: `[persona.trim(), directive].filter(Boolean).join('\n\n')`, persona가 없으면 directive만. **XC-4(프롬프트 인젝션 가드) 불변** — 페르소나 + 앱 통제 지시어만 systemInstruction에 들어가고 사용자·댓글 내용은 data turn 유지.
 - [x] **I18N-10 · SUMMARY_DIRECTIVE 언어화**: `contextEngine.ts`의 `SUMMARY_DIRECTIVE` 상수를 `{ ko: '<기존 한국어 요약 지시>', en: '<동등 영문 요약 지시>' }` 객체로 교체. `ensureSummary`에서 `SUMMARY_DIRECTIVE[lang]` 선택.
-- [x] **I18N-11 · 오류 문자열 언어화**: `gemini.ts`의 `USER_MESSAGES`(오류 코드 → 사용자 표시 문자열 레코드)를 `{ ko: {...}, en: {...} }` 구조로 교체하고, 현재 lang을 읽는 헬퍼로 선택. `contextEngine.ts` 내 하드코딩된 AI 실패 문자열도 동일하게 `tn()`으로 교체.
+- [x] **I18N-11 · 오류 문자열 언어화**: `llm.ts`의 `USER_MESSAGES`(오류 코드 → 사용자 표시 문자열 레코드)를 `{ ko: {...}, en: {...} }` 구조로 교체하고, 현재 lang을 읽는 헬퍼로 선택. `contextEngine.ts` 내 하드코딩된 AI 실패 문자열도 동일하게 `tn()`으로 교체.
 - [x] **I18N-12 · Intl 날짜/숫자 포맷**: 날짜·숫자가 렌더되는 모든 위치에서 `new Intl.DateTimeFormat(lang, ...)` / `new Intl.NumberFormat(lang, ...)` 적용.
 - [x] **I18N-13 · 검증**: `typecheck` + `test` + `build` green. 브라우저 — KO↔EN 토글 시 전체 UI 크롬 언어 전환 확인; AI 답변·요약 언어가 UI 언어를 따르는지 실 키로 확인; 새로고침 후 선택 언어 유지 확인.
 

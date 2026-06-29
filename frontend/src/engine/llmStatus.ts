@@ -1,7 +1,7 @@
-// Tracked wrapper around gemini.generateContent.
+// Tracked wrapper around llm.generateContent.
 //
-// Records the most-recent LLM query outcome into geminiStatusStore so the header
-// badge can reflect live Gemini connectivity. gemini.ts stays key-blind and
+// Records the most-recent LLM query outcome into llmStatusStore so the header
+// badge can reflect live LLM connectivity. llm.ts stays key-blind and
 // store-free (L1); this app-layer seam is the single chokepoint that every
 // answer / summary / retry flow funnels through, so wrapping it here covers all
 // call sites without each one repeating the bookkeeping.
@@ -11,22 +11,22 @@
 import {
   countTokens,
   generateContent as baseGenerateContent,
-  GeminiError,
+  LlmError,
   type GenerateContentArgs,
-} from '../api/gemini';
-import { useGeminiStatusStore } from '../stores/geminiStatusStore';
+} from '../api/llm';
+import { useLlmStatusStore } from '../stores/llmStatusStore';
 
 export async function generateContent(
   args: GenerateContentArgs,
 ): Promise<string> {
   try {
     const text = await baseGenerateContent(args);
-    useGeminiStatusStore.getState().markSuccess();
+    useLlmStatusStore.getState().markSuccess();
     return text;
   } catch (err) {
-    useGeminiStatusStore
+    useLlmStatusStore
       .getState()
-      .markFailure(err instanceof GeminiError ? err.kind : 'unknown');
+      .markFailure(err instanceof LlmError ? err.kind : 'unknown');
     throw err;
   }
 }
@@ -35,23 +35,23 @@ export async function generateContent(
  * One-shot connectivity probe — run once per key (on login / key change) so the
  * header badge reflects real reachability immediately, instead of waiting for
  * the first @AI call. Uses countTokens: it validates the key + network with NO
- * generation cost (the cheapest authenticated Gemini round-trip). Never throws —
- * it only records the outcome into geminiStatusStore.
+ * generation cost (the cheapest authenticated LLM provider round-trip). Never
+ * throws — it only records the outcome into llmStatusStore.
  *
  * Note: passive tracking (the generateContent wrapper above) intentionally
  * ignores countTokens, but this EXPLICIT probe is exactly a connectivity test,
  * so a countTokens success/failure here is a valid connected/disconnected signal.
  */
-export async function pingGemini(apiKey: string): Promise<void> {
+export async function pingLlm(apiKey: string): Promise<void> {
   try {
     await countTokens({
       apiKey,
       contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
     });
-    useGeminiStatusStore.getState().markSuccess();
+    useLlmStatusStore.getState().markSuccess();
   } catch (err) {
-    useGeminiStatusStore
+    useLlmStatusStore
       .getState()
-      .markFailure(err instanceof GeminiError ? err.kind : 'unknown');
+      .markFailure(err instanceof LlmError ? err.kind : 'unknown');
   }
 }

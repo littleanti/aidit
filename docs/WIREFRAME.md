@@ -30,12 +30,12 @@ Login(모달) ─▶ Home ──┬──▶ Search ──┬──▶ Community
                       └──▶ CreatePost  ──▶ Thread (게시 후)
 
 하단 탭바(모바일):  [🏠 홈]  [🔍 검색]  [＋ 작성]  [👤 나]
-상단바 우측:  ● GEMINI  [ {username} ] ─▶ /me (나)  ·  [ KO | EN ]  ·   비로그인 시 [ Login ] ─▶ 로그인 모달
+상단바 우측:  ● LLM  [ {username} ] ─▶ /me (나)  ·  [ KO | EN ]  ·   비로그인 시 [ Login ] ─▶ 로그인 모달
 ```
 > **2026-06-20 — i18n 언어 토글 (M17)** — 상단바 우측에 `[ KO | EN ]` 세그먼트 컨트롤(`LangToggle variant="header"`)을 추가한다. 활성 언어는 `text-term-amber`, 비활성은 `text-term-dim hover:text-term-bright`(터미널 앰버 브래킷 미감). 선택은 `langStore`(zustand persist, `localStorage` 키 `'aidit-lang'`)에 저장되며, 명시적 선택이 브라우저 기본값을 항상 덮어쓴다. 언어 변경 시 AI 페르소나 답변과 요약도 선택된 언어로 출력된다(UGC는 번역하지 않음). 모바일에서는 공간 절약을 위해 레이블 없이 `KO`/`EN` 두 글자만 표시한다.
 
 > **상단바 username 진입점(2026-06-19)** — 로그인 상태에서 상단바 우측의 `[ {username} ]`은 **`/me`(나) 페이지로 이동하는 링크**다(`hover:text-term-bright`). 비로그인 시에는 같은 자리에 `[ Login ]`(`openLogin()`)이 표시된다.
-> **Gemini 연결 표식(2026-06-19)** — 로그인 상태에서 `[ {username} ]` **바로 좌측**에 LED 점 + `GEMINI` 라벨 배지(`GeminiStatusBadge`)를 표시한다. **가장 최근 실제 LLM 쿼리**(`gemini.generateContent`) 결과를 반영: 성공=`● 연결됨`(초록 인광 `glow`), 실패(`GeminiError`)=`● 끊김`(`text-term-danger`, `animate-pulse`), 아직 호출 없음=`○ 미확인`(`text-term-faint`). hover 시 한국어 툴팁. 세션 한정(하드 리로드 시 `미확인` 초기화). **로그인/키 설정 시 키당 1회 연결 테스트**(`pingGemini` = `countTokens`, 생성 비용 0)를 돌려 첫 `@AI` 호출 전에도 배지가 즉시 연결/끊김을 표시. §9 참조.
+> **LLM 연결 표식(2026-06-19)** — 로그인 상태에서 `[ {username} ]` **바로 좌측**에 LED 점 + `LLM` 라벨 배지(`LlmStatusBadge`)를 표시한다. **가장 최근 실제 LLM 쿼리**(`llm.generateContent`) 결과를 반영: 성공=`● 연결됨`(초록 인광 `glow`), 실패(`LlmError`)=`● 끊김`(`text-term-danger`, `animate-pulse`), 아직 호출 없음=`○ 미확인`(`text-term-faint`). hover 시 한국어 툴팁. 세션 한정(하드 리로드 시 `미확인` 초기화). **로그인/키 설정 시 키당 1회 연결 테스트**(`pingLlm` = `countTokens`, 생성 비용 0)를 돌려 첫 `@AI` 호출 전에도 배지가 즉시 연결/끊김을 표시. §9 참조.
 > **Option A 동선(2026-06-19)** — **'작성' 탭(＋)은 글 작성(`/create-post`)으로 직결**한다(예전 `/create-community` 진입 폐기). **커뮤니티 만들기는 검색 화면에서만** 진입한다(상시 `[+ 커뮤니티 만들기]` 버튼 + 무결과 인라인 CTA). 데스크톱 사이드바도 "커뮤니티 만들기" 대신 **"작성"(`/create-post`, IconWrite)** 을 두며 순서는 **홈 / 검색 / 작성 / 나**. `/create-post`·`/create-community` 라우트는 **둘 다 유지**(만들기는 검색·커뮤니티 편집에서 계속 사용). **로그인은 별도 페이지가 아니라 모달 오버레이**(§1)로 어디서든 열린다(`/login` 직접 접근/딥링크는 호환 유지).
 
 ---
@@ -50,7 +50,7 @@ Login(모달) ─▶ Home ──┬──▶ Search ──┬──▶ Community
 > 우상단 `[x]`(닫기), A-mark + `AIDIT`(glow-lg) + 부제. **배경/[x] 클릭으로 닫힘**(카드 클릭은 전파 차단),
 > 제출 성공 시 닫힘. `/login` 라우트는 유지되어 페이지 셸에서 동일 `LoginForm`을 렌더(딥링크 호환,
 > 성공 시 `/`로 이동). 상태는 신규 `uiStore`(`loginOpen/openLogin/closeLogin`)가 보유.
-> **2026-06-20 — 실인증(JWT) 폼**: `LoginForm`은 `username` + `password`(+ 회원가입 모드는 **`비밀번호 확인`** 추가) 입력. 회원가입은 두 비밀번호가 **일치해야** 제출(불일치 시 인라인 빨간 힌트 `aria-invalid` + 가입 차단), 비밀번호 8자 이상. Gemini API 키는 동일 폼의 **선택 필드**(BYOK 로컬 저장). 로그인/회원가입 토글. **세션 만료/무효 시**(시크릿 교체·이전 세션) 인증 요청 401이면 자동으로 세션 정리(Gemini 키 보존) + 이 모달이 다시 열린다 — "로그인된 듯 보이나 쓰기가 401"인 좀비 상태 방지.
+> **2026-06-20 — 실인증(JWT) 폼**: `LoginForm`은 `username` + `password`(+ 회원가입 모드는 **`비밀번호 확인`** 추가) 입력. 회원가입은 두 비밀번호가 **일치해야** 제출(불일치 시 인라인 빨간 힌트 `aria-invalid` + 가입 차단), 비밀번호 8자 이상. LLM API 키는 동일 폼의 **선택 필드**(BYOK 로컬 저장). 로그인/회원가입 토글. **세션 만료/무효 시**(시크릿 교체·이전 세션) 인증 요청 401이면 자동으로 세션 정리(LLM 키 보존) + 이 모달이 다시 열린다 — "로그인된 듯 보이나 쓰기가 401"인 좀비 상태 방지.
 
 ```
 ┌──── 모달 오버레이 (딤 배경 위) ───┐
@@ -214,7 +214,7 @@ Login(모달) ─▶ Home ──┬──▶ Search ──┬──▶ Community
 **게시 인터랙션 (FR-4.2/4.3)**
 ```
 [게시] → ① POST /posts (먼저 등록) → ② Thread로 즉시 이동
-        → ③ (작성자 키) Gemini 호출, 상단 원본 아래 ‹⟳ ChefBot 입력 중…›
+        → ③ (작성자 키) LLM 호출, 상단 원본 아래 ‹⟳ ChefBot 입력 중…›
         → ④ 응답 도착 → ‹ChefBot🍳: 계란이면 …› 좌버블 등록 (SSE로 전원 동기화)
 ```
 
@@ -287,7 +287,7 @@ Login(모달) ─▶ Home ──┬──▶ Search ──┬──▶ Community
  t1  ‹ ⟳ 입력 중…  좌측 PENDING placeholder
  t2  GET /context → 128K 판정
  t3  (초과 시) §7 요약 분기 먼저
- t4  Gemini 응답 → ‹AI 답변› 으로 placeholder 교체, SSE 전원 동기화
+ t4  LLM 응답 → ‹AI 답변› 으로 placeholder 교체, SSE 전원 동기화
 ```
 
 ---
@@ -392,8 +392,8 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
    [+]  > @AI 메시지 보내기…   [🤖 AI ⌄]   [↑]
   ```
   - **상태 신호 동기화**: AI ON이면 트레일링 칩·입력 보더 `term-amber` + placeholder `@AI 메시지 보내기…`, OFF면 `term-border` 녹색 + `메시지 보내기…`. 길이 활성=`[보통]`(대괄호 + `term-amber`), 비활성=`term-dim`. **AI OFF면 길이 버튼 비활성**(disabled, `role="radiogroup"`/`role="switch"` + `aria-label`).
-  - **키 기반 기본값**: 스레드 진입 시 BYOK Gemini 키가 있으면 AI **ON**, 없으면 **OFF**로 시작(세션 한정·postId별 override 유지). 토글은 명시값을 `aiModeStore`에 기록.
-  - **키 없음 가드 — AI 켜기 차단**: BYOK Gemini 키가 없으면 **AI를 켤 수 없다**. 팝오버에서 AI 토글을 눌러도 켜지지 않고(OFF 유지), **팝오버 안에 앰버 경고**(`thread.aiNoKeyHint` + `키 등록하기 →` → `/me/settings`)만 뜬다(기존 전송 시 토스트에서 이동). 키 없는 사용자의 댓글은 항상 일반 댓글로 등록.
+  - **키 기반 기본값**: 스레드 진입 시 BYOK LLM 키가 있으면 AI **ON**, 없으면 **OFF**로 시작(세션 한정·postId별 override 유지). 토글은 명시값을 `aiModeStore`에 기록.
+  - **키 없음 가드 — AI 켜기 차단**: BYOK LLM 키가 없으면 **AI를 켤 수 없다**. 팝오버에서 AI 토글을 눌러도 켜지지 않고(OFF 유지), **팝오버 안에 앰버 경고**(`thread.aiNoKeyHint` + `키 등록하기 →` → `/me/settings`)만 뜬다(기존 전송 시 토스트에서 이동). 키 없는 사용자의 댓글은 항상 일반 댓글로 등록.
   - **수동 `@AI` 단축 제거**: 본문에 `@AI`를 타이핑해 라우팅하던 경로와 멘션 안내 행(`mentionIndicator`)을 삭제. AI 여부는 **오직 토글**로 결정(`wantsAI = aiMode`).
   - 모드·길이 상태 모두 세션 한정·postId별·미영속. 팝오버 버튼 터치 타깃 ≥44px, 길이 선택 시 자동 닫힘, 바깥 클릭/Esc로 닫힘. 기본 `보통`은 지시문·토큰 상한을 추가하지 않아 현행 동작과 동일(FR-11.2).
 

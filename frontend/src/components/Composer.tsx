@@ -12,13 +12,13 @@
 //
 // AI routing (M3 / 2026-06-23): AI replies are driven SOLELY by the in-composer
 // AI-mode toggle (the trailing [AI] popover) — there is NO '@AI' body-token
-// shortcut anymore. The toggle's default is key-based: a BYOK Gemini key present
+// shortcut anymore. The toggle's default is key-based: a BYOK LLM key present
 // -> default ON, absent -> default OFF. When AI mode is ON for a post, after the
 // human comment commits we fire the engine's runAtAiReply with the CALLER's key.
 // If AI is on but no key is set, the human comment still posts and the AI turn is
 // skipped (the key-absent guard is surfaced in the popover at activation time).
-// L1: nothing here ever sends a key to the Aidit server; the Gemini key is handed
-// straight to the engine (browser->Gemini) and only { type, body, clientId }
+// L1: nothing here ever sends a key to the Aidit server; the LLM key is handed
+// straight to the engine (browser->LLM provider) and only { type, body, clientId }
 // crosses the Aidit wire.
 
 import { useEffect, useRef, useState } from 'react';
@@ -44,7 +44,7 @@ const ALLOWED_IMAGE_TYPES = [
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 /** Read a File as base64 inline data (mimeType + base64 WITHOUT the data: prefix)
- *  for a Gemini inlineData part. Read from the File, never a (revocable) URL. */
+ *  for an LLM inlineData part. Read from the File, never a (revocable) URL. */
 function fileToInlineData(
   file: File,
 ): Promise<{ mimeType: string; data: string }> {
@@ -353,7 +353,7 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
       return;
     }
 
-    // 1b. AI invocation requires a personal Gemini key (BYOK). The no-key guard
+    // 1b. AI invocation requires a personal LLM key (BYOK). The no-key guard
     // is surfaced in the AI menu at activation time (not here): if AI mode is on
     // without a key we DON'T block — the human comment still posts and the AI
     // turn is silently skipped. willInvokeAi unifies "wants AI" + "has a key".

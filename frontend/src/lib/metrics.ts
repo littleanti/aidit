@@ -1,7 +1,7 @@
 // ============================================================================
 // WP XC-10 — client metrics instrumentation.
 //
-// §8 KPIs that the KEY-BLIND server cannot observe (Gemini success rate, @AI
+// §8 KPIs that the KEY-BLIND server cannot observe (LLM success rate, @AI
 // counts) are emitted from the browser here. This module is intentionally TINY
 // and NON-BLOCKING:
 //   * track()       — best-effort: console.debug + optional fire-and-forget POST

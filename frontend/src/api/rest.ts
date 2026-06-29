@@ -481,7 +481,7 @@ export async function getComments(
 }
 
 /**
- * GET /posts/:id/context — assembled context for a direct Gemini call (M3).
+ * GET /posts/:id/context — assembled context for a direct LLM call (M3).
  * L5: built from the active ContextSegment; L1: NO key crosses the wire.
  */
 export function getContext(postId: string): Promise<ContextResponse> {
@@ -513,7 +513,7 @@ export interface PatchCommentBody {
 
 /**
  * PATCH /comments/:id — update an AI/human comment's status or body once the
- * browser-side Gemini call resolves. L1: NO key. Identity via Bearer JWT when present.
+ * browser-side LLM call resolves. L1: NO key. Identity via Bearer JWT when present.
  */
 export function patchComment(
   id: string,

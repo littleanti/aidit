@@ -1,5 +1,5 @@
-// i18n dict — AI-facing strings: Gemini error messages (USER_MESSAGES in
-// gemini.ts), contextEngine fallback messages, the summary directive, and the
+// i18n dict — AI-facing strings: LLM error messages (USER_MESSAGES in
+// llm.ts), contextEngine fallback messages, the summary directive, and the
 // response-language directive appended to systemInstruction.
 //
 // These are the user-visible AI failure strings AND the app-controlled prompt
@@ -8,12 +8,12 @@
 // systemInstruction — never user/comment content.)
 export const ai = {
   ko: {
-    // Gemini USER_MESSAGES (keyed by GeminiErrorKind).
+    // LLM USER_MESSAGES (keyed by LlmErrorKind).
     err_invalid_key: 'AI 응답 실패 — 키를 확인하세요',
     err_quota: '호출 한도 — 잠시 후 재시도',
     err_network: 'AI 응답 실패 — 네트워크 오류',
     err_unknown: 'AI 응답 실패 — 잠시 후 재시도',
-    // contextEngine fallback messages (failures outside the typed Gemini path).
+    // contextEngine fallback messages (failures outside the typed LLM path).
     fallback_context: 'AI 응답 실패 — 컨텍스트를 불러오지 못했습니다',
     fallback_retry: 'AI 응답 실패 — 잠시 후 재시도',
     // Default speaker label for an author turn with no resolvable username.

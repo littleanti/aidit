@@ -1,21 +1,21 @@
 // ============================================================================
 // FE-12 retry — re-run a FAILED AI bubble without changing the engine's public
-// API. This rebuilds the SAME assembly chokepoint (buildGeminiRequest) used by
+// API. This rebuilds the SAME assembly chokepoint (buildLlmRequest) used by
 // the primary/@AI flows and re-resolves an EXISTING AI_REPLY bubble in place:
 // it PATCHes the same comment id (authorized by its clientId, BE-8) back to
 // PENDING -> COMPLETE/FAILED. It never creates a new bubble and never mutates
 // the human/original (NFR-5).
 //
 // L1 (key-blind): apiKey is a call-time arg only; handed straight to
-// gemini.generateContent (browser->Gemini). Never stored/logged/sent to Aidit.
+// llm.generateContent (browser->LLM). Never stored/logged/sent to Aidit.
 // ============================================================================
 
-import { GeminiError, type GenerationConfig } from '../api/gemini';
+import { LlmError, type GenerationConfig } from '../api/llm';
 import { tn } from '../i18n/tn';
 // status-tracked wrapper (records connectivity for the header badge).
-import { generateContent } from './geminiStatus';
+import { generateContent } from './llmStatus';
 import { getContext, patchComment } from '../api/rest';
-import { buildGeminiRequest, type ReplyResult } from './contextEngine';
+import { buildLlmRequest, type ReplyResult } from './contextEngine';
 
 export interface RetryAiBubbleArgs {
   postId: string;
@@ -24,7 +24,7 @@ export interface RetryAiBubbleArgs {
   /** the bubble's clientId — required to authorize the null-author PATCH (BE-8). */
   clientId: string;
   communityPersonaPrompt: string;
-  /** the retrying user's Gemini key (call-time only; never stored/logged). */
+  /** the retrying user's LLM key (call-time only; never stored/logged). */
   apiKey: string;
   generationConfig?: GenerationConfig;
 }
@@ -59,7 +59,7 @@ export async function retryAiBubble(
   let request;
   try {
     const context = await getContext(postId);
-    request = buildGeminiRequest({
+    request = buildLlmRequest({
       personaPrompt: communityPersonaPrompt,
       context,
       ...(generationConfig ? { generationConfig } : {}),
@@ -98,9 +98,9 @@ export async function retryAiBubble(
     return { ok: true, aiCommentId, answer };
   } catch (err) {
     const ge =
-      err instanceof GeminiError
+      err instanceof LlmError
         ? err
-        : new GeminiError('unknown', tn('misc.ai_fail_retry'), {
+        : new LlmError('unknown', tn('misc.ai_fail_retry'), {
             cause: err,
           });
     try {

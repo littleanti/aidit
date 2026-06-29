@@ -2,13 +2,13 @@ import { useEffect, useRef } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useUiStore } from '../stores/uiStore';
-import { pingGemini } from '../engine/geminiStatus';
-import { useGeminiStatusStore } from '../stores/geminiStatusStore';
+import { pingLlm } from '../engine/llmStatus';
+import { useLlmStatusStore } from '../stores/llmStatusStore';
 import { setOnAuthExpired } from '../lib/authEvents';
 import BottomTabBar from './BottomTabBar';
 import Logo from '../components/Logo';
 import LoginModal from '../components/LoginModal';
-import GeminiStatusBadge from '../components/GeminiStatusBadge';
+import LlmStatusBadge from '../components/LlmStatusBadge';
 import LangToggle from '../components/LangToggle';
 import { useT } from '../i18n/useT';
 
@@ -65,12 +65,12 @@ export default function AppLayout() {
   const googleApiKey = useAuthStore((s) => s.googleApiKey);
   const clearSession = useAuthStore((s) => s.clearSession);
   const refreshAuth = useAuthStore((s) => s.refresh);
-  const resetGeminiStatus = useGeminiStatusStore((s) => s.reset);
+  const resetLlmStatus = useLlmStatusStore((s) => s.reset);
   const openLogin = useUiStore((s) => s.openLogin);
   const { t } = useT();
 
   // Zombie-session guard: when a write gets 401 (token expired / secret rotated),
-  // rest.ts fires notifyAuthExpired → clear the dead session (keep the Gemini
+  // rest.ts fires notifyAuthExpired → clear the dead session (keep the LLM
   // key) and open the login modal, instead of silently 401-ing forever.
   useEffect(() => {
     setOnAuthExpired(() => {
@@ -90,8 +90,8 @@ export default function AppLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Gemini 연결 표식: 키가 생기거나 바뀔 때(신규 로그인 · 프로필 키 변경 · 지속
-  // 세션 로드) 키당 한 번 가벼운 연결 테스트(pingGemini)를 돌려 배지를 즉시
+  // LLM 연결 표식: 키가 생기거나 바뀔 때(신규 로그인 · 프로필 키 변경 · 지속
+  // 세션 로드) 키당 한 번 가벼운 연결 테스트(pingLlm)를 돌려 배지를 즉시
   // 갱신한다. ref로 마지막 핑한 키를 기억해 같은 키로는 한 번만 호출.
   // 키가 제거되면(`updateKey('')`) 더는 보고할 BYOK 연결이 없으므로 ref를 비우고
   // 배지를 '미확인'으로 되돌린다 — 같은 키를 다시 넣으면 핑이 한 번 더 돈다.
@@ -100,13 +100,13 @@ export default function AppLayout() {
     if (googleApiKey) {
       if (googleApiKey !== lastPingedKey.current) {
         lastPingedKey.current = googleApiKey;
-        void pingGemini(googleApiKey);
+        void pingLlm(googleApiKey);
       }
     } else {
       lastPingedKey.current = null;
-      resetGeminiStatus();
+      resetLlmStatus();
     }
-  }, [googleApiKey, resetGeminiStatus]);
+  }, [googleApiKey, resetLlmStatus]);
 
   return (
     <div className="min-h-full">
@@ -120,8 +120,8 @@ export default function AppLayout() {
             <Logo size="sm" />
           </Link>
           <div className="flex items-center gap-2 text-sm">
-            {/* Gemini 연결 표식: 로그인(BYOK) 상태에서 아이디 바로 좌측에 표시. */}
-            {username && <GeminiStatusBadge />}
+            {/* LLM 연결 표식: 로그인(BYOK) 상태에서 아이디 바로 좌측에 표시. */}
+            {username && <LlmStatusBadge />}
             <LangToggle variant="header" />
             {username ? (
               <Link

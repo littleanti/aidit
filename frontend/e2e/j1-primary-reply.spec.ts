@@ -4,19 +4,19 @@
 // A logged-in author creates a community + post with the "1차 AI 답변 받기"
 // toggle ON. On entering the thread the engine fires the PRIMARY reply with the
 // author's (mocked) key; the thread should then show an AI reply bubble whose
-// text is exactly what our Gemini mock returned.
+// text is exactly what our LLM mock returned.
 //
-// Gemini is mocked via page.route on generativelanguage.googleapis.com, so this
-// runs with a DUMMY key and never calls a real model. Boot a local frontend +
-// backend first (see e2e/README.md).
+// The LLM provider is mocked via page.route on generativelanguage.googleapis.com,
+// so this runs with a DUMMY key and never calls a real model. Boot a local
+// frontend + backend first (see e2e/README.md).
 // ============================================================================
 import { test, expect } from '@playwright/test';
-import { login, mockGemini, uniq, createCommunityAndPost } from './helpers';
+import { login, mockLlm, uniq, createCommunityAndPost } from './helpers';
 
 const AI_REPLY = 'J1 primary AI reply from the persona.';
 
 test('J1: creating a post triggers a primary AI reply bubble', async ({ page }) => {
-  await mockGemini(page, { reply: AI_REPLY });
+  await mockLlm(page, { reply: AI_REPLY });
 
   await login(page, uniq('j1user'));
 

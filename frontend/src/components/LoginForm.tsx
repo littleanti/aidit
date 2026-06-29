@@ -31,7 +31,7 @@ function defaultTab(): Tab {
 //   [Login] — username + password. A bottom link flips between login
 //             (POST /auth/session) and register (POST /auth/register);
 //             register reveals the confirm-password field.
-// The Gemini API key is orthogonal to the mode: optional in both tabs, stored
+// The LLM API key is orthogonal to the mode: optional in both tabs, stored
 // locally only (L1) via updateKey().
 export default function LoginForm({ onSuccess }: LoginFormProps) {
   const login = useAuthStore((s) => s.login);
@@ -138,7 +138,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       } else {
         await register(username.trim(), password.trim());
       }
-      // Persist the Gemini key locally if the user supplied one.
+      // Persist the LLM key locally if the user supplied one.
       if (apiKey.trim()) updateKey(apiKey.trim());
       onSuccess?.();
     } catch (err) {
@@ -152,7 +152,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     'w-full rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 text-sm text-term-bright caret-term-bright outline-none placeholder:text-term-faint focus:border-term-bright focus:ring-1 focus:ring-term-bright';
   const labelClass = 'mb-1 block text-sm font-medium text-term-dim';
 
-  // Shared optional Gemini API-key field (rendered in both tabs).
+  // Shared optional LLM API-key field (rendered in both tabs).
   const apiKeyField = (
     <div>
       <label htmlFor="apiKey" className={labelClass}>

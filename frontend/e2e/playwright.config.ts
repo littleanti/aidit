@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 // ============================================================================
 // WP XC-T (E2E scaffold) — Playwright config for the three core journeys
-// J1/J2/J3. These specs MOCK the Gemini endpoint via page.route on
+// J1/J2/J3. These specs MOCK the LLM provider endpoint via page.route on
 // generativelanguage.googleapis.com so NO real BYOK key is ever needed and no
 // real LLM call is made. They drive a LOCALLY-RUNNING frontend + backend
 // (see e2e/README.md for how to start them).

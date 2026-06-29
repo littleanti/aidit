@@ -2,7 +2,7 @@
 
 End-to-end **scaffold** for the three core product journeys. These specs drive a
 **locally running** Aidit backend + frontend in a real (mobile-viewport)
-browser, and **mock the Gemini endpoint** so no real Google API key is needed
+browser, and **mock the LLM provider endpoint** so no real Google API key is needed
 and no real LLM call is ever made.
 
 | Spec | Journey | Asserts |
@@ -19,14 +19,14 @@ green gate is the Vitest unit/contract/integration suite** (`npm test` in
 sanitize, store dedupe) hermetically. These Playwright specs are written,
 type-clean, and documented so they can be run on demand against a live stack.
 
-## How the Gemini mock works (key-blind, no real key)
+## How the LLM mock works (key-blind, no real key)
 
-`helpers.ts → mockGemini(page)` installs `page.route('**generativelanguage.googleapis.com/**')`:
+`helpers.ts → mockLlm(page)` installs `page.route('**generativelanguage.googleapis.com/**')`:
 
 - `:generateContent` → `{ candidates: [{ content: { parts: [{ text }] } }] }`
 - `:countTokens` → `{ totalTokens }`
 
-So the BYOK browser→Gemini call is intercepted in-page. A **dummy key**
+So the BYOK browser→LLM provider call is intercepted in-page. A **dummy key**
 (`AIza-DUMMY-E2E-KEY`) is entered at login; it is stored locally only (L1) and
 never sent to the Aidit server. J3 uses `replyForCall` to return the **summary**
 on call #0 and the **summary-based answer** on call #1.

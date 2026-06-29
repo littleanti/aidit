@@ -72,6 +72,7 @@ if (config.jwtSecret === DEV_JWT_SECRET) {
   );
 }
 
-// Gemini model id — single source of truth (PLAN L7). Used later in M3 (BYOK calls
+// LLM model id — single source of truth (PLAN L7). Used later in M3 (BYOK calls
 // happen in the browser; the server stays key-blind and only references the model id).
-export const GEMINI_MODEL = "gemini-3.1-flash-lite";
+// Provider-agnostic: override via LLM_MODEL; defaults to the Gemini model shipped.
+export const LLM_MODEL = process.env.LLM_MODEL ?? "gemini-3.1-flash-lite";

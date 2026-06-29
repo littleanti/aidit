@@ -1,7 +1,7 @@
 // WP BE-12 — GET /posts/:id/context.
 //
 // Read-only context endpoint. Returns the active segment's conversation turns so
-// the browser can make a direct BYOK Gemini call (M3). The server stays
+// the browser can make a direct BYOK LLM call (M3). The server stays
 // KEY-BLIND (L1): no apiKey is accepted or returned. No auth is required —
 // reading thread context exposes nothing key-related.
 

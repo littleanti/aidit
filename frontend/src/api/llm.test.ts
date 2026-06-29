@@ -3,7 +3,7 @@
 // active UI language (useLangStore). These tests set a known lang and assert via
 // the lang-aware accessor (the raw map is module-private).
 import { describe, it, expect, beforeEach } from 'vitest';
-import { estimateTokens, userMessage, userMessages } from './gemini';
+import { estimateTokens, userMessage, userMessages } from './llm';
 import { useLangStore } from '../stores/langStore';
 import { ai as aiDict } from '../i18n/dicts/ai';
 

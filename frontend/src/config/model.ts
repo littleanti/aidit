@@ -1,12 +1,18 @@
 // ============================================================================
-// AI-2 / L7: SINGLE SOURCE for the Gemini model id + generation config.
-// The model id is defined here ONCE — never hardcode "gemini-*" elsewhere.
+// AI-2 / L7: SINGLE SOURCE for the LLM model id + generation config.
+// The model id is defined here ONCE — never hardcode the model elsewhere.
+// Provider is abstracted: the model id and REST base are env-overridable so the
+// LLM provider can be swapped without code changes. Defaults target Google
+// Gemini (the default provider), preserving existing behavior.
 // ============================================================================
 
 import type { AiLength } from '../engine/length';
 
-/** L7: the one and only Gemini model id used by the BYOK client. */
-export const MODEL = 'gemini-3.1-flash-lite';
+/** L7: the one and only LLM model id used by the BYOK client. Override via
+ *  VITE_LLM_MODEL; defaults to the Gemini model the app ships with. */
+export const LLM_MODEL =
+  (import.meta.env.VITE_LLM_MODEL as string | undefined) ??
+  'gemini-3.1-flash-lite';
 
 /** Default generation parameters for generateContent calls. */
 export const GENERATION_CONFIG = {
@@ -24,5 +30,8 @@ export const MAX_OUTPUT_TOKENS_BY_LENGTH: Record<AiLength, number | undefined> =
     long: 4096,
   };
 
-/** Gemini REST API base (v1beta). Browser fetches go DIRECTLY here (BYOK). */
-export const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+/** LLM provider REST API base. Browser fetches go DIRECTLY here (BYOK).
+ *  Override via VITE_LLM_BASE; defaults to Google Gemini's v1beta endpoint. */
+export const LLM_BASE =
+  (import.meta.env.VITE_LLM_BASE as string | undefined) ??
+  'https://generativelanguage.googleapis.com/v1beta';

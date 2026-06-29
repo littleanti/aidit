@@ -1,32 +1,35 @@
 // ============================================================================
-// AI-1 + AI-3: BYOK Google Gemini client.
+// AI-1 + AI-3: BYOK LLM client.
 //
 // L1 (key-blind): EVERY call here is a fetch() FROM THE BROWSER, DIRECTLY to
-// GEMINI_BASE, with the user's own key as the ?key=<USER_KEY> query param.
+// LLM_BASE, with the user's own key as the ?key=<USER_KEY> query param.
 // The key is ALWAYS passed in at call time (function arg). It is NEVER stored
 // in module scope, NEVER logged, and NEVER placed in an error message.
+//
+// Provider is abstracted via config (LLM_MODEL / LLM_BASE); the default
+// provider is Google Gemini and the wire shapes below follow its REST API.
 // ============================================================================
 
-import { GEMINI_BASE, GENERATION_CONFIG, MODEL } from '../config/model';
+import { LLM_BASE, GENERATION_CONFIG, LLM_MODEL } from '../config/model';
 import { useLangStore } from '../stores/langStore';
 import { ai as aiDict } from '../i18n/dicts/ai';
 
-// ---- Wire types (subset of the Gemini REST shapes we use) ----
+// ---- Wire types (subset of the LLM provider's REST shapes we use) ----
 
 /** A single content part: either text OR inline image bytes (base64, no
  *  data: prefix). The inlineData variant rides ONLY on a fresh-upload @AI turn. */
-export type GeminiPart =
+export type LlmPart =
   | { text: string }
   | { inlineData: { mimeType: string; data: string } };
 
 /** A single turn of conversation content. */
-export interface GeminiContent {
+export interface LlmContent {
   role: 'user' | 'model';
-  parts: GeminiPart[];
+  parts: LlmPart[];
 }
 
 /** systemInstruction is a single content block (no role). */
-export interface GeminiSystemInstruction {
+export interface LlmSystemInstruction {
   parts: Array<{ text: string }>;
 }
 
@@ -37,23 +40,23 @@ export interface GenerationConfig {
 
 // ---- Error model (AI-1) ----
 
-export type GeminiErrorKind = 'invalid_key' | 'quota' | 'network' | 'unknown';
+export type LlmErrorKind = 'invalid_key' | 'quota' | 'network' | 'unknown';
 
 /**
- * Typed error for all Gemini failures. `userMessage` is safe to surface in the
+ * Typed error for all LLM failures. `userMessage` is safe to surface in the
  * UI (Korean). The raw key is NEVER referenced here.
  */
-export class GeminiError extends Error {
-  readonly kind: GeminiErrorKind;
+export class LlmError extends Error {
+  readonly kind: LlmErrorKind;
   readonly userMessage: string;
   readonly status?: number;
   constructor(
-    kind: GeminiErrorKind,
+    kind: LlmErrorKind,
     userMessage: string,
     opts?: { status?: number; cause?: unknown },
   ) {
     super(userMessage);
-    this.name = 'GeminiError';
+    this.name = 'LlmError';
     this.kind = kind;
     this.userMessage = userMessage;
     this.status = opts?.status;
@@ -64,7 +67,7 @@ export class GeminiError extends Error {
 // AI error messages are lang-aware: the UI-safe userMessage follows the active
 // UI language (i18n). Sourced from the 'ai' i18n dict so the strings live in one
 // place. The raw key is NEVER referenced in any of these (L1).
-const USER_MESSAGES: Record<'ko' | 'en', Record<GeminiErrorKind, string>> = {
+const USER_MESSAGES: Record<'ko' | 'en', Record<LlmErrorKind, string>> = {
   ko: {
     invalid_key: aiDict.ko.err_invalid_key,
     quota: aiDict.ko.err_quota,
@@ -79,29 +82,29 @@ const USER_MESSAGES: Record<'ko' | 'en', Record<GeminiErrorKind, string>> = {
   },
 };
 
-/** Current-language Gemini error message map (snapshot of langStore). Non-React:
+/** Current-language LLM error message map (snapshot of langStore). Non-React:
  *  reads useLangStore.getState() so callers in this module need no hook. */
-export function userMessages(): Record<GeminiErrorKind, string> {
+export function userMessages(): Record<LlmErrorKind, string> {
   return USER_MESSAGES[useLangStore.getState().lang];
 }
 
 /** Convenience: the current-language message for a single error kind. */
-export function userMessage(kind: GeminiErrorKind): string {
+export function userMessage(kind: LlmErrorKind): string {
   return userMessages()[kind];
 }
 
-/** Map an HTTP status to a typed GeminiError. Never includes the key. */
-function errorFromStatus(status: number): GeminiError {
-  let kind: GeminiErrorKind;
+/** Map an HTTP status to a typed LlmError. Never includes the key. */
+function errorFromStatus(status: number): LlmError {
+  let kind: LlmErrorKind;
   if (status === 401 || status === 403) kind = 'invalid_key';
   else if (status === 429) kind = 'quota';
   else kind = 'unknown';
-  return new GeminiError(kind, userMessage(kind), { status });
+  return new LlmError(kind, userMessage(kind), { status });
 }
 
 /**
- * POST to a Gemini model endpoint with the key as a query param.
- * Wraps transport/HTTP failures into a typed GeminiError. The key never
+ * POST to an LLM model endpoint with the key as a query param.
+ * Wraps transport/HTTP failures into a typed LlmError. The key never
  * appears in any thrown message or log.
  */
 async function postModel<T>(
@@ -109,7 +112,7 @@ async function postModel<T>(
   apiKey: string,
   body: unknown,
 ): Promise<T> {
-  const url = `${GEMINI_BASE}/models/${MODEL}:${method}?key=${encodeURIComponent(
+  const url = `${LLM_BASE}/models/${LLM_MODEL}:${method}?key=${encodeURIComponent(
     apiKey,
   )}`;
 
@@ -122,7 +125,7 @@ async function postModel<T>(
     });
   } catch (cause) {
     // fetch rejects only on network-level failures (offline, DNS, CORS).
-    throw new GeminiError('network', userMessage('network'), { cause });
+    throw new LlmError('network', userMessage('network'), { cause });
   }
 
   if (!res.ok) {
@@ -135,7 +138,7 @@ async function postModel<T>(
   try {
     return (await res.json()) as T;
   } catch (cause) {
-    throw new GeminiError('unknown', userMessage('unknown'), {
+    throw new LlmError('unknown', userMessage('unknown'), {
       status: res.status,
       cause,
     });
@@ -145,11 +148,11 @@ async function postModel<T>(
 // ---- generateContent ----
 
 export interface GenerateContentArgs {
-  /** User's own Gemini key. Call-time only. NEVER stored/logged. */
+  /** User's own LLM key. Call-time only. NEVER stored/logged. */
   apiKey: string;
   /** Persona / system prompt (L6: persona lives ONLY here). */
   systemInstruction?: string;
-  contents: GeminiContent[];
+  contents: LlmContent[];
   generationConfig?: GenerationConfig;
 }
 
@@ -160,7 +163,7 @@ interface GenerateContentResponse {
 }
 
 /**
- * Call models/{MODEL}:generateContent and return the first candidate's text.
+ * Call models/{LLM_MODEL}:generateContent and return the first candidate's text.
  * L6: the persona prompt is passed as systemInstruction, never as a content turn.
  */
 export async function generateContent(
@@ -185,7 +188,7 @@ export async function generateContent(
     .join('');
 
   if (!text) {
-    throw new GeminiError('unknown', userMessage('unknown'));
+    throw new LlmError('unknown', userMessage('unknown'));
   }
   return text;
 }
@@ -194,7 +197,7 @@ export async function generateContent(
 
 export interface CountTokensArgs {
   apiKey: string;
-  contents: GeminiContent[];
+  contents: LlmContent[];
   systemInstruction?: string;
 }
 
@@ -209,7 +212,7 @@ export function estimateTokens(text: string): number {
 
 /** Sum the estimated tokens across all content parts. */
 function estimateContentsTokens(
-  contents: GeminiContent[],
+  contents: LlmContent[],
   systemInstruction?: string,
 ): number {
   let total = systemInstruction ? estimateTokens(systemInstruction) : 0;
@@ -220,8 +223,8 @@ function estimateContentsTokens(
 }
 
 /**
- * Call models/{MODEL}:countTokens and return totalTokens.
- * Throws a typed GeminiError on failure (use countTokensWithFallback to be safe).
+ * Call models/{LLM_MODEL}:countTokens and return totalTokens.
+ * Throws a typed LlmError on failure (use countTokensWithFallback to be safe).
  */
 export async function countTokens(args: CountTokensArgs): Promise<number> {
   const body: Record<string, unknown> = { contents: args.contents };
@@ -235,7 +238,7 @@ export async function countTokens(args: CountTokensArgs): Promise<number> {
     body,
   );
   if (typeof data.totalTokens !== 'number') {
-    throw new GeminiError('unknown', userMessage('unknown'));
+    throw new LlmError('unknown', userMessage('unknown'));
   }
   return data.totalTokens;
 }

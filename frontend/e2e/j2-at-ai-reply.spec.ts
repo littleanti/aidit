@@ -6,17 +6,17 @@
 // the AI reply bubble appear. We assert both bubbles are present AND that the
 // human bubble is ordered before the AI bubble in the chat column.
 //
-// Gemini is mocked (page.route), so a DUMMY key suffices and no real model call
-// is made.
+// The LLM provider is mocked (page.route), so a DUMMY key suffices and no real
+// model call is made.
 // ============================================================================
 import { test, expect } from '@playwright/test';
-import { login, mockGemini, uniq, createCommunityAndPost } from './helpers';
+import { login, mockLlm, uniq, createCommunityAndPost } from './helpers';
 
 const HUMAN_TEXT = '@AI 이 토론의 핵심이 뭐야?';
 const AI_REPLY = 'J2 AI answer to the mention.';
 
 test('J2: @AI comment shows the human bubble first, then the AI reply', async ({ page }) => {
-  await mockGemini(page, { reply: AI_REPLY });
+  await mockLlm(page, { reply: AI_REPLY });
 
   await login(page, uniq('j2user'));
 

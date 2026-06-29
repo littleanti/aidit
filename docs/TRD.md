@@ -11,7 +11,7 @@
 ┌─────────────────────────── Browser (PWA, React) ───────────────────────────┐
 │  UI (Home / Community / Thread-Chat)                                        │
 │  ├─ AuthStore        localStorage: { username, googleApiKey }               │
-│  ├─ GeminiClient     fetch → generativelanguage.googleapis.com  (BYOK)      │
+│  ├─ LlmClient        fetch → generativelanguage.googleapis.com  (BYOK)      │
 │  ├─ ContextEngine    토큰 카운팅 + 128K 세그먼트 + 요약 트리거 (manager.py 포팅) │
 │  └─ ThreadStream     EventSource(SSE)  ← 서버 실시간 버블                      │
 └───────────┬───────────────────────────────────────────────┬───────────────┘
@@ -36,7 +36,7 @@
 |----------------|-----------|
 | `context/manager.py` 토큰 budget + 압축/요약 (90% 임계) | **클라이언트 TS로 포팅**, 임계를 128K 정책으로 |
 | `render/web.py` `_event_buffer` fan-out + 재생(replay) | **post 단위 SSE Hub**로 재구성 |
-| `providers/openai|anthropic.py` (서버 키) | 폐기. **클라이언트 GeminiClient(BYOK)** 신규 |
+| `providers/openai|anthropic.py` (서버 키) | 폐기. **클라이언트 LlmClient(BYOK)** 신규 |
 | 단일 세션/JSONL 저장, 닉네임-only auth | 폐기. **멀티테넌트 DB + username 식별** |
 
 ---
@@ -51,7 +51,7 @@
 | ORM/DB | **Prisma + SQLite(PoC) → Postgres(확장)** | 무상태 서버, 단일 SoT |
 | 인증 | **bcrypt(비밀번호) + @fastify/jwt(서명)** | 비밀번호 해시 저장, Bearer JWT 토큰 |
 | Pub/Sub | **인메모리(단일 인스턴스)** → **Redis pub/sub**(다중) | NFR-4 수평확장 |
-| LLM | **Google Gemini Flash Lite (BYOK, 클라이언트)** | §5 |
+| LLM | **LLM 제공자 BYOK, 클라이언트 직접 호출 (기본: Google Gemini Flash Lite)** | §5 |
 | 배포 | 정적 프론트(CDN) + Node 서버(컨테이너) | |
 
 ---
@@ -282,13 +282,13 @@ export interface CommunitiesPage { items: Community[]; nextCursor: string | null
 
 ---
 
-## 5. Gemini (BYOK) 클라이언트
+## 5. LLM (BYOK) 클라이언트
 
 > **모든 호출은 브라우저에서.** 서버·서버 로그를 절대 경유하지 않는다.
 
 - 엔드포인트(REST): `https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={USER_KEY}`
 - 토큰 카운팅: `.../models/{MODEL}:countTokens?key={USER_KEY}` (정확) 또는 로컬 휴리스틱(`chars/4`) 폴백.
-- 모델(A-1): `MODEL = "gemini-3.1-flash-lite"` (PoC 고정값, 설정 한 곳에서 관리).
+- 모델(A-1): `LLM_MODEL = "gemini-3.1-flash-lite"` (PoC 고정값, 설정 한 곳에서 관리).
 - 요청 형태:
 ```jsonc
 {
@@ -300,9 +300,9 @@ export interface CommunitiesPage { items: Community[]; nextCursor: string | null
 - 오류 처리: 401/403(키 무효) → AI 버블 `FAILED` + "키를 확인하세요". 429(쿼터) → 재시도 안내. 사람 댓글은 영향 없음(NFR-5).
 - **스트리밍(선택)**: `:streamGenerateContent`로 부분 토큰 표시(버블 타이핑 효과). PoC는 비스트리밍 + 로딩 인디케이터로 충분.
 
-### 5.1 컨텍스트 → Gemini `contents` 매핑
+### 5.1 컨텍스트 → LLM `contents` 매핑
 - 글 원본/타인 댓글/AI 버블 → 역할 매핑: 사람 발화는 `role:"user"`, AI 버블은 `role:"model"`.
-- 다자 대화이므로 각 user turn 앞에 `「{username}」: ` 접두로 화자 구분(Gemini는 멀티 user 화자 개념이 약해 텍스트로 표기).
+- 다자 대화이므로 각 user turn 앞에 `「{username}」: ` 접두로 화자 구분(LLM API는 멀티 user 화자 개념이 약해 텍스트로 표기).
 - 요약 버블은 새 세그먼트의 첫 `user` turn으로 "지금까지 요약: ..." 형태 주입(§6.3).
 - **멀티모달 이미지**: 컨텍스트 턴은 텍스트(`parts:[{text}]`)로만 매핑한다. 이미지는 **"그 호출에서 신규로 실리는" 한 장**만 user turn에 `inlineData`(base64) 파트로 덧붙는다 — ① `@AI` 댓글에 방금 업로드한 이미지(Composer), ② **글 작성 시 첨부한 이미지의 1차 AI 답변**(`runPrimaryReply`: 글 본문 텍스트 턴 뒤에 작성자 user turn으로 `Post.imageUrl`을 `inlineData`로 첨부). 과거 글/댓글의 이미지는 후속 호출에서 재전송하지 않는다(컨텍스트는 텍스트). 인코딩 실패 시 텍스트 only로 진행(답변을 막지 않음).
 
@@ -322,11 +322,11 @@ export interface CommunitiesPage { items: Community[]; nextCursor: string | null
  1) [REST] 사람 댓글 우선 등록 (type=HUMAN, COMPLETE)         ← 먼저 보임(FR-6.2)
  2) [REST] GET /posts/:id/context  → { segmentIndex, contents[], tokenSum, summaryNeeded }
  3) IF tokenSum > 128_000  (= summaryNeeded)  →  [요약 분기, 6.3]
-        a) 사용자 키로 Gemini 요약 호출 (요약 프롬프트 + 현재 contents)
+        a) 사용자 키로 LLM 요약 호출 (요약 프롬프트 + 현재 contents)
         b) [REST] AI_SUMMARY 버블 게시 → 서버가 새 세그먼트(N+1) 개시, 활성 전환
         c) 컨텍스트를 (요약문 + 방금 @AI 사람댓글)로 재조립
  4) [REST] AI_REPLY 버블 PENDING 게시 (replyToId=사람댓글) → 즉시 좌측에 "…로딩"
- 5) 사용자 키로 Gemini generateContent (systemInstruction=persona, contents=조립결과)
+ 5) 사용자 키로 LLM generateContent (systemInstruction=persona, contents=조립결과)
  6) [REST] PATCH /comments/:aiId  body=응답, status=COMPLETE   (실패 시 FAILED)
  7) 서버는 매 단계 SSE fan-out → 모든 시청자 실시간 갱신
 ```
@@ -344,7 +344,7 @@ export interface CommunitiesPage { items: Community[]; nextCursor: string | null
   - 새 세그먼트는 이 요약을 첫 컨텍스트 요소로 가짐(이전 원본 제외 = 요청 #7).
 
 ### 6.4 토큰 카운팅
-- 각 버블 게시 시 `tokenCount` 산정: 1순위 Gemini `countTokens`(정확, 키 필요), 폴백 `Math.ceil(chars/4)`.
+- 각 버블 게시 시 `tokenCount` 산정: 1순위 LLM `countTokens`(정확, 키 필요), 폴백 `Math.ceil(chars/4)`.
 - 서버는 `segment.tokenSum += tokenCount`. `GET /context`는 `tokenSum`을 그대로 임계 판정에 사용.
 - agent-cli처럼 추정→실제(usage) 보정도 가능(PoC 선택).
 
@@ -400,7 +400,7 @@ ageDecay = -(epochHours(now - createdAt)) / 12     // 12h 반감 느낌
 src/
  ├─ stores/        authStore(username,key), threadStore(bubbles,segment)
  │                 langStore.ts  ← NEW (§14)
- ├─ api/           rest.ts(서버), gemini.ts(BYOK 호출·countTokens·요약)
+ ├─ api/           rest.ts(서버), llm.ts(BYOK 호출·countTokens·요약)
  ├─ engine/        contextEngine.ts (manager.py 포팅: 조립·128K 판정·요약 오케스트레이션)
  ├─ stream/        useThreadStream.ts (EventSource 구독·재생)
  ├─ i18n/          dicts/<namespace>.ts, index.ts, useT.ts, tn.ts  ← NEW (§14)
@@ -431,7 +431,7 @@ src/
 - **단위**: contextEngine 토큰 합산/128K 경계/세그먼트 전환, hotScore.
 - **계약**: REST 멱등(clientId), `/context` 조립 정확성(요청 #5 vs #7 분기).
 - **통합**: 다중 클라 SSE fan-out, 동시 `@AI`/동시 요약 경쟁.
-- **E2E(요청 매핑)**: J1(게시→1차 AI), J2(@AI), J3(128K→요약→요약기반 답변). Gemini는 모킹/실키 양면.
+- **E2E(요청 매핑)**: J1(게시→1차 AI), J2(@AI), J3(128K→요약→요약기반 답변). LLM 제공자는 모킹/실키 양면.
 - **수동 검증**: 두 브라우저로 같은 스레드, 좌/우 버블·실시간·요약색 확인.
 
 ---
@@ -505,7 +505,7 @@ src/i18n/
  │   ├─ community.ts   // 커뮤니티 생성·검색
  │   ├─ thread.ts      // 스레드 채팅 버블·컴포저
  │   ├─ profile.ts     // 프로필·설정 화면
- │   └─ errors.ts      // Gemini/네트워크 오류 메시지
+ │   └─ errors.ts      // LLM/네트워크 오류 메시지
  ├─ index.ts           // DICTS 집계·재수출
  ├─ useT.ts            // React 컴포넌트용 훅
  └─ tn.ts              // 비 React 모듈용 함수
@@ -652,7 +652,7 @@ export function LangToggle({ variant = 'header' }: Props) {
 
 #### 14.5.1 언어 지시문 삽입
 
-`buildGeminiRequest` 함수 안에서 최종 `systemInstruction`을 조립할 때:
+`buildLlmRequest` 함수 안에서 최종 `systemInstruction`을 조립할 때:
 
 ```ts
 const lang = useLangStore.getState().lang;
@@ -689,7 +689,7 @@ const lang = useLangStore.getState().lang;
 const summaryPrompt = SUMMARY_DIRECTIVE[lang];
 ```
 
-#### 14.5.3 오류 메시지 언어 분기 (`src/api/gemini.ts`)
+#### 14.5.3 오류 메시지 언어 분기 (`src/api/llm.ts`)
 
 기존 `USER_MESSAGES` 레코드(고정 한국어 문자열)를 언어별 맵으로 전환:
 
@@ -711,7 +711,7 @@ export const errors = {
 } as const;
 ```
 
-`gemini.ts`와 `contextEngine.ts`의 하드코딩 한국어 오류 문자열을 `tn('errors.<key>')` 호출로 교체.
+`llm.ts`와 `contextEngine.ts`의 하드코딩 한국어 오류 문자열을 `tn('errors.<key>')` 호출로 교체.
 
 ### 14.6 날짜·숫자 로케일
 

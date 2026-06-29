@@ -3,10 +3,10 @@ import { test, expect, type Request } from '@playwright/test';
 // ============================================================================
 // REAL-KEY BYOK end-to-end check (opt-in; NOT part of the mocked CI suite).
 //
-// Unlike j1/j2/j3 (which mock Gemini), this spec drives the full journey
-// against a REAL Google Gemini call using a key supplied via env:
-//   GEMINI_TEST_KEY=<key> npx playwright test real-key-byok --config e2e/playwright.config.ts
-// It is skipped automatically when GEMINI_TEST_KEY is absent, so it never runs
+// Unlike j1/j2/j3 (which mock the LLM provider), this spec drives the full
+// journey against a REAL Google LLM call using a key supplied via env:
+//   LLM_TEST_KEY=<key> npx playwright test real-key-byok --config e2e/playwright.config.ts
+// It is skipped automatically when LLM_TEST_KEY is absent, so it never runs
 // in CI and the key is never stored in the repo.
 //
 // Asserts the core BYOK invariants on a live system:
@@ -15,11 +15,11 @@ import { test, expect, type Request } from '@playwright/test';
 //  3) the @AI flow yields a COMPLETE AI_REPLY bubble (human-first → reply)
 // ============================================================================
 
-const KEY = process.env.GEMINI_TEST_KEY;
+const KEY = process.env.LLM_TEST_KEY;
 const stamp = Date.now();
 const SLUG = `cook-pw-${stamp}`;
 
-test.skip(!KEY, 'GEMINI_TEST_KEY not set — skipping real-key BYOK check');
+test.skip(!KEY, 'LLM_TEST_KEY not set — skipping real-key BYOK check');
 
 test('BYOK @AI flow: key-blind server + direct Google call + COMPLETE reply', async ({
   page,

@@ -5,7 +5,7 @@ import fp from "fastify-plugin";
 //
 // L2: the CSP `connect-src` allowlist is the PRIMARY key-exfiltration mitigation.
 // A compromised/XSS script can only POST the user's Google API key to origins in
-// connect-src; restricting it to 'self' + the Gemini endpoint means a leaked key
+// connect-src; restricting it to 'self' + the LLM provider endpoint means a leaked key
 // cannot be shipped to an attacker-controlled host. The SPA additionally ships a
 // CSP <meta>; these response headers cover anything the server itself serves.
 //

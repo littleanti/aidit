@@ -10,7 +10,7 @@ import { requireAuth } from "../auth.js";
 //   POST /metrics/visit — idempotent daily visit record (author D1-retention basis).
 //   GET  /metrics       — §8 KPIs derivable from the DB.
 //
-// KPIs that require client-only events (e.g. Gemini API success rate, P95 SSE
+// KPIs that require client-only events (e.g. LLM API success rate, P95 SSE
 // propagation latency) are NOT observable server-side in a key-blind PoC, so we
 // return them as `null` with a note in `unavailable`.
 
@@ -115,11 +115,11 @@ const plugin: FastifyPluginAsync = async (app) => {
       summarySuccessRate, // target >= 0.95 (null when no summaries yet)
       authorD1RetentionRate, // target >= 0.25 (null when no authored posts yet)
       // KPIs that depend on client-only events the key-blind server never sees.
-      geminiSuccessRate: null, // target >= 0.97 — measured in the browser (BYOK).
+      llmSuccessRate: null, // target >= 0.97 — measured in the browser (BYOK).
       p95PropagationMs: null, // target < 1500 — measured client-side end-to-end.
       unavailable: {
-        geminiSuccessRate:
-          "Gemini calls happen browser-side (BYOK, key-blind server); success/failure is not observable here.",
+        llmSuccessRate:
+          "LLM calls happen browser-side (BYOK, key-blind server); success/failure is not observable here.",
         p95PropagationMs:
           "SSE propagation latency is an end-to-end client measurement; not recorded server-side.",
       },

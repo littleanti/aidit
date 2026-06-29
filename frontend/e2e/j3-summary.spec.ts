@@ -11,13 +11,13 @@
 //      the summary-based answer (AI-9 reassembly).
 //
 // We seed the over-threshold state by posting a comment with a large tokenCount
-// (helpers.seedOverThreshold), then mock Gemini so call #0 returns the SUMMARY
-// and call #1 returns the summary-based ANSWER.
+// (helpers.seedOverThreshold), then mock the LLM provider so call #0 returns
+// the SUMMARY and call #1 returns the summary-based ANSWER.
 // ============================================================================
 import { test, expect } from '@playwright/test';
 import {
   login,
-  mockGemini,
+  mockLlm,
   uniq,
   createCommunityAndPost,
   seedOverThreshold,
@@ -31,7 +31,7 @@ test('J3: crossing 128K renders a distinct summary band then a summary-based ans
   page,
 }) => {
   // call #0 = the AI_SUMMARY; call #1 = the summary-based @AI answer (AI-9).
-  await mockGemini(page, {
+  await mockLlm(page, {
     replyForCall: (i) => (i === 0 ? SUMMARY_TEXT : ANSWER_TEXT),
     totalTokens: 200_000,
   });

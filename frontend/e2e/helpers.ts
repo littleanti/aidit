@@ -1,8 +1,8 @@
 // ============================================================================
 // E2E shared helpers (WP XC-T J1/J2/J3).
 //
-// The single most important helper is mockGemini(): it intercepts the BYOK
-// direct browser->Gemini call (generativelanguage.googleapis.com) with
+// The single most important helper is mockLlm(): it intercepts the BYOK
+// direct browser->LLM call (generativelanguage.googleapis.com) with
 // page.route, so the journeys run with a DUMMY key and NEVER hit a real model.
 // This is what lets the full "post -> AI reply", "@AI -> reply", and
 // "128K -> summary -> summary-based answer" flows run hermetically.
@@ -10,9 +10,9 @@
 import type { Page, Route } from '@playwright/test';
 
 /** The Google Generative Language host the BYOK client calls directly. */
-export const GEMINI_HOST_GLOB = '**generativelanguage.googleapis.com/**';
+export const LLM_HOST_GLOB = '**generativelanguage.googleapis.com/**';
 
-export interface GeminiMockOptions {
+export interface LlmMockOptions {
   /** Text returned for a :generateContent call (the AI reply / summary body). */
   reply?: string;
   /** totalTokens returned for a :countTokens call. */
@@ -26,16 +26,16 @@ export interface GeminiMockOptions {
 }
 
 /**
- * Install a route that fulfills every Gemini REST call locally.
+ * Install a route that fulfills every LLM REST call locally.
  *  - :generateContent  -> { candidates: [{ content: { parts: [{ text }] } }] }
  *  - :countTokens      -> { totalTokens }
  * No real network egress to Google happens; no real key is validated.
  */
-export async function mockGemini(page: Page, opts: GeminiMockOptions = {}): Promise<void> {
+export async function mockLlm(page: Page, opts: LlmMockOptions = {}): Promise<void> {
   const { reply = 'MOCKED_AI_REPLY', totalTokens = 10, replyForCall } = opts;
   let generateCalls = 0;
 
-  await page.route(GEMINI_HOST_GLOB, async (route: Route) => {
+  await page.route(LLM_HOST_GLOB, async (route: Route) => {
     const url = route.request().url();
 
     if (url.includes(':generateContent')) {
@@ -60,7 +60,7 @@ export async function mockGemini(page: Page, opts: GeminiMockOptions = {}): Prom
       return;
     }
 
-    // Any other Gemini path: succeed empty so nothing leaks to the network.
+    // Any other LLM path: succeed empty so nothing leaks to the network.
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
   });
 }
@@ -68,7 +68,7 @@ export async function mockGemini(page: Page, opts: GeminiMockOptions = {}): Prom
 /**
  * Log in through the UI. The Login form posts the username to the Aidit server
  * (real local backend) and stores the DUMMY key locally (L1 — never sent to the
- * server). The key only needs to be non-empty: all Gemini calls are mocked.
+ * server). The key only needs to be non-empty: all LLM calls are mocked.
  */
 export async function login(
   page: Page,

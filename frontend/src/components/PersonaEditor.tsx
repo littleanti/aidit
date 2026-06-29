@@ -13,7 +13,7 @@ interface PersonaEditorProps {
 /**
  * Reusable editor for a community's AI persona prompt.
  *
- * The text entered here becomes the Gemini `systemInstruction` for every AI
+ * The text entered here becomes the LLM provider `systemInstruction` for every AI
  * call made within the community (set later in M3). It is plain text only —
  * L1: it never carries or references any API key.
  *

@@ -1,5 +1,5 @@
 // i18n dict — shared state components (empty/error/loading screens in
-// components/states, GeminiStatusBadge). Filled by the states migration agent.
+// components/states, LlmStatusBadge). Filled by the states migration agent.
 // Shape contract: export const <ns> = { ko: {...}, en: {...} } as const;
 export const states = {
   ko: {

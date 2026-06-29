@@ -3,7 +3,7 @@
 //
 // L1 (key-blind): NO 'apiKey' field appears on ANY DTO, request body, header,
 // or anything that crosses the network boundary. The Google API key lives ONLY
-// in the browser (localStorage via authStore) and is used for direct Gemini
+// in the browser (localStorage via authStore) and is used for direct LLM
 // calls in M3 — never sent to the Aidit server.
 //
 // L4: 'seq' (monotonic per-post int) is the single source of truth for
@@ -123,7 +123,7 @@ export interface CommunitiesPage {
 }
 
 /**
- * Context payload assembled for a direct Gemini call (used in M3).
+ * Context payload assembled for a direct LLM call (used in M3).
  * L5: built from the active ContextSegment; tokenSum is the 128K basis.
  */
 export interface ContextResponse {

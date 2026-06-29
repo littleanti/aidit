@@ -11,7 +11,7 @@ import { UPLOAD_DIR } from "../uploads-dir.js";
 import { normalizeImageUrl } from "../storage/imageUrl.js";
 import { requireAuth } from "../auth.js";
 
-// WP-6 Image upload route. KEY-BLIND (L1): no Gemini key is ever accepted; only
+// WP-6 Image upload route. KEY-BLIND (L1): no LLM key is ever accepted; only
 // a valid Bearer JWT is required. Can store uploads locally (default) or to S3
 // when STORAGE_BACKEND=s3 is configured.
 

@@ -140,7 +140,7 @@
     post opens a chat-room-like comment thread, and multiple users jointly accumulate a single
     cumulative AI context with a per-community persona. Aidit's server is deliberately
     <em>key-blind</em>: it never holds, relays, or logs an LLM key. The browser fetches the Google
-    Gemini endpoint directly (proxyless BYOK), removing the server-side SSRF surface that proxied
+    LLM provider endpoint directly (proxyless BYOK), removing the server-side SSRF surface that proxied
     BYOK designs incur. When the
     active context exceeds a 128K-token product-policy threshold, summarization is not performed by
     the server but is <em>lazily</em> delegated to the next client that triggers an <code>@AI</code>
@@ -330,8 +330,8 @@
         <text x="279" y="111" text-anchor="middle" font-size="9.5">localStorage: USER_KEY</text>
 
         <rect x="34" y="140" width="150" height="44" fill="#f2f2f2" stroke="#000"/>
-        <text x="109" y="160" text-anchor="middle" font-size="12">GeminiClient</text>
-        <text x="109" y="175" text-anchor="middle" font-size="9.5">buildGeminiRequest</text>
+        <text x="109" y="160" text-anchor="middle" font-size="12">LlmClient</text>
+        <text x="109" y="175" text-anchor="middle" font-size="9.5">buildLlmRequest</text>
 
         <rect x="204" y="140" width="150" height="44" fill="#f2f2f2" stroke="#000"/>
         <text x="279" y="160" text-anchor="middle" font-size="12">ContextEngine</text>
@@ -383,7 +383,7 @@
         <!-- server <-> db -->
         <line x1="620" y1="196" x2="620" y2="286" stroke="#000" stroke-width="1.2" marker-end="url(#ar)" marker-start="url(#ar)"/>
 
-        <!-- BOLD direct fetch arrow browser -> gemini bypassing server -->
+        <!-- BOLD direct fetch arrow browser -> LLM provider bypassing server -->
         <path d="M194 360 C 560 405, 880 405, 1048 280" fill="none" stroke="#000" stroke-width="3.2" marker-end="url(#arB)"/>
         <rect x="540" y="372" width="244" height="34" fill="#fff" stroke="#000" stroke-width="1.2"/>
         <text x="662" y="394" text-anchor="middle" font-size="12.5" font-weight="bold">Direct Fetch (BYOK) &mdash; bypasses server</text>
@@ -394,7 +394,7 @@
         <text x="565" y="235" text-anchor="middle" font-size="9.5" font-style="italic">server holds no key</text>
       </svg>
       <figcaption><span class="fnum">Fig.&nbsp;1.</span> Aidit system architecture. Browser-side modules
-      (UI, AuthStore with the API key in <code>localStorage</code>, GeminiClient, ContextEngine,
+      (UI, AuthStore with the API key in <code>localStorage</code>, LlmClient, ContextEngine,
       ThreadStream/SSE) talk to the Aidit server (REST, SSE Hub, Domain, Segment&nbsp;SoT, DB) for text
       only. The bold <b>Direct&nbsp;Fetch&nbsp;(BYOK)</b> arrow goes browser&nbsp;&rarr;&nbsp;Google&nbsp;Gemini,
       bypassing the server; the server is <em>key-blind</em>.</figcaption>
@@ -411,7 +411,7 @@
     transits an LLM key. Everything the server receives is already-generated text: a human comment,
     an AI reply, or a summary.</p>
 
-    <h3 class="sub">B. Proxyless Browser&rarr;Gemini Direct Fetch</h3>
+    <h3 class="sub">B. Proxyless Browser&rarr;LLM Direct Fetch</h3>
     <p class="noindent">All inference is a direct browser fetch to the provider:</p>
     <p class="noindent mono">https://generativelanguage.googleapis.com/<br>
     v1beta/models/{MODEL}:generateContent?key={USER_KEY}</p>
@@ -422,7 +422,7 @@
     own guidance, which recommends a backend proxy and warns against client-side key exposure; the
     CSP and <code>localStorage</code> mitigations of Sec.&nbsp;V exist precisely to address the
     resulting client-side key-exposure risk. The PoC pins
-    <code>MODEL = gemini-3.1-flash-lite</code> (Gemini Flash&nbsp;Lite, GA 2026, ~1,048,576-token
+    <code>LLM_MODEL = gemini-3.1-flash-lite</code> (Google Gemini Flash&nbsp;Lite, GA 2026, ~1,048,576-token
     input window) [16]. Because there
     is no server proxy, the server-side SSRF surface that proxied BYOK clients incur does not exist
     (Sec.&nbsp;V).</p>
@@ -468,7 +468,7 @@
     active segment only (the server has no key). (3)&nbsp;If <code>summaryNeeded</code>, the lazy
     summarization branch runs (below). (4)&nbsp;The client POSTs an <code>AI_REPLY</code> bubble as
     <code>PENDING</code> (with <code>replyToId</code> set to the human comment), surfacing a loading
-    indicator to all viewers over SSE. (5)&nbsp;The caller calls Gemini
+    indicator to all viewers over SSE. (5)&nbsp;The caller calls the LLM provider's
     <code>generateContent</code> with its own key (<code>systemInstruction = persona</code>,
     <code>contents = </code> the assembled context). (6)&nbsp;The client PATCHes the AI bubble with
     the reply and <code>status=COMPLETE</code> (or <code>FAILED</code> on error); the human comment is
@@ -486,7 +486,7 @@
     is, by definition, present and about to perform inference anyway.</p>
 
     <h3 class="sub">C. Recursive Context Reassembly</h3>
-    <p class="noindent">In the lazy branch (Fig.&nbsp;2, step&nbsp;3): (a)&nbsp;the caller calls Gemini
+    <p class="noindent">In the lazy branch (Fig.&nbsp;2, step&nbsp;3): (a)&nbsp;the caller calls the LLM provider
     with <code>systemInstruction = persona + summarization-directive</code> and
     <code>contents = </code> the current active context, producing a summary; (b)&nbsp;the client
     POSTs an <code>AI_SUMMARY</code> bubble with <code>segmentExpected = current active index</code>,
@@ -536,7 +536,7 @@
         <line x1="100" y1="216" x2="40" y2="216" stroke="#000"/>
         <line x1="40" y1="216" x2="40" y2="288" stroke="#000" marker-end="url(#ar2)"/>
         <rect x="14" y="288" width="180" height="58" fill="#fff" stroke="#000"/>
-        <text x="104" y="306" text-anchor="middle" font-size="10">3a. Gemini summarize</text>
+        <text x="104" y="306" text-anchor="middle" font-size="10">3a. LLM summarize</text>
         <text x="104" y="320" text-anchor="middle" font-size="9.5">(caller key, persona+dir)</text>
         <text x="104" y="334" text-anchor="middle" font-size="9.5">3b. POST AI_SUMMARY</text>
         <line x1="104" y1="346" x2="104" y2="362" stroke="#000" marker-end="url(#ar2)"/>
@@ -563,7 +563,7 @@
         <line x1="190" y1="450" x2="190" y2="466" stroke="#000" marker-end="url(#ar2)"/>
 
         <rect x="70" y="466" width="240" height="38" fill="#fff" stroke="#000"/>
-        <text x="190" y="490" text-anchor="middle" font-size="10.5">5. Gemini generateContent (caller key)</text>
+        <text x="190" y="490" text-anchor="middle" font-size="10.5">5. LLM generateContent (caller key)</text>
         <line x1="190" y1="504" x2="190" y2="520" stroke="#000" marker-end="url(#ar2)"/>
 
         <rect x="70" y="520" width="240" height="34" rx="17" fill="#eee" stroke="#000"/>
@@ -667,7 +667,7 @@
         <!-- both proceed -->
         <rect x="20" y="252" width="340" height="46" fill="#fff" stroke="#000"/>
         <text x="190" y="270" text-anchor="middle" font-size="9.5">Both proceed against seg k+1: post AI_REPLY,</text>
-        <text x="190" y="285" text-anchor="middle" font-size="9.5">call Gemini with own key. Optimistic concurrency.</text>
+        <text x="190" y="285" text-anchor="middle" font-size="9.5">call LLM provider with own key. Optimistic concurrency.</text>
       </svg>
       <figcaption><span class="fnum">Fig.&nbsp;4.</span> Concurrent summarization under the invariant
       <em>at most one <code>AI_SUMMARY</code> per active segment</em>. The first POST wins
@@ -716,7 +716,7 @@
     <p class="noindent">Only <code>community.personaPrompt</code> is mapped to the
     <code>systemInstruction</code> (XC-4). All user and comment content is always mapped as
     <code>role:'user'</code> data turns and can never be promoted to the <code>system</code> role.
-    <code>buildGeminiRequest</code> is the single point where this mapping occurs, and every appended
+    <code>buildLlmRequest</code> is the single point where this mapping occurs, and every appended
     turn is forced to <code>role:'user'</code>. Fig.&nbsp;5 depicts both the CSP egress control and the
     proxyless (no-SSRF) topology.</p>
 
@@ -793,7 +793,7 @@
     reintroduces provider-side cost.</p>
 
     <h3 class="sub">B. Token-Counting Method</h3>
-    <p class="noindent">On bubble post, <code>tokenCount</code> is computed by Gemini
+    <p class="noindent">On bubble post, <code>tokenCount</code> is computed by the LLM provider's
     <code>countTokens</code> as the primary, accurate method (requires a key), with a key-free fallback
     of <code>Math.ceil(chars/4)</code>. The server accumulates
     <code>segment.tokenSum += tokenCount</code>; <code>GET /context</code> returns this
