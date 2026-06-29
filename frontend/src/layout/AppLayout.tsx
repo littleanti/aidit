@@ -167,7 +167,11 @@ export default function AppLayout() {
           </nav>
         </aside>
 
-        <main className="px-4 pb-20 pt-4 desktop:px-0 desktop:pb-8">
+        {/* min-w-0: <main> is the 1fr grid track item; grid items default to
+            min-width:auto, so long unwrappable content (code blocks, URLs, wide
+            images) would expand the track past its share and blow out the fixed
+            max-w-5xl grid. min-w-0 caps it so content wraps/scrolls instead. */}
+        <main className="min-w-0 px-4 pb-20 pt-4 desktop:px-0 desktop:pb-8">
           <Outlet />
         </main>
       </div>
