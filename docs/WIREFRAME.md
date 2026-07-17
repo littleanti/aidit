@@ -551,6 +551,14 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 │ ( ••••••••••••  ) [변경]     │  ← 마스킹(로컬 전용); 변경 클릭 → 인라인 입력 토글
 │ ⚠ 키는 이 기기에만 저장됩니다  │  ← term-dim 경고 문구
 │                            │
+│ ── MY AI PERSONA ──         │
+│ 슬롯 1: (이름   )            │  ← 슬롯 3개, 각각 이름 + 프롬프트 textarea
+│ (프롬프트 textarea)          │
+│ [ 저장 ] [ 비우기 ]           │
+│ … 슬롯 2 · 슬롯 3 동일 …      │
+│ ⚠ 이 기기(localStorage)에만  │  ← 로컬 전용 안내 (BYOK 키와 동일 철학)
+│   저장됩니다                  │
+│                            │
 │ ── Language ──              │
 │ 언어 / Language              │
 │ [ KO | EN ]                 │  ← LangToggle variant="setting" (term-amber 활성)
@@ -582,6 +590,8 @@ size: sm = h-7 w-7 text-[13px], md = h-8 w-8 text-sm (기본 md)
 **2026-06-20 업데이트 (M17)**: "언어 / Language `[ KO | EN ]`" 행 추가.
 
 **2026-06-21 업데이트 (v0.6)**: /me 전면 리디자인 — 탭형 활동 피드(communities / posts / bookmarks) + `usePagedList` 무한 스크롤 + 커서 페이지네이션 + 탭별 ShellPrompt. 설정(API Key·Language·Logout)을 `/me/settings`(§9.1)로 분리. /me 헤더에 `[ ⚙ ]` 설정 진입점 추가.
+
+**2026-07-17 업데이트 (FR-12)**: §9.1 설정에 **MY AI PERSONA** 섹션 추가 — 개인 페르소나 3슬롯(이름+프롬프트), localStorage 전용(`aidit-user-personas`). Composer AI 메뉴에는 페르소나 선택 행(`[없음]` + 저장된 슬롯 이름, 기본 없음, 세션 한정)이 추가되어 선택된 페르소나가 해당 스레드의 `@AI` 답변 systemInstruction에 커뮤니티 페르소나 다음 순서로 결합된다.
 
 ---
 

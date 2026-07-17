@@ -12,7 +12,8 @@
 //
 // ---------------------------------------------------------------------------
 // XC-4 GUARD (CRITICAL, TRD §8 — prompt injection):
-//   * The community personaPrompt is the ONLY thing that goes into
+//   * ONLY persona prompts (community personaPrompt + the caller's own
+//     userPersonaPrompt, FR-12) and app-controlled directives go into
 //     systemInstruction.
 //   * EVERY piece of user/comment content stays as role:'user' DATA turns and
 //     is NEVER concatenated into systemInstruction.
@@ -78,6 +79,10 @@ export interface AppendedTurn {
 export interface BuildLlmRequestArgs {
   /** Community persona prompt. L6/XC-4: goes ONLY into systemInstruction. */
   personaPrompt: string;
+  /** FR-12: the caller's OWN persona (local-only, userPersonaStore). Joined
+   *  into systemInstruction AFTER the community persona — like personaPrompt
+   *  it goes ONLY into systemInstruction, never into a user data turn. */
+  userPersonaPrompt?: string;
   /** Assembled context from GET /posts/:id/context (active segment). */
   context: ContextResponse;
   /** Optional extra user turn to append after the context turns. */
@@ -168,14 +173,18 @@ export function buildLlmRequest(
   // if BOTH are empty. Only persona + this app directive ever reach
   // systemInstruction — NO user/comment content (XC-4).
   const persona = personaPrompt.trim();
+  // FR-12: the caller's own persona rides AFTER the community persona so the
+  // community's topic/rules stay primary and the user persona adds role/stance.
+  const userPersona = (args.userPersonaPrompt ?? '').trim();
   const directive = responseLanguageDirective().trim();
-  // Length directive (XC-4 safe): order is persona -> language -> length.
-  // Every level emits a directive (short/normal/long); .filter(Boolean) only
-  // drops empty persona/language pieces.
+  // Length directive (XC-4 safe): order is community persona -> user persona
+  // -> language -> length. Every level emits a directive (short/normal/long);
+  // .filter(Boolean) only drops empty persona/language pieces.
   const lengthDirective = responseLengthDirective(len).trim();
   const systemInstruction =
-    [persona, directive, lengthDirective].filter(Boolean).join('\n\n') ||
-    undefined;
+    [persona, userPersona, directive, lengthDirective]
+      .filter(Boolean)
+      .join('\n\n') || undefined;
 
   // Safety-only token cap: merge a per-length maxOutputTokens when defined.
   // (All three levels define a cap; the `!== undefined` guard stays so a future
@@ -404,6 +413,10 @@ export interface RunAtAiReplyArgs {
   callerApiKey: string;
   /** optional: the @AI text, used only if we must append (context predates it). */
   humanCommentBody?: string;
+  /** FR-12: the caller's OWN persona prompt (Composer per-thread pick). Joined
+   *  into systemInstruction after the community persona; @AI replies only —
+   *  primary reply and summarization never carry it. */
+  userPersonaPrompt?: string;
   /** optional: inline image bytes (base64) freshly uploaded on THIS turn. When
    *  present, the appended user turn is FORCED so the image rides this call. */
   image?: { mimeType: string; data: string };
@@ -616,6 +629,7 @@ export async function runAtAiReply(
 
   const request = buildLlmRequest({
     personaPrompt: communityPersonaPrompt,
+    userPersonaPrompt: args.userPersonaPrompt,
     context,
     appended,
     length,

@@ -27,6 +27,11 @@ import { useAuthStore } from '../stores/authStore';
 import { useThreadStore } from '../stores/threadStore';
 import { useAiModeStore } from '../stores/aiModeStore';
 import { useAiLengthStore } from '../stores/aiLengthStore';
+import {
+  useUserPersonaStore,
+  isFilledSlot,
+  type UserPersonaSlot,
+} from '../stores/userPersonaStore';
 import { postComment, uploadImage } from '../api/rest';
 import type { Comment } from '../api/types';
 import { runAtAiReply } from '../engine/contextEngine';
@@ -115,18 +120,28 @@ function AiModeMenu({
   aiMode,
   length,
   showGuard,
+  personas,
+  personaSel,
   onToggle,
   onPickLength,
+  onPickPersona,
   onAddKey,
+  onOpenSettings,
   t,
 }: {
   aiMode: boolean;
   length: AiLength;
   /** show the key-absent guard (user tried to enable AI without a BYOK key). */
   showGuard: boolean;
+  /** the user's saved persona slots (FR-12); empty slots are hidden. */
+  personas: UserPersonaSlot[];
+  /** selected slot index for THIS thread, or null for "none" (default). */
+  personaSel: number | null;
   onToggle: () => void;
   onPickLength: (len: AiLength) => void;
+  onPickPersona: (index: number | null) => void;
   onAddKey: () => void;
+  onOpenSettings: () => void;
   t: (key: string) => string;
 }) {
   const labels: Record<AiLength, string> = {
@@ -134,6 +149,11 @@ function AiModeMenu({
     normal: t('thread.lengthNormal'),
     long: t('thread.lengthLong'),
   };
+  // FR-12: only saved (prompt-bearing) slots are pickable, keeping their
+  // original slot index so the selection maps back to the store.
+  const filledPersonas = personas
+    .map((p, i) => ({ p, i }))
+    .filter(({ p }) => isFilledSlot(p));
   return (
     <div
       role="dialog"
@@ -187,6 +207,73 @@ function AiModeMenu({
             );
           })}
         </div>
+      </div>
+      {/* FR-12: my-persona row — pick the caller's own persona for THIS thread's
+          @AI replies. Default is none; selection is session-only (per post). */}
+      <div
+        role="radiogroup"
+        aria-label={t('thread.personaAria')}
+        className={`flex flex-wrap items-center gap-1.5 border-t border-term-border pt-2 ${
+          aiMode ? '' : 'opacity-40'
+        }`}
+      >
+        <span className="shrink-0 text-[11px] font-bold text-term-faint">
+          {t('thread.personaRowLabel')}
+        </span>
+        {filledPersonas.length === 0 ? (
+          <span className="text-[11px] leading-snug text-term-dim">
+            {t('thread.personaEmptyHint')}{' '}
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="text-term-bright underline underline-offset-2"
+            >
+              {t('thread.personaEmptyCta')} →
+            </button>
+          </span>
+        ) : (
+          <>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={personaSel === null}
+              disabled={!aiMode}
+              onClick={() => onPickPersona(null)}
+              className={`flex min-h-[36px] select-none items-center rounded-[2px] border px-2 text-xs font-bold transition ${
+                aiMode && personaSel === null
+                  ? 'border-term-amber text-term-amber'
+                  : 'border-term-border text-term-dim'
+              } ${aiMode ? 'hover:text-term-bright' : 'cursor-not-allowed'}`}
+            >
+              {aiMode && personaSel === null
+                ? `[${t('thread.personaNone')}]`
+                : t('thread.personaNone')}
+            </button>
+            {filledPersonas.map(({ p, i }) => {
+              const active = aiMode && personaSel === i;
+              const name = p.name || `#${i + 1}`;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  disabled={!aiMode}
+                  onClick={() => onPickPersona(i)}
+                  className={`flex min-h-[36px] max-w-full select-none items-center rounded-[2px] border px-2 text-xs font-bold transition ${
+                    active
+                      ? 'border-term-amber text-term-amber'
+                      : 'border-term-border text-term-dim'
+                  } ${aiMode ? 'hover:text-term-bright' : 'cursor-not-allowed'}`}
+                >
+                  <span className="truncate">
+                    {active ? `[${name}]` : name}
+                  </span>
+                </button>
+              );
+            })}
+          </>
+        )}
       </div>
       {/* key-absent guard — shown when the user taps the toggle without a key
           (AI stays OFF; the guard explains why + links to key registration). */}
@@ -244,6 +331,19 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
   // Thread-scoped AI-response-length (session-only, default 'normal' per post).
   const aiLength = useAiLengthStore((s) => s.byPost[postId] ?? DEFAULT_AI_LENGTH);
   const setAiLength = useAiLengthStore((s) => s.set);
+
+  // FR-12: my-persona slots (persisted, local-only) + per-thread selection
+  // (session-only, default null = none). Applied to @AI replies only.
+  const userPersonas = useUserPersonaStore((s) => s.personas);
+  const personaSelRaw = useUserPersonaStore(
+    (s) => s.selectedByPost[postId] ?? null,
+  );
+  const selectPersona = useUserPersonaStore((s) => s.select);
+  // A selection pointing at a since-cleared slot degrades to "none".
+  const personaSel =
+    personaSelRaw !== null && isFilledSlot(userPersonas[personaSelRaw] ?? { name: '', prompt: '' })
+      ? personaSelRaw
+      : null;
 
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -455,10 +555,18 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
     // need to touch the human bubble on AI failure (NFR-5).
     if (willInvokeAi && sendSucceeded && humanCommentId && apiKey) {
       const callerUsername = useAuthStore.getState().username ?? t('thread.userFallback');
+      // FR-12: resolve the selected persona from a store SNAPSHOT at send time
+      // (mirrors the apiKey read above). Cleared/none selections yield undefined.
+      const personaState = useUserPersonaStore.getState();
+      const selIdx = personaState.selectedByPost[postId] ?? null;
+      const selSlot = selIdx !== null ? personaState.personas[selIdx] : undefined;
+      const userPersonaPrompt =
+        selSlot && isFilledSlot(selSlot) ? selSlot.prompt : undefined;
       void runAtAiReply({
         postId,
         humanCommentId,
         communityPersonaPrompt: communityPersonaPrompt ?? '',
+        userPersonaPrompt,
         callerUsername,
         callerApiKey: apiKey,
         humanCommentBody: body,
@@ -605,12 +713,19 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
                 aiMode={aiMode}
                 length={aiLength}
                 showGuard={!hasApiKey && noKeyWarn}
+                personas={userPersonas}
+                personaSel={personaSel}
                 onToggle={handleToggleAi}
                 onPickLength={(len) => {
                   setAiLength(postId, len);
                   setMenuOpen(false);
                 }}
+                onPickPersona={(idx) => selectPersona(postId, idx)}
                 onAddKey={() => {
+                  setMenuOpen(false);
+                  navigate('/me/settings');
+                }}
+                onOpenSettings={() => {
                   setMenuOpen(false);
                   navigate('/me/settings');
                 }}

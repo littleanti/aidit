@@ -1,7 +1,7 @@
 # Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
 
 > 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
-> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-06-23 (로그아웃 시 BYOK Gemini 키 보존 + 로그인 폼 저장된 키 표시 + 프로필 설정 버튼 라벨 항상 노출)
+> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-07-17 (내 AI 페르소나 3슬롯 — 로컬 저장 + Composer 발화별 선택)
 > 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
 
 ---
@@ -9,6 +9,15 @@
 ## 변경 이력 (Changelog)
 
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
+
+### 2026-07-17
+- **[feat]** **내 AI 페르소나 — 사용자 개인 페르소나 3슬롯(로컬 저장) + Composer 발화별 선택 적용**: 커뮤니티 페르소나(systemInstruction) 외에, 사용자가 자신의 BYOK AI에 부여할 **개인 페르소나를 최대 3개** 저장하고 `@AI` 답변마다 골라 적용할 수 있게 한다(예: 토론 커뮤니티에서 "게시글에 반대 입장을 내는 토론자" 페르소나).
+  - **저장(로컬 전용)**: 신규 스토어 `frontend/src/stores/userPersonaStore.ts` — zustand persist, localStorage 키 `aidit-user-personas`, 슬롯 3개 `{ name, prompt }`. BYOK 키·AI 모드·길이 설정과 동일한 "AI 관련 설정은 내 기기에" 철학으로 **서버에 전송하지 않는다**(서버·API 계약·DB 무변경). 발화별 선택 상태 `selectedByPost`(postId → 슬롯 인덱스 | null)는 **세션 한정·미영속**(aiModeStore와 동일 철학, persist `partialize`로 `personas`만 저장).
+  - **관리 UI**: 설정 페이지 `/me/settings`(`Settings.tsx`)의 API Key 섹션 아래에 "MY AI PERSONA" 섹션 추가 — 슬롯 3개 각각 이름 입력 + 프롬프트 textarea + `[ 저장 ]`/`[ 비우기 ]`, 로컬 저장 안내 문구.
+  - **선택 UX**: Composer AI 메뉴(`AiModeMenu`)에 페르소나 선택 행 추가 — `[없음]` + 저장된 슬롯 이름 버튼(빈 슬롯은 미노출). **기본값은 없음**이며 사용자가 스레드에서 발화별로 선택한다. 저장된 페르소나가 하나도 없으면 설정으로 안내하는 힌트 노출.
+  - **주입(XC-4 유지)**: `contextEngine.buildLlmRequest`의 systemInstruction 조립을 `[커뮤니티 페르소나, 내 페르소나, 언어 지시, 길이 지시]` 순으로 확장(`BuildLlmRequestArgs.userPersonaPrompt?` 신설). `RunAtAiReplyArgs.userPersonaPrompt?`로 Composer→엔진 전달. **`runPrimaryReply`(1차 답변)·`ensureSummary`(128K 요약)는 무변경** — 개인 페르소나는 Composer가 구동하는 `@AI` 답변에만 적용. 개인 페르소나도 systemInstruction에만 들어가고 user 데이터 턴과는 절대 결합되지 않는다(XC-4 격리 불변).
+  - **i18n**: `profile.myPersona*`(설정 섹션)·`thread.persona*`(Composer 행) 키를 ko/en 대칭 추가.
+  - **변경 파일**: `frontend/src/stores/userPersonaStore.ts`(신규), `frontend/src/pages/Settings.tsx`, `frontend/src/components/Composer.tsx`, `frontend/src/engine/contextEngine.ts`, `frontend/src/i18n/dicts/profile.ts`, `frontend/src/i18n/dicts/thread.ts`. (PRD FR-12 신설, WIREFRAME §9.1 갱신)
 
 ### 2026-07-08
 - **[docs]** **PATENT.html — 멀티유저 AI 챗 오픈소스 추가 조사(STMP) 반영**: 사용자 문의로 CopilotKit/open-multiplayer-chat 확인 결과 미존재(404; CopilotKit 산하 유사물은 open-multi-agent-canvas — 다중 에이전트/단일 사용자라 비관련). 대신 실재하는 최근접 오픈소스 SillyTavern MultiPlayer(STMP, AGPL-3.0 — 복수 사용자가 하나의 채팅 히스토리를 공유하며 AI와 대화)를 배경기술 (1)에 추가. 신규성 위협 아님 — 호스트 서버가 호스트 자격증명(secrets.json)으로 LLM 호출(key-custody), 컨텍스트는 요약이 아닌 길이 절단(truncation), 동시성은 발화 쿨다운뿐. AnythingLLM(사용자별 분리 히스토리)·llm-party-chat(다중 LLM 간 대화)은 비관련으로 인용 제외. (`docs/PATENT.html`)

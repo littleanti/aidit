@@ -66,6 +66,19 @@ export const profile = {
       '예) 당신은 친절한 요리 전문가입니다. 항상 단계별로 쉽게 설명하고, 재료 대체안을 함께 제안하세요.',
     personaHint:
       '이 프롬프트는 커뮤니티의 모든 AI 호출에 적용되는 시스템 지침(systemInstruction)이 됩니다. AI의 말투·역할·관점을 정해 보세요.',
+
+    // My AI persona (Settings, FR-12)
+    myPersonaHeading: '내 AI 페르소나',
+    myPersonaSlotLabel: '슬롯 {n}',
+    myPersonaEmptyBadge: '비어 있음',
+    myPersonaNamePlaceholder: '이름 (예: 반대 토론자)',
+    myPersonaPromptPlaceholder:
+      '예) 당신은 게시글의 주장에 반대 입장을 취하는 토론자입니다. 근거를 들어 정중하게 반박하세요.',
+    myPersonaSaveBtn: '[ 저장 ]',
+    myPersonaClearBtn: '[ 비우기 ]',
+    myPersonaHint:
+      '저장한 페르소나는 스레드 입력창의 AI 메뉴에서 골라 쓸 수 있어요. 커뮤니티 페르소나 다음에 내 AI의 시스템 지침으로 덧붙습니다.',
+    myPersonaStorageNote: '페르소나는 이 기기(localStorage)에만 저장됩니다.',
   },
   en: {
     // errors / async
@@ -131,5 +144,18 @@ export const profile = {
       'e.g. You are a friendly cooking expert. Always explain step by step and suggest ingredient substitutions.',
     personaHint:
       'This prompt becomes the system instruction (systemInstruction) applied to every AI call in the community. Use it to set the AI\'s tone, role, and perspective.',
+
+    // My AI persona (Settings, FR-12)
+    myPersonaHeading: 'My AI Personas',
+    myPersonaSlotLabel: 'Slot {n}',
+    myPersonaEmptyBadge: 'Empty',
+    myPersonaNamePlaceholder: 'Name (e.g. Devil\'s advocate)',
+    myPersonaPromptPlaceholder:
+      'e.g. You are a debater who argues against the post\'s position. Rebut politely with evidence.',
+    myPersonaSaveBtn: '[ Save ]',
+    myPersonaClearBtn: '[ Clear ]',
+    myPersonaHint:
+      'Saved personas can be picked from the AI menu in a thread\'s composer. They are appended to your AI\'s system instruction after the community persona.',
+    myPersonaStorageNote: 'Personas are stored only on this device (localStorage).',
   },
 } as const;
