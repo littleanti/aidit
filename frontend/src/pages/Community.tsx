@@ -5,6 +5,7 @@ import {
   getCommunities,
   getCommunity,
   getCommunityPosts,
+  getPosts,
 } from '../api/rest';
 import type { Community as CommunityDTO, PostListItem } from '../api/types';
 import { useAuthStore } from '../stores/authStore';
@@ -65,13 +66,23 @@ export default function Community() {
 
 export function CommunitySearch() {
   const { t } = useT();
+  // FR-1.4: unified search — [communities | posts] tabs sharing one query box.
+  const [tab, setTab] = useState<'communities' | 'posts'>('communities');
   const [q, setQ] = useState('');
   const [results, setResults] = useState<CommunityDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // debounced partial-match search
+  // post-search state (FR-1.4): newest-first, cursor-paginated via [ load more ].
+  const [postResults, setPostResults] = useState<PostListItem[]>([]);
+  const [postCursor, setPostCursor] = useState<string | null>(null);
+  const [postLoading, setPostLoading] = useState(false);
+  const [postMoreLoading, setPostMoreLoading] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
+
+  // debounced partial-match community search (active tab only)
   useEffect(() => {
+    if (tab !== 'communities') return;
     let cancelled = false;
     const term = q.trim();
     setLoading(true);
@@ -98,7 +109,60 @@ export function CommunitySearch() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [q, t]);
+  }, [q, tab, t]);
+
+  // debounced post search (active tab only) — resets to page 1 on query change.
+  useEffect(() => {
+    if (tab !== 'posts') return;
+    let cancelled = false;
+    const term = q.trim();
+    setPostLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const page = await getPosts({ sort: 'new', q: term || undefined });
+        if (!cancelled) {
+          setPostResults(page.items);
+          setPostCursor(page.nextCursor);
+          setPostError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setPostError(
+            err instanceof ApiError
+              ? err.message
+              : t('community.postLoadError'),
+          );
+        }
+      } finally {
+        if (!cancelled) setPostLoading(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [q, tab, t]);
+
+  async function loadMorePosts() {
+    if (!postCursor || postMoreLoading) return;
+    setPostMoreLoading(true);
+    try {
+      const page = await getPosts({
+        sort: 'new',
+        q: q.trim() || undefined,
+        cursor: postCursor,
+      });
+      setPostResults((prev) => [...prev, ...page.items]);
+      setPostCursor(page.nextCursor);
+      setPostError(null);
+    } catch (err) {
+      setPostError(
+        err instanceof ApiError ? err.message : t('community.postLoadError'),
+      );
+    } finally {
+      setPostMoreLoading(false);
+    }
+  }
 
   const trimmed = q.trim();
 
@@ -111,6 +175,34 @@ export function CommunitySearch() {
       </PageHeaderBar>
       <ShellPrompt command={`grep -ri "${q}"`} className="mb-3" />
 
+      {/* FR-1.4: search-target tabs (communities | posts) */}
+      <div
+        role="tablist"
+        aria-label={t('community.searchTabsAria')}
+        className="flex rounded-[2px] border border-term-border"
+      >
+        {(['communities', 'posts'] as const).map((key) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={`flex min-h-[44px] flex-1 items-center justify-center text-sm font-semibold transition ${
+              tab === key
+                ? 'border-b-2 border-term-amber bg-[rgba(255,207,74,0.06)] text-term-amber'
+                : 'text-term-dim hover:text-term-bright'
+            }`}
+          >
+            {t(
+              key === 'communities'
+                ? 'community.tabCommunities'
+                : 'community.tabPosts',
+            )}
+          </button>
+        ))}
+      </div>
+
       <div className="flex items-center gap-2 rounded-[2px] border border-term-border bg-term-input px-3 py-2.5 focus-within:border-term-bright">
         <span aria-hidden className="text-term-cta">
           &gt;
@@ -119,12 +211,22 @@ export function CommunitySearch() {
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder={t('community.searchPlaceholder')}
-          aria-label={t('community.searchAriaLabel')}
+          placeholder={t(
+            tab === 'communities'
+              ? 'community.searchPlaceholder'
+              : 'community.postSearchPlaceholder',
+          )}
+          aria-label={t(
+            tab === 'communities'
+              ? 'community.searchAriaLabel'
+              : 'community.postSearchAriaLabel',
+          )}
           className="w-full flex-1 bg-transparent text-sm text-term-bright outline-none placeholder:text-term-dim"
         />
       </div>
 
+      {tab === 'communities' && (
+      <>
       <Link
         to="/create-community"
         state={trimmed ? { name: trimmed } : undefined}
@@ -180,6 +282,69 @@ export function CommunitySearch() {
               : t('community.emptyCreateLink')}
           </Link>
         </div>
+      )}
+      </>
+      )}
+
+      {tab === 'posts' && (
+      <>
+      {postError && <ErrorState variant="banner" message={postError} />}
+
+      {postLoading && postResults.length === 0 ? (
+        <LoadingState variant="skeleton" rows={4} />
+      ) : (
+        <ul className="space-y-2">
+          {postResults.map((p) => (
+            <li key={p.id}>
+              <Link
+                to={`/p/${p.id}`}
+                className="block rounded-[2px] border border-term-border bg-term-card px-3 py-2.5 transition active:bg-term-hover hover:border-term-bright"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 truncate text-sm font-bold text-term-title glow">
+                    {p.title}
+                  </span>
+                  <span className="ml-auto shrink-0 truncate text-xs text-term-faint">
+                    {p.communityName}
+                  </span>
+                </div>
+                {p.body && (
+                  <p className="mt-1 truncate text-xs text-term-dim">{p.body}</p>
+                )}
+                <p className="mt-1 text-[11px] text-term-faint">
+                  {t('community.postMeta', {
+                    author: p.authorUsername,
+                    score: p.score,
+                    count: p.commentCount,
+                  })}
+                </p>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {postCursor && !postLoading && (
+        <button
+          type="button"
+          onClick={() => void loadMorePosts()}
+          disabled={postMoreLoading}
+          className="flex min-h-[44px] w-full items-center justify-center rounded-[2px] border border-term-border text-sm font-semibold text-term-bright transition hover:border-term-bright hover:bg-term-hover disabled:opacity-40"
+        >
+          {postMoreLoading
+            ? t('community.loadingMore')
+            : t('community.loadMore')}
+        </button>
+      )}
+
+      {!postLoading && !postError && postResults.length === 0 && (
+        <div className="rounded-[2px] border border-dashed border-term-border px-3 py-4 text-center text-sm leading-relaxed text-term-dim">
+          {trimmed
+            ? t('community.postEmptyNoMatch', { q: trimmed })
+            : t('community.postEmptyAll')}
+        </div>
+      )}
+      </>
       )}
     </div>
   );

@@ -1142,3 +1142,119 @@ describe("AI_SUMMARY 409 guard (BE-7)", () => {
     expect(active?.index).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// FR-1.4: GET /posts?q= — post search (title OR body partial match, ANDed
+// with the keyset cursor so search pages exactly like the feed)
+// ---------------------------------------------------------------------------
+
+describe("GET /posts?q= — post search (FR-1.4)", () => {
+  it("filters by title OR body (case-insensitive), excluding non-matching posts", async () => {
+    const user = await createUser(app);
+    const community = await createCommunity(user.id);
+    const byTitle = await createPostViaApi(app, user.token, community.id, {
+      title: "All about zebra habitats",
+      body: "Plains and savannas.",
+    });
+    const byBody = await createPostViaApi(app, user.token, community.id, {
+      title: "Striped animals",
+      body: "The zebra is the most famous one.",
+    });
+    await createPostViaApi(app, user.token, community.id, {
+      title: "Unrelated post",
+      body: "Nothing to see here.",
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/posts?sort=new&q=ZEBRA",
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    const ids = body.items.map((p: { id: string }) => p.id).sort();
+    expect(ids).toEqual([byTitle.id, byBody.id].sort());
+  });
+
+  it("returns an empty page (items: [], nextCursor: null) when nothing matches", async () => {
+    const user = await createUser(app);
+    const community = await createCommunity(user.id);
+    await createPostViaApi(app, user.token, community.id);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/posts?sort=new&q=no-such-needle",
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.items).toEqual([]);
+    expect(body.nextCursor).toBeNull();
+  });
+
+  it("pages matching posts with the cursor and never leaks non-matching rows", async () => {
+    const user = await createUser(app);
+    const community = await createCommunity(user.id);
+    // 22 matching posts (> FEED_PAGE_SIZE=20) + 1 non-matching in between.
+    // Inserted directly via prisma (NOT the route) to sidestep the per-user
+    // posting rate limit; GET /posts only reads Post rows, no segment needed.
+    const base = Date.now() - 60_000;
+    const rows = [] as {
+      communityId: string;
+      authorId: string;
+      title: string;
+      body: string;
+      score: number;
+      commentCount: number;
+      hotScore: number;
+      createdAt: Date;
+    }[];
+    for (let i = 0; i < 22; i++) {
+      rows.push({
+        communityId: community.id,
+        authorId: user.id,
+        title: `needle post ${i}`,
+        body: `match ${i}`,
+        score: 0,
+        commentCount: 0,
+        hotScore: 0,
+        createdAt: new Date(base + i * 1000),
+      });
+      if (i === 10) {
+        rows.push({
+          communityId: community.id,
+          authorId: user.id,
+          title: "hay only",
+          body: "no match here",
+          score: 0,
+          commentCount: 0,
+          hotScore: 0,
+          createdAt: new Date(base + i * 1000 + 500),
+        });
+      }
+    }
+    await prisma.post.createMany({ data: rows });
+
+    const page1Res = await app.inject({
+      method: "GET",
+      url: "/posts?sort=new&q=needle",
+    });
+    expect(page1Res.statusCode).toBe(200);
+    const page1 = JSON.parse(page1Res.body);
+    expect(page1.items).toHaveLength(20);
+    expect(page1.nextCursor).toBeTruthy();
+    for (const p of page1.items) expect(p.title).toContain("needle");
+
+    const page2Res = await app.inject({
+      method: "GET",
+      url: `/posts?sort=new&q=needle&cursor=${encodeURIComponent(page1.nextCursor)}`,
+    });
+    expect(page2Res.statusCode).toBe(200);
+    const page2 = JSON.parse(page2Res.body);
+    expect(page2.items).toHaveLength(2);
+    expect(page2.nextCursor).toBeNull();
+    for (const p of page2.items) expect(p.title).toContain("needle");
+
+    // no overlap between pages
+    const ids1 = new Set(page1.items.map((p: { id: string }) => p.id));
+    for (const p of page2.items) expect(ids1.has(p.id)).toBe(false);
+  });
+});

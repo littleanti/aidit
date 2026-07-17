@@ -212,6 +212,8 @@ export type PostSort = 'hot' | 'new' | 'top';
 export interface GetPostsParams {
   sort?: PostSort;
   cursor?: string;
+  /** FR-1.4: partial-match post search on title OR body (server-side filter). */
+  q?: string;
 }
 
 // The server returns a paginated envelope { items, nextCursor } for post
@@ -234,7 +236,7 @@ export interface PostsPage {
 export async function getPosts(params: GetPostsParams = {}, userId?: string): Promise<PostsPage> {
   const r = await request<PostListResponse | { items: PostListItem[]; nextCursor?: string | null }>(
     '/posts',
-    { query: { sort: params.sort, cursor: params.cursor }, userId },
+    { query: { sort: params.sort, cursor: params.cursor, q: params.q }, userId },
   );
   const nextCursor =
     !Array.isArray(r) && 'nextCursor' in r ? (r.nextCursor ?? null) : null;

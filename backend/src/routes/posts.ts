@@ -159,22 +159,32 @@ const plugin: FastifyPluginAsync = async (app) => {
 
   // Home feed: ORDER BY hotScore DESC (sort=hot, default) or createdAt DESC
   // (sort=new), keyset/cursor paginated.
-  app.get<{ Querystring: { sort?: string; cursor?: string } }>(
+  // FR-1.4: optional `q` — partial, case-insensitive (ASCII, SQLite LIKE) match
+  // on title OR body. ANDed with the keyset predicate so search pages exactly
+  // like the feed; omitting `q` keeps the original feed behavior verbatim.
+  app.get<{ Querystring: { sort?: string; cursor?: string; q?: string } }>(
     "/posts",
     async (req, reply) => {
       const sort = req.query.sort === "new" ? "new" : "hot";
+      const term = typeof req.query.q === "string" ? req.query.q.trim() : "";
       const cursorRaw = req.query.cursor;
       const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
       if (cursorRaw && !cursor) {
         return reply.code(400).send({ error: "Invalid cursor" });
       }
 
+      const searchWhere = term
+        ? {
+            OR: [{ title: { contains: term } }, { body: { contains: term } }],
+          }
+        : null;
+
       // Keyset predicate: rows strictly "after" the cursor in the sort order.
       // For DESC ordering on (key, id) the next page is key < cursorKey, OR
       // key == cursorKey AND id < cursorId (id also DESC as a stable tie-break).
-      const where =
+      const cursorWhere =
         cursor === null
-          ? {}
+          ? null
           : sort === "hot"
             ? {
                 OR: [
@@ -198,6 +208,13 @@ const plugin: FastifyPluginAsync = async (app) => {
                   },
                 ],
               };
+
+      // Both predicates are OR-shaped, so combining them MUST use an explicit
+      // AND (object-merging would clobber one OR with the other).
+      const where =
+        searchWhere && cursorWhere
+          ? { AND: [searchWhere, cursorWhere] }
+          : (searchWhere ?? cursorWhere ?? {});
 
       const orderBy =
         sort === "hot"

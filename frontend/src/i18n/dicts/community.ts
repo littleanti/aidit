@@ -4,7 +4,7 @@
 export const community = {
   ko: {
     // CommunitySearch
-    searchTitle: '커뮤니티 검색',
+    searchTitle: '검색',
     searchPlaceholder: '커뮤니티 이름으로 검색',
     searchAriaLabel: '커뮤니티 이름으로 검색',
     createCta: '[+] 커뮤니티 만들기',
@@ -13,6 +13,18 @@ export const community = {
     emptyAll: '커뮤니티가 없어요',
     emptyCreateLinkWithName: "[+] '{q}' 만들기 →",
     emptyCreateLink: '[+] 만들기 →',
+
+    // Post search tab (FR-1.4)
+    searchTabsAria: '검색 대상',
+    tabCommunities: '커뮤니티',
+    tabPosts: '게시글',
+    postSearchPlaceholder: '게시글 제목·본문으로 검색',
+    postSearchAriaLabel: '게시글 제목·본문으로 검색',
+    postLoadError: '게시글을 불러오지 못했습니다.',
+    postEmptyNoMatch: "'{q}' 게시글이 없어요",
+    postEmptyAll: '게시글이 없어요',
+    loadMore: '[ 더 보기 ]',
+    loadingMore: '[ 불러오는 중… ]',
 
     // CommunityDetail
     notFoundTitle: '커뮤니티를 찾을 수 없어요',
@@ -55,7 +67,7 @@ export const community = {
   },
   en: {
     // CommunitySearch
-    searchTitle: 'Community Search',
+    searchTitle: 'Search',
     searchPlaceholder: 'Search by community name',
     searchAriaLabel: 'Search by community name',
     createCta: '[+] Create Community',
@@ -64,6 +76,18 @@ export const community = {
     emptyAll: 'No communities found',
     emptyCreateLinkWithName: "[+] Create '{q}' →",
     emptyCreateLink: '[+] Create →',
+
+    // Post search tab (FR-1.4)
+    searchTabsAria: 'Search target',
+    tabCommunities: 'Communities',
+    tabPosts: 'Posts',
+    postSearchPlaceholder: 'Search posts by title or body',
+    postSearchAriaLabel: 'Search posts by title or body',
+    postLoadError: 'Failed to load posts.',
+    postEmptyNoMatch: "No posts found for '{q}'",
+    postEmptyAll: 'No posts found',
+    loadMore: '[ Load more ]',
+    loadingMore: '[ Loading… ]',
 
     // CommunityDetail
     notFoundTitle: 'Community not found',

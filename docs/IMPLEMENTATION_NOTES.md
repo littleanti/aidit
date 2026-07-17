@@ -11,6 +11,13 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-07-17
+- **[feat]** **검색 화면에 게시글 검색 추가 — [커뮤니티|게시글] 탭 (FR-1.4)**: 기존 `/search`는 커뮤니티 검색만 제공했다. 게시글(제목·본문 부분일치) 검색을 추가한다.
+  - **백엔드**: `GET /posts`에 선택 쿼리 `q` 추가 — `title OR body contains(q)` 필터를 기존 keyset 커서 where와 `AND`로 결합(정렬·커서·voted 계산 등 기존 피드 동작 불변, `q` 미지정 시 완전 동일). SQLite `contains`는 ASCII 대소문자 무시. (`backend/src/routes/posts.ts`)
+  - **프론트 API**: `getPosts` 파라미터에 `q?` 추가. (`frontend/src/api/rest.ts`)
+  - **검색 UI**: `CommunitySearch`(→ 화면 제목 "검색")에 [커뮤니티|게시글] 세그먼트 탭 추가. 게시글 탭은 디바운스(250ms) `getPosts({sort:'new', q})` — 결과는 제목+커뮤니티+메타(작성자·점수·댓글) 카드로 `/p/:id` 링크, `nextCursor` 있으면 `[ 더 보기 ]`로 추가 로드. 커뮤니티 만들기 CTA·커뮤니티 결과는 커뮤니티 탭에서만 노출. (`frontend/src/pages/Community.tsx`)
+  - **i18n**: `community.*`에 탭·게시글 검색 문구 ko/en 대칭 추가, `searchTitle`을 "커뮤니티 검색"→"검색"으로 일반화.
+  - **테스트**: 백엔드 계약 테스트에 `GET /posts?q=` 필터·페이지네이션 케이스 추가. (`backend/test/contract.test.ts`)
+  - (PRD FR-1.4 신설·§5.2 정정, WIREFRAME §3 갱신)
 - **[feat]** **내 AI 페르소나 — 사용자 개인 페르소나 3슬롯(로컬 저장) + Composer 발화별 선택 적용**: 커뮤니티 페르소나(systemInstruction) 외에, 사용자가 자신의 BYOK AI에 부여할 **개인 페르소나를 최대 3개** 저장하고 `@AI` 답변마다 골라 적용할 수 있게 한다(예: 토론 커뮤니티에서 "게시글에 반대 입장을 내는 토론자" 페르소나).
   - **저장(로컬 전용)**: 신규 스토어 `frontend/src/stores/userPersonaStore.ts` — zustand persist, localStorage 키 `aidit-user-personas`, 슬롯 3개 `{ name, prompt }`. BYOK 키·AI 모드·길이 설정과 동일한 "AI 관련 설정은 내 기기에" 철학으로 **서버에 전송하지 않는다**(서버·API 계약·DB 무변경). 발화별 선택 상태 `selectedByPost`(postId → 슬롯 인덱스 | null)는 **세션 한정·미영속**(aiModeStore와 동일 철학, persist `partialize`로 `personas`만 저장).
   - **관리 UI**: 설정 페이지 `/me/settings`(`Settings.tsx`)의 API Key 섹션 아래에 "MY AI PERSONA" 섹션 추가 — 슬롯 3개 각각 이름 입력 + 프롬프트 textarea + `[ 저장 ]`/`[ 비우기 ]`, 로컬 저장 안내 문구.
