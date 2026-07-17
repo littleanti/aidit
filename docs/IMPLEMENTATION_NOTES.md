@@ -11,6 +11,7 @@
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
 ### 2026-07-17
+- **[refactor]** **홈 상단을 다른 페이지와 동일한 "제목 바 + 쉘 + 본문 탭" 리듬으로 통일**: 홈의 고정 상단바(`PageHeaderBar`)는 2026-06-26부터 인기/최신 탭 두 버튼이 바를 가득 채우는 형태였다(다른 페이지는 제목). 검색 화면에 본문 탭([커뮤니티|게시글], FR-1.4)이 생기면서 "상단바 = 페이지 정체성, 본문 탭 = 콘텐츠 전환" 규칙으로 앱 전체를 통일한다 — 홈 상단바를 **제목 "홈"**으로 바꾸고, 인기/최신 탭을 ShellPrompt 아래 **본문 세그먼트 탭**(검색 페이지 tablist와 동일 스타일: `min-h-[44px] flex-1`, 활성 amber 언더라인+배경)으로 이동. 트레이드오프(인지된 결정): 탭이 sticky에서 내려와 **스크롤 중 정렬 전환은 불가**해짐 — 전환 시 목록이 리셋되어 최상단으로 돌아가므로 실사용 영향 낮다고 판단. 정렬 상태·무한 스크롤·데이터 로직 무변경. 신규 i18n 키 `home.title`·`home.sortTabsAria`(ko/en 대칭). (`frontend/src/pages/Home.tsx`, `frontend/src/i18n/dicts/home.ts`; WIREFRAME §2 갱신)
 - **[feat]** **검색 화면에 게시글 검색 추가 — [커뮤니티|게시글] 탭 (FR-1.4)**: 기존 `/search`는 커뮤니티 검색만 제공했다. 게시글(제목·본문 부분일치) 검색을 추가한다.
   - **백엔드**: `GET /posts`에 선택 쿼리 `q` 추가 — `title OR body contains(q)` 필터를 기존 keyset 커서 where와 `AND`로 결합(정렬·커서·voted 계산 등 기존 피드 동작 불변, `q` 미지정 시 완전 동일). SQLite `contains`는 ASCII 대소문자 무시. (`backend/src/routes/posts.ts`)
   - **프론트 API**: `getPosts` 파라미터에 `q?` 추가. (`frontend/src/api/rest.ts`)

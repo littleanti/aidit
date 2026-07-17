@@ -1,5 +1,7 @@
 export const home = {
   ko: {
+    title: '홈',
+    sortTabsAria: '피드 정렬',
     tabHot: '인기',
     tabNew: '최신',
     loadError: '게시글을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
@@ -10,6 +12,8 @@ export const home = {
     eof: '— EOF · 마지막 게시글이에요 —',
   },
   en: {
+    title: 'Home',
+    sortTabsAria: 'Feed sort',
     tabHot: 'Hot',
     tabNew: 'New',
     loadError: 'Failed to load posts. Please try again in a moment.',

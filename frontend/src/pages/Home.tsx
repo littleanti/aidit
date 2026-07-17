@@ -91,36 +91,46 @@ export default function Home() {
 
   return (
     <div className="pb-4">
-      {/* fixed top bar — same size/style as Search/Write (PageHeaderBar),
-          differing only by holding the two 인기/최신 tab buttons instead of a
-          title. Buttons fill the bar (h-full flex-1); active tab keeps the
-          amber underline aligned with the bar's bottom border. */}
+      {/* fixed top bar — unified with Search/Write/Profile/Settings: the bar
+          holds the page TITLE; the 인기/최신 sort tabs live in the body below
+          the ShellPrompt (same tablist pattern as the search page). */}
       <PageHeaderBar>
-        <div className="flex h-full w-full">
-          {TABS.map((tab) => {
-            const active = sort === tab.key;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setSort(tab.key)}
-                aria-pressed={active}
-                className={`flex h-full flex-1 items-center justify-center border-b-2 text-base font-semibold transition ${
-                  active
-                    ? 'border-term-amber bg-[rgba(255,207,74,0.06)] text-term-amber'
-                    : 'border-transparent text-term-dim hover:text-term-bright'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-term-title glow">
+          {t('home.title')}
+        </h1>
       </PageHeaderBar>
 
       {/* terminal prompt line — directly under the fixed bar, mt-4 = unified
           16px gap between the bar and the ShellPrompt (same as Search/Write). */}
       <ShellPrompt command={`feed --sort=${sort}`} className="mt-4 mb-3" />
+
+      {/* in-body sort tabs — same segmented tablist style as the search page.
+          Not sticky (a switch resets the list to the top anyway). */}
+      <div
+        role="tablist"
+        aria-label={t('home.sortTabsAria')}
+        className="mb-3 flex rounded-[2px] border border-term-border"
+      >
+        {TABS.map((tab) => {
+          const active = sort === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setSort(tab.key)}
+              className={`flex min-h-[44px] flex-1 items-center justify-center text-sm font-semibold transition ${
+                active
+                  ? 'border-b-2 border-term-amber bg-[rgba(255,207,74,0.06)] text-term-amber'
+                  : 'text-term-dim hover:text-term-bright'
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
 
       {error && (
         <ErrorState
