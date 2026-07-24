@@ -10,6 +10,9 @@
 
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
+### 2026-07-25
+- **[docs]** **비즈니스 가치 근거 문서 추가(`docs/BUSINESS_VALUE.md`)**: 심사 기준 "비즈니스 가치"를 서사→근거로 보강. 한 줄 가치제안, 문제·시장, ICP·쐐기 유스케이스, 차별화 해자(key-blind BYOK 비용귀속·멀티유저 공유 컨텍스트·컨텍스트 연속성 엔진), Unit Economics(운영자 LLM 원가≈0), 경쟁 2×2, GTM, KPI, 자매 제품(Aidit-Code)과의 포트폴리오 논리(정반대 원가모델→획득/수익화 사다리), 리스크. (`docs/BUSINESS_VALUE.md`)
+
 ### 2026-07-24
 - **[chore]** **데모 오케스트레이션 스크립트 추가**: `docs/DEMO_SCENARIO.md`의 시나리오(3440×1440 3분할 창 A/B/C, 게스트 BYOK 로그인, 커뮤니티 생성 → 게시글 → 16턴 댓글 대화 → AI 문서 생성)를 Playwright로 자동 실행한다. ffmpeg(ddagrab+NVENC, `draw_mouse=0`) 전체 화면 녹화 시작/종료 포함, 산출물 `demo-aidit.mp4`(리포 루트, 미추적). 앱 코드 무변경 — 데모 전용 도구. (`frontend/e2e/demo-scenario.mjs`)
 
