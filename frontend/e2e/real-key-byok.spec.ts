@@ -22,6 +22,12 @@ const SLUG = `cook-pw-${stamp}`;
 
 test.skip(!KEY, 'LLM_TEST_KEY not set — skipping real-key BYOK check');
 
+// A real model call has no latency guarantee, so this spec cannot live inside the
+// config's 30s default: the reply poll below alone allows 60s, and without this the
+// test would die at 30s while the call was still in flight (it only passed earlier
+// because it was run with an explicit --timeout).
+test.setTimeout(180_000);
+
 test('BYOK @AI flow: key-blind server + direct Google call + COMPLETE reply', async ({
   page,
 }) => {
