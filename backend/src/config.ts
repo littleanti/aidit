@@ -29,6 +29,10 @@ export interface Config {
   jwtSecret: string;
   jwtExpires: string;
   apiPrefix: string;
+  /** NFR-4: when set, thread events fan out over Redis pub/sub so several app
+   *  instances share one realtime bus. Unset => process-local in-memory bus
+   *  (correct only for a single instance). See TRD §15.2. */
+  redisUrl: string | null;
   storageBackend: "local" | "s3";
   storageS3Region: string | null;
   storageS3Bucket: string | null;
@@ -42,6 +46,7 @@ export const config: Config = {
   jwtSecret: process.env.JWT_SECRET ?? DEV_JWT_SECRET,
   jwtExpires: process.env.JWT_EXPIRES ?? "7d",
   apiPrefix: (process.env.API_PREFIX ?? "/").trim() || "/",
+  redisUrl: process.env.REDIS_URL?.trim() || null,
   storageBackend:
     (process.env.STORAGE_BACKEND ?? "local").toLowerCase() === "s3"
       ? "s3"

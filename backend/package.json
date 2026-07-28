@@ -12,8 +12,14 @@
     "start": "node dist/app.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "db:pg:sync": "node scripts/sync-postgres-schema.mjs",
+    "db:pg:check": "node scripts/sync-postgres-schema.mjs --check",
+    "db:pg:ddl": "npm run db:pg:sync && prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.postgres.prisma --script > prisma/postgres/init.sql",
+    "db:pg:push": "npm run db:pg:sync && prisma db push --schema prisma/schema.postgres.prisma",
+    "db:pg:generate": "npm run db:pg:sync && prisma generate --schema prisma/schema.postgres.prisma",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "load:sim": "tsx test/load/simulate.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
