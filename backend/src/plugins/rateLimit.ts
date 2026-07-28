@@ -1,35 +1,52 @@
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 
-// WP XC-9 — Rate limiting (in-memory, single instance per L10).
+import { rateLimitStore } from "../store/rateLimitStore.js";
+
+// WP XC-9 — Rate limiting.
 //
-// Per-identity limits keyed on x-user-id (falling back to the socket IP when the
-// header is absent). Two conservative PoC policies:
-//   - POST /posts        : max POST_MAX posts per POST_WINDOW_MS (sliding window).
-//   - POST /communities  : 1 community per COMMUNITY_COOLDOWN_MS (creation cooldown).
+// This file owns the POLICY (which route, how many, per how long). WHERE the
+// counters live is the store's job (store/rateLimitStore.ts): process-local by
+// default, shared over Redis when REDIS_URL is set, so limits stay per-identity
+// rather than per-identity-per-instance when the app is scaled out (§15.3).
 //
 // Reads, comment posting, upvotes, and the realtime stream are intentionally NOT
 // limited so the live demo stays smooth. Server stays KEY-BLIND (no apiKey here).
 // On breach we return 429 with a clear message and a Retry-After header.
 
-const POST_WINDOW_MS = 60_000; // 1 minute
-const POST_MAX = 10; // up to 10 posts/min/identity
-const COMMUNITY_COOLDOWN_MS = 180_000; // 1 community / 3 minutes/identity
-const UPLOAD_WINDOW_MS = 60_000; // 1 minute
-const UPLOAD_MAX = 20; // up to 20 uploads/min/identity (only disk-write endpoint)
-// FR-13: document condensation burns a whole context window on the caller's own
-// key and writes up to 200K chars, so it is the heaviest user-triggered action.
-const DOCUMENT_WINDOW_MS = 300_000; // 5 minutes
-const DOCUMENT_MAX = 3; // up to 3 condensations / 5 min / identity
+interface Policy {
+  windowMs: number;
+  max: number;
+  /** 429 body message. */
+  message: string;
+}
 
-// Sliding-window timestamps for post creation, per identity.
-const postTimestamps = new Map<string, number[]>();
-// Sliding-window timestamps for image uploads, per identity.
-const uploadTimestamps = new Map<string, number[]>();
-// Sliding-window timestamps for document condensation (FR-13), per identity.
-const documentTimestamps = new Map<string, number[]>();
-// Last community-creation instant, per identity.
-const lastCommunityAt = new Map<string, number>();
+// Route template (req.routeOptions.url) -> policy.
+const POLICIES: Record<string, Policy> = {
+  "/posts": {
+    windowMs: 60_000,
+    max: 10,
+    message: "Rate limit: at most 10 posts per minute. Try again shortly.",
+  },
+  "/uploads": {
+    windowMs: 60_000,
+    max: 20,
+    message: "Rate limit: too many uploads. Try again shortly.",
+  },
+  // FR-13: document condensation burns a whole context window on the caller's
+  // own key and writes up to 200K chars — the heaviest user-triggered action.
+  "/posts/:id/documents": {
+    windowMs: 300_000,
+    max: 3,
+    message: "Rate limit: at most 3 documents per 5 minutes. Try again shortly.",
+  },
+  // Community creation is a cooldown, i.e. a window of one.
+  "/communities": {
+    windowMs: 180_000,
+    max: 1,
+    message: "Rate limit: one community every 3 minutes. Try again shortly.",
+  },
+};
 
 function identity(req: FastifyRequest): string {
   // Prefer the JWT sub (Bearer token) for per-user rate-limiting; fall back to
@@ -44,7 +61,7 @@ function identity(req: FastifyRequest): string {
         const payload = req.server.jwt.verify<{ sub?: string }>(token);
         if (payload.sub) return `u:${payload.sub}`;
       } catch {
-        // invalid token — fall through to IP
+        // fall through to IP keying
       }
     }
   }
@@ -57,86 +74,25 @@ function identity(req: FastifyRequest): string {
 // only, so the gate never sees POST /posts or POST /communities and never 429s.
 const rateLimitImpl: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", async (req, reply) => {
-    const isPost = req.method === "POST";
-    if (!isPost) return;
+    if (req.method !== "POST") return;
 
     // routerPath is the matched route template ("/posts", "/communities").
     const routePath = req.routeOptions?.url ?? req.url;
-    const id = identity(req);
-    const now = Date.now();
+    const policy = POLICIES[routePath];
+    if (!policy) return;
 
-    if (routePath === "/posts") {
-      const arr = (postTimestamps.get(id) ?? []).filter(
-        (t) => now - t < POST_WINDOW_MS,
-      );
-      if (arr.length >= POST_MAX) {
-        const oldest = arr[0]!;
-        const retryMs = POST_WINDOW_MS - (now - oldest);
-        void reply.header("Retry-After", Math.ceil(retryMs / 1000));
-        return reply.code(429).send({
-          error: `Rate limit: at most ${POST_MAX} posts per minute. Try again shortly.`,
-        });
-      }
-      arr.push(now);
-      postTimestamps.set(id, arr);
-      return;
-    }
+    // Recorded on the gate (onRequest), so a malformed request also consumes a
+    // slot. Accepted tradeoff: the client only POSTs a document after its own
+    // LLM call succeeded, and posts/uploads validate cheaply.
+    const decision = await rateLimitStore.hit(
+      `${routePath}|${identity(req)}`,
+      policy.windowMs,
+      policy.max,
+    );
 
-    if (routePath === "/uploads") {
-      const arr = (uploadTimestamps.get(id) ?? []).filter(
-        (t) => now - t < UPLOAD_WINDOW_MS,
-      );
-      if (arr.length >= UPLOAD_MAX) {
-        const oldest = arr[0]!;
-        const retryMs = UPLOAD_WINDOW_MS - (now - oldest);
-        void reply.header("Retry-After", Math.ceil(retryMs / 1000));
-        return reply.code(429).send({
-          error: "Rate limit: too many uploads. Try again shortly.",
-        });
-      }
-      arr.push(now);
-      uploadTimestamps.set(id, arr);
-      return;
-    }
-
-    if (routePath === "/posts/:id/documents") {
-      const arr = (documentTimestamps.get(id) ?? []).filter(
-        (t) => now - t < DOCUMENT_WINDOW_MS,
-      );
-      if (arr.length >= DOCUMENT_MAX) {
-        const oldest = arr[0]!;
-        const retryMs = DOCUMENT_WINDOW_MS - (now - oldest);
-        void reply.header("Retry-After", Math.ceil(retryMs / 1000));
-        return reply.code(429).send({
-          error: `Rate limit: at most ${DOCUMENT_MAX} documents per ${Math.round(
-            DOCUMENT_WINDOW_MS / 60_000,
-          )} minutes. Try again shortly.`,
-        });
-      }
-      // Recorded on the gate (onRequest), so a malformed request also consumes a
-      // slot — same tradeoff as the community cooldown below. Acceptable here
-      // because the client only POSTs after its own LLM call already succeeded,
-      // making malformed bodies a non-path in practice.
-      arr.push(now);
-      documentTimestamps.set(id, arr);
-      return;
-    }
-
-    if (routePath === "/communities") {
-      const last = lastCommunityAt.get(id);
-      if (last !== undefined && now - last < COMMUNITY_COOLDOWN_MS) {
-        const retryMs = COMMUNITY_COOLDOWN_MS - (now - last);
-        void reply.header("Retry-After", Math.ceil(retryMs / 1000));
-        return reply.code(429).send({
-          error: `Rate limit: one community every ${Math.round(
-            COMMUNITY_COOLDOWN_MS / 60_000,
-          )} minutes. Try again shortly.`,
-        });
-      }
-      // Record optimistically on the gate; a downstream validation failure still
-      // consumes the cooldown slot, which is acceptable for a PoC.
-      lastCommunityAt.set(id, now);
-      return;
+    if (!decision.allowed) {
+      void reply.header("Retry-After", Math.ceil(decision.retryAfterMs / 1000));
+      return reply.code(429).send({ error: policy.message });
     }
   });
 };

@@ -69,6 +69,17 @@ if (config.storageBackend === "s3" && (!config.storageS3Region || !config.storag
   );
 }
 
+// §15.3: REDIS_URL means "several instances share one bus", but local disk
+// storage is per-instance — an image uploaded to instance A 404s on instance B.
+// S3 is already supported; this is the one combination that is silently broken.
+if (config.redisUrl && config.storageBackend === "local") {
+  console.warn(
+    "[storage] WARNING: REDIS_URL is set (multi-instance) but STORAGE_BACKEND=local. " +
+      "Uploaded images live on one instance's disk and will 404 from the others. " +
+      "Set STORAGE_BACKEND=s3 for multi-instance deployments (TRD §15.3).",
+  );
+}
+
 // Warn once at startup when using the insecure dev fallback secret.
 if (config.jwtSecret === DEV_JWT_SECRET) {
   console.warn(

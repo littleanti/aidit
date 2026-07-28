@@ -16,7 +16,6 @@
 // explains why the adapter exists.
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import net from "node:net";
 
 import {
   InMemoryPubSub,
@@ -28,130 +27,13 @@ import {
   parseRedisUrl,
   type PubSub,
 } from "../src/realtime/pubsub.js";
+// The in-process RESP broker is shared with rateLimitStore.test.ts — one fake,
+// both shared-state adapters (§15.2 bus, §15.3 limiter).
+import { startFakeRedis, waitFor, type FakeRedis } from "./fakeRedis.js";
 import {
   EVENT_COMMENT_CREATED,
   type CommentCreatedEvent,
 } from "../src/realtime/events.js";
-
-// ---------------------------------------------------------------------------
-// Minimal in-process RESP broker: SUBSCRIBE / UNSUBSCRIBE / PUBLISH / AUTH.
-// ---------------------------------------------------------------------------
-
-interface Broker {
-  port: number;
-  close(): Promise<void>;
-  /** Number of currently connected client sockets. */
-  connectionCount(): number;
-}
-
-async function startBroker(): Promise<Broker> {
-  // channel -> set of subscriber sockets
-  const channels = new Map<string, Set<net.Socket>>();
-  const sockets = new Set<net.Socket>();
-
-  const server = net.createServer((socket) => {
-    sockets.add(socket);
-    const parser = new RespParser();
-
-    socket.on("data", (chunk: Buffer) => {
-      parser.feed(chunk);
-      for (;;) {
-        const reply = parser.next();
-        if (reply === undefined) break;
-        if (!Array.isArray(reply)) continue;
-        const parts = reply.map((p) => String(p));
-        const cmd = (parts[0] ?? "").toUpperCase();
-
-        if (cmd === "AUTH") {
-          socket.write("+OK\r\n");
-          continue;
-        }
-
-        if (cmd === "SUBSCRIBE") {
-          let count = 0;
-          for (const channel of parts.slice(1)) {
-            let subs = channels.get(channel);
-            if (!subs) {
-              subs = new Set();
-              channels.set(channel, subs);
-            }
-            subs.add(socket);
-            count += 1;
-            // Real Redis confirms with ['subscribe', channel, <count>] where the
-            // third element is an INTEGER, so hand-build the frame.
-            socket.write(
-              `*3\r\n$9\r\nsubscribe\r\n$${Buffer.byteLength(channel)}\r\n${channel}\r\n:${count}\r\n`,
-            );
-          }
-          continue;
-        }
-
-        if (cmd === "UNSUBSCRIBE") {
-          for (const channel of parts.slice(1)) {
-            channels.get(channel)?.delete(socket);
-          }
-          socket.write(":0\r\n");
-          continue;
-        }
-
-        if (cmd === "PUBLISH") {
-          const channel = parts[1] ?? "";
-          const payload = parts[2] ?? "";
-          const subs = channels.get(channel);
-          const receivers = subs ? subs.size : 0;
-          if (subs) {
-            const frame = encodeCommand(["message", channel, payload]);
-            for (const sub of subs) {
-              if (!sub.destroyed) sub.write(frame);
-            }
-          }
-          socket.write(`:${receivers}\r\n`);
-          continue;
-        }
-
-        // Unknown command: answer +OK so the client never wedges.
-        socket.write("+OK\r\n");
-      }
-    });
-
-    const drop = () => {
-      sockets.delete(socket);
-      for (const subs of channels.values()) subs.delete(socket);
-    };
-    socket.on("close", drop);
-    socket.on("error", drop);
-  });
-
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  if (address === null || typeof address === "string") {
-    throw new Error("broker failed to bind a TCP port");
-  }
-
-  return {
-    port: address.port,
-    connectionCount: () => sockets.size,
-    async close() {
-      for (const socket of [...sockets]) socket.destroy();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    },
-  };
-}
-
-/** Poll until `predicate` holds or the timeout elapses (no arbitrary sleeps). */
-async function waitFor(
-  predicate: () => boolean,
-  timeoutMs = 3_000,
-): Promise<void> {
-  const start = Date.now();
-  for (;;) {
-    if (predicate()) return;
-    if (Date.now() - start > timeoutMs) {
-      throw new Error(`waitFor timed out after ${timeoutMs}ms`);
-    }
-    await new Promise((r) => setTimeout(r, 10));
-  }
-}
 
 function makeEvent(id: string, seq: number): CommentCreatedEvent {
   return {
@@ -263,11 +145,11 @@ describe("InMemoryPubSub — process-local (WHY the adapter exists)", () => {
 });
 
 describe("RedisPubSub — cross-instance fan-out over a real socket", () => {
-  let broker: Broker;
+  let broker: FakeRedis;
   const buses: PubSub[] = [];
 
   beforeEach(async () => {
-    broker = await startBroker();
+    broker = await startFakeRedis();
   });
 
   afterEach(async () => {

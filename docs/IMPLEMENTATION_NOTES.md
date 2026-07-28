@@ -10,6 +10,14 @@
 
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
+### 2026-07-28 (2)
+- **[fix]** **인스턴스 로컬 상태 제거 — 레이트리밋 공유 + 업로드 경고 (NFR-4 / TRD §15.3)**: pub/sub만 어댑터로 분리해 놓고 **레이트리밋 카운터가 모듈 스코프 `Map`(프로세스 로컬)** 로 남아 있었다. 2대로 띄우면 identity당 실효 한도가 2배가 되어 "수평 확장 가능"이라는 문서 서술과 **모순**이었다.
+  - **정책/저장소 분리**: `plugins/rateLimit.ts`는 정책 테이블(라우트→윈도우·최대치·메시지)만 갖고, 카운터 위치는 신규 `store/rateLimitStore.ts`가 결정 — `InMemoryRateLimitStore`(기본) / `RedisRateLimitStore`(`REDIS_URL`). 4개 정책의 값·키잉(JWT sub 우선, 없으면 IP)은 불변.
+  - **RESP 재사용**: `realtime/pubsub.ts` 안에 있던 RESP 코덱을 `redis/resp.ts`로 추출(`encodeCommand`/`RespParser`/`RedisConnection`/`parseRedisUrl`)하고, 응답 상관관계가 필요한 명령용으로 `redis/client.ts`(`RedisCommandClient`)를 신설했다. RESP2는 요청 id가 없고 응답이 전송 순서대로 오므로 **FIFO 리졸버 큐**로 상관시키며, 타임아웃된 명령은 큐에서 빼지 않고 `dead` 플래그만 세운다 — 빼면 늦게 도착한 응답이 **다음 명령의 응답으로 오인**된다. `pubsub.ts`는 기존 import 경로 유지를 위해 re-export만 남겼다.
+  - **구현 중 발견한 결함(중요)**: 처음엔 정확도를 위해 ZSET 슬라이딩 윈도우로 만들었는데, Redis에서 그 방식은 read-then-act(트림→카운트→판정→추가)라 **동시 요청이 모두 "추가 전" 개수를 읽고 전부 통과**한다. 한도 2에 동시 3건이 모두 통과하는 것을 테스트로 재현했다. 막으려는 바로 그 버스트에서 한도를 넘는 리미터는 의미가 없으므로, **두 백엔드를 원자적 고정 윈도우로 전환**(Redis는 `INCR` + 첫 히트에만 `PEXPIRE`). 대가로 경계에서 최대 2배 버스트를 허용하는 것은 인지된 트레이드오프로 문서화했다. TTL 유실(`PTTL`=-1) 시 영구 차단 대신 윈도우를 재설정하고, Redis 장애 시 **fail-open**(429 남발 방지).
+  - **업로드**: `STORAGE_BACKEND=local`은 이미지를 그 인스턴스 디스크에 쓰므로 다중 인스턴스에서 다른 인스턴스가 404를 낸다. 코드는 이미 s3를 지원하므로, `REDIS_URL`이 설정된 채 `local`이면 **기동 시 경고**를 출력한다(`config.ts`).
+  - **테스트**: 신규 `test/rateLimitStore.test.ts` 16건 — 두 백엔드 동일 동작, **Redis 2 인스턴스가 한 예산 공유**, 동시 초과 허용 없음(위 결함 회귀 방어), 인메모리는 인스턴스 간 공유 안 됨(어댑터 필요성), 윈도우 만료 복구, 명령 수 검증, TTL 유실 복구, fail-open. 테스트용 RESP 브로커를 `test/fakeRedis.ts`로 공유화(pub/sub 테스트의 중복 브로커 제거, INCR/PEXPIRE/PTTL/DEL 추가). 백엔드 **125 통과**.
+
 ### 2026-07-28
 - **[docs]** **README 미디어 — 응결 흐름 GIF + 화면 스크린샷 3장(재현 가능 생성)**: 데모 영상이 Google Drive 링크라 **익명 접근 시 로그인 페이지로 유도**되는 것을 확인했다(WebFetch 검증). 링크 하나에 전달력을 의존하지 않도록 리포 안에 미디어를 넣는다.
   - **생성 도구**: `frontend/e2e/capture-media.spec.ts` — Aidit REST와 LLM 호스트를 스텁한 상태로 실제 UI를 촬영(백엔드·DB·실키 불필요, 매 실행 동일 산출물). 산출물: `docs/assets/thread.png`·`document.png`·`community.png` + `docs/assets/condense/*.png`(GIF 프레임 23장). 전용 설정 `e2e/playwright.media.config.ts`(Pixel 7 · `deviceScaleFactor: 2`)를 두고, 메인 e2e 설정에는 `testIgnore`를 추가해 **미디어 갱신이 테스트 게이트를 막지 않게** 했다.

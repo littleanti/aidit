@@ -5,7 +5,7 @@
 **여러 사람이 하나의 AI 대화를 함께 쌓아 올리는 커뮤니티.**
 LLM 키와 비용은 각자 부담(BYOK)이라, 서버는 키를 보지도 저장하지도 않습니다.
 
-`React 18` · `TypeScript` · `Fastify` · `Prisma` · `SSE` · `PWA` · **테스트 173개 통과** · `MIT`
+`React 18` · `TypeScript` · `Fastify` · `Prisma` · `SSE` · `PWA` · **테스트 189개 통과** · `MIT`
 
 <img src="./docs/assets/condense.gif" alt="여러 사람의 논의를 한 번에 마크다운 문서로 응결하는 흐름" width="380">
 
@@ -102,7 +102,9 @@ flowchart LR
     BUS --> SSE
 ```
 
-`REDIS_URL`을 주면 pub/sub이 Redis 어댑터로 바뀌어 **여러 인스턴스가 하나의 실시간 버스를 공유**합니다. 호출 코드는 한 줄도 바뀌지 않습니다(TRD §15.2).
+`REDIS_URL`을 주면 pub/sub과 **레이트리밋 카운터**가 Redis 어댑터로 바뀌어 여러 인스턴스가 하나의 실시간 버스와 **하나의 한도 예산**을 공유합니다. 호출 코드는 한 줄도 바뀌지 않습니다(TRD §15.2–15.3).
+
+> 다중 인스턴스 구성의 요구사항은 **Postgres · `REDIS_URL` · `STORAGE_BACKEND=s3`** 세 가지입니다. 업로드가 `local`이면 이미지가 한 인스턴스 디스크에만 남으므로, `REDIS_URL`이 설정된 채 `local`이면 서버가 기동 시 경고합니다.
 
 ---
 
@@ -173,11 +175,11 @@ npm run dev
 
 | 항목 | 상태 |
 |---|---|
-| 백엔드 테스트 | **109 통과** (계약 · SSE · 문서 응결 · pub/sub fan-out · hotScore · 프로필 페이지네이션) |
+| 백엔드 테스트 | **125 통과** (계약 · SSE · 문서 응결 · pub/sub fan-out · 레이트리밋 저장소 · hotScore · 프로필 페이지네이션) |
 | 프론트엔드 테스트 | **64 통과** (컨텍스트 엔진 · 문서 엔진 · 스토어 · sanitize · LLM 클라이언트) |
 | 타입체크 | 양쪽 `tsc --noEmit` 클린 |
 | E2E | Playwright 5스펙 — J1 1차 답변 · J2 @AI · J3 요약 · J4 문서 응결(백엔드 없이 hermetic, **4 통과 확인**) · 실키 BYOK |
-| 다중 인스턴스 fan-out | 테스트 내 RESP 브로커로 **2 인스턴스 전달 검증** — 실 Redis 서버 검증은 배포 시 |
+| 다중 인스턴스 | 테스트 내 RESP 브로커로 **2 인스턴스 SSE 전달 + 레이트리밋 예산 공유** 검증 — 실 Redis 서버 검증은 배포 시 |
 | Postgres | 스키마 파생 + **DDL 생성물 커밋**(`backend/prisma/postgres/init.sql`) — 런타임 검증은 배포 시 |
 | CI | **자체 서버 파이프라인에서 구성** — GitHub Actions를 쓰지 않으므로 리포에 워크플로 정의가 없습니다(의도된 선택, [배포 · CI](#-배포--ci) 참조) |
 

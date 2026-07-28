@@ -19,10 +19,24 @@
 // reconnects with `Last-Event-ID` and the SSE endpoint replays the missing
 // bubbles from the DB snapshot (TRD §7). The bus is an accelerator, not a log.
 
-import net from "node:net";
-
 import { config } from "../config.js";
+import {
+  RedisConnection,
+  encodeCommand,
+  parseRedisUrl,
+  type RedisTarget,
+} from "../redis/resp.js";
 import type { ThreadEvent } from "./events.js";
+
+// RESP primitives (encodeCommand / RespParser / RedisConnection / parseRedisUrl)
+// live in ../redis/resp.ts because the rate-limit store (§15.3) needs the same
+// codec. Re-exported here so existing importers/tests keep one entry point.
+export {
+  RespParser,
+  encodeCommand,
+  parseRedisUrl,
+  type RedisTarget,
+} from "../redis/resp.js";
 
 export type ThreadEventHandler = (event: ThreadEvent) => void;
 
@@ -109,200 +123,14 @@ export class InMemoryPubSub implements PubSub {
 }
 
 // ---------------------------------------------------------------------------
-// Redis implementation — minimal RESP over node:net (no new dependency).
+// Redis implementation.
 //
 // Two sockets are required: a Redis connection in SUBSCRIBE mode refuses
 // PUBLISH, so we keep a dedicated subscriber socket and a separate publisher
-// socket. Both reconnect with exponential backoff, and the subscriber
-// re-SUBSCRIBEs every currently-active channel after a reconnect (otherwise a
-// blip would silently orphan every live SSE stream on this instance).
+// socket. Both reconnect with exponential backoff (RedisConnection), and the
+// subscriber re-SUBSCRIBEs every currently-active channel after a reconnect —
+// otherwise a blip would silently orphan every live SSE stream on this instance.
 // ---------------------------------------------------------------------------
-
-export interface RedisTarget {
-  host: string;
-  port: number;
-  password?: string;
-}
-
-/** Parse redis://[:password@]host:port (also accepts rediss:// hosts). */
-export function parseRedisUrl(url: string): RedisTarget | null {
-  try {
-    const u = new URL(url);
-    if (u.protocol !== "redis:" && u.protocol !== "rediss:") return null;
-    const host = u.hostname || "127.0.0.1";
-    const port = u.port === "" ? 6379 : Number(u.port);
-    if (!Number.isInteger(port) || port <= 0) return null;
-    const password = u.password !== "" ? decodeURIComponent(u.password) : undefined;
-    return { host, port, ...(password !== undefined ? { password } : {}) };
-  } catch {
-    return null;
-  }
-}
-
-/** Encode a RESP array command: *N\r\n$len\r\narg\r\n... */
-export function encodeCommand(args: string[]): string {
-  let out = `*${args.length}\r\n`;
-  for (const arg of args) {
-    out += `$${Buffer.byteLength(arg, "utf8")}\r\n${arg}\r\n`;
-  }
-  return out;
-}
-
-/**
- * Incremental RESP reader. Feed bytes, pull complete replies.
- *
- * Only the subset Redis pub/sub actually returns is handled: simple strings
- * (+), errors (-), integers (:), bulk strings ($) and arrays (*). Nested arrays
- * work too, which is what `subscribe` confirmations and `message` pushes are.
- */
-export class RespParser {
-  private buf: Buffer = Buffer.alloc(0);
-
-  feed(chunk: Buffer): void {
-    this.buf = this.buf.length === 0 ? chunk : Buffer.concat([this.buf, chunk]);
-  }
-
-  /** Pull the next complete reply, or undefined if more bytes are needed. */
-  next(): unknown | undefined {
-    const parsed = this.parseAt(0);
-    if (!parsed) return undefined;
-    this.buf = this.buf.subarray(parsed.end);
-    return parsed.value;
-  }
-
-  private parseAt(offset: number): { value: unknown; end: number } | undefined {
-    if (offset >= this.buf.length) return undefined;
-    const type = String.fromCharCode(this.buf[offset]!);
-    const lineEnd = this.buf.indexOf("\r\n", offset);
-    if (lineEnd === -1) return undefined;
-    const line = this.buf.toString("utf8", offset + 1, lineEnd);
-    const afterLine = lineEnd + 2;
-
-    switch (type) {
-      case "+":
-        return { value: line, end: afterLine };
-      case "-":
-        return { value: new Error(line), end: afterLine };
-      case ":":
-        return { value: Number(line), end: afterLine };
-      case "$": {
-        const len = Number(line);
-        if (len === -1) return { value: null, end: afterLine };
-        const end = afterLine + len + 2;
-        if (this.buf.length < end) return undefined;
-        return {
-          value: this.buf.toString("utf8", afterLine, afterLine + len),
-          end,
-        };
-      }
-      case "*": {
-        const count = Number(line);
-        if (count === -1) return { value: null, end: afterLine };
-        const items: unknown[] = [];
-        let cursor = afterLine;
-        for (let i = 0; i < count; i += 1) {
-          const item = this.parseAt(cursor);
-          if (!item) return undefined;
-          items.push(item.value);
-          cursor = item.end;
-        }
-        return { value: items, end: cursor };
-      }
-      default:
-        // Unknown type byte — skip the line rather than wedging the stream.
-        return { value: null, end: afterLine };
-    }
-  }
-}
-
-const RECONNECT_BASE_MS = 200;
-const RECONNECT_MAX_MS = 5_000;
-
-/** One managed Redis socket with backoff reconnect + a pending write queue. */
-class RedisConnection {
-  private socket: net.Socket | null = null;
-  private ready = false;
-  private closed = false;
-  private attempt = 0;
-  private pending: string[] = [];
-  private readonly parser = new RespParser();
-
-  constructor(
-    private readonly target: RedisTarget,
-    private readonly onReply: (reply: unknown) => void,
-    private readonly onReady: () => void,
-    private readonly onError: (err: Error) => void,
-  ) {
-    this.connect();
-  }
-
-  private connect(): void {
-    if (this.closed) return;
-    const socket = net.createConnection({
-      host: this.target.host,
-      port: this.target.port,
-    });
-    socket.setNoDelay(true);
-    this.socket = socket;
-
-    socket.on("connect", () => {
-      this.ready = true;
-      this.attempt = 0;
-      if (this.target.password !== undefined) {
-        socket.write(encodeCommand(["AUTH", this.target.password]));
-      }
-      const queued = this.pending;
-      this.pending = [];
-      for (const cmd of queued) socket.write(cmd);
-      this.onReady();
-    });
-
-    socket.on("data", (chunk: Buffer) => {
-      this.parser.feed(chunk);
-      for (;;) {
-        const reply = this.parser.next();
-        if (reply === undefined) break;
-        this.onReply(reply);
-      }
-    });
-
-    socket.on("error", (err: Error) => {
-      this.onError(err);
-    });
-
-    socket.on("close", () => {
-      this.ready = false;
-      this.socket = null;
-      if (this.closed) return;
-      this.attempt += 1;
-      const delay = Math.min(
-        RECONNECT_MAX_MS,
-        RECONNECT_BASE_MS * 2 ** (this.attempt - 1),
-      );
-      const timer = setTimeout(() => this.connect(), delay);
-      if (typeof timer.unref === "function") timer.unref();
-    });
-  }
-
-  send(command: string): void {
-    if (this.closed) return;
-    if (this.ready && this.socket) {
-      this.socket.write(command);
-      return;
-    }
-    // Not connected yet (or reconnecting): queue and flush on 'connect'.
-    this.pending.push(command);
-  }
-
-  close(): void {
-    this.closed = true;
-    this.pending = [];
-    if (this.socket) {
-      this.socket.destroy();
-      this.socket = null;
-    }
-  }
-}
 
 export class RedisPubSub implements PubSub {
   private readonly local = new LocalHandlers();
