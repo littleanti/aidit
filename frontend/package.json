@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test --config e2e/playwright.config.ts"
+    "e2e": "playwright test --config e2e/playwright.config.ts",
+    "media": "playwright test --config e2e/playwright.media.config.ts",
+    "media:gif": "node e2e/make-gif.mjs"
   },
   "dependencies": {
     "dompurify": "^3.4.10",

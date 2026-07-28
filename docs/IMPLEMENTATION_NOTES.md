@@ -10,6 +10,14 @@
 
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
+### 2026-07-28
+- **[docs]** **README 미디어 — 응결 흐름 GIF + 화면 스크린샷 3장(재현 가능 생성)**: 데모 영상이 Google Drive 링크라 **익명 접근 시 로그인 페이지로 유도**되는 것을 확인했다(WebFetch 검증). 링크 하나에 전달력을 의존하지 않도록 리포 안에 미디어를 넣는다.
+  - **생성 도구**: `frontend/e2e/capture-media.spec.ts` — Aidit REST와 LLM 호스트를 스텁한 상태로 실제 UI를 촬영(백엔드·DB·실키 불필요, 매 실행 동일 산출물). 산출물: `docs/assets/thread.png`·`document.png`·`community.png` + `docs/assets/condense/*.png`(GIF 프레임 23장). 전용 설정 `e2e/playwright.media.config.ts`(Pixel 7 · `deviceScaleFactor: 2`)를 두고, 메인 e2e 설정에는 `testIgnore`를 추가해 **미디어 갱신이 테스트 게이트를 막지 않게** 했다.
+  - **GIF**: `frontend/e2e/make-gif.mjs`(`npm run media:gif`) — ffmpeg 2-pass 팔레트(64색, bayer 디더)로 `docs/assets/condense.gif` 생성(380px, 194KB). 필터 그래프의 인용부호가 OS 셸마다 다르게 해석되는 문제를 피해 argv 배열로 spawn한다. 프레임은 `.gitignore`(재생성 가능), GIF만 커밋.
+  - **캡처 정확성 이슈 2건 수정**: ① `page.route`로 채운 SSE 응답은 **완결된 바디**라 EventSource가 즉시 EOF→에러로 가면서 "연결이 끊겼습니다" 배너가 모든 스크린샷에 남았다 → `EventSource`를 페이지에서 열린 상태로 스텁해 정상 정상상태를 촬영. ② 스텁 헬퍼의 `authorId: null ?? 기본값`이 널을 덮어써 **AI 답변이 사람 버블로 렌더**됐다(제품 오해) → 명시적 null이 살아남게 수정, `Code Agent [AI]` 라벨로 정상 촬영.
+  - **README**: 히어로에 GIF + 한 줄 캡션, 신설 "🖼 화면" 절에 스크린샷 3장 + 설명, 데모 영상은 보조 링크로 이동, 스크립트 표에 `media`/`media:gif` 추가.
+  - **후속(사용자 조치 필요)**: Drive 영상 공유 설정을 "링크가 있는 모든 사용자"로 바꿔야 외부에서 열린다.
+
 ### 2026-07-27 (2)
 - **[docs]** **배포·CI 방침을 자체 서버(self-hosted)로 명시 — GitHub Pages·Actions 미사용**: 운영을 직접 관리하는 서버에서 하기로 결정되어, 문서가 GitHub 호스팅을 전제하던 서술을 정정한다. 동작 변경 없음(문서 전용).
   - **README**: "GitHub Pages 배포" 절 → **"배포 · CI"** 절로 교체 — 자체 서버 운영 명시, `WEB_ORIGIN` 예시를 `app.example.com`으로, 파이프라인에서 그대로 쓸 게이트 명령(양쪽 typecheck·test·build + `db:pg:check`) 추가. "검증 상태" 표에 **CI 행 신설** — 리포에 워크플로 정의가 없는 것은 누락이 아니라 의도된 선택임을 못박음.

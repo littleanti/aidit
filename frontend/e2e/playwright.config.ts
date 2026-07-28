@@ -15,6 +15,9 @@ const BASE_URL = process.env.AIDIT_E2E_BASE_URL ?? 'http://localhost:5173';
 export default defineConfig({
   testDir: '.',
   testMatch: '**/*.spec.ts',
+  // capture-media.spec.ts is a media generator (README screenshots + GIF frames),
+  // not a test. It must never gate `npm run e2e`; run it via `npm run media`.
+  testIgnore: '**/capture-media.spec.ts',
   // Mobile-first product (L9: 360–430px). Default to a phone viewport.
   use: {
     baseURL: BASE_URL,

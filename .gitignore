@@ -56,3 +56,6 @@ test-results/
 
 # --- Demo recording (large, not committed) ---
 /demo-aidit.mp4
+
+# README media: frame sequence is regenerable, only the built GIF is committed
+docs/assets/condense/

@@ -5,11 +5,15 @@
 **여러 사람이 하나의 AI 대화를 함께 쌓아 올리는 커뮤니티.**
 LLM 키와 비용은 각자 부담(BYOK)이라, 서버는 키를 보지도 저장하지도 않습니다.
 
-### ▶ [**데모 영상 보기**](https://drive.google.com/file/d/1oMfWccdxC8tbMpsUjlNUYq0q5nqT8Yb4/view)
-
 `React 18` · `TypeScript` · `Fastify` · `Prisma` · `SSE` · `PWA` · **테스트 173개 통과** · `MIT`
 
-[30초 요약](#30초-요약) · [빠른 시작](#-빠른-시작) · [성능 실측](#-성능-실측) · [문서](#-문서)
+<img src="./docs/assets/condense.gif" alt="여러 사람의 논의를 한 번에 마크다운 문서로 응결하는 흐름" width="380">
+
+**논의 → `[ 문서로 정리 ]` → 커뮤니티 자산.** 여러 사람이 쌓은 대화가 호출자 본인 키로 한 번에 문서가 됩니다.
+
+▶ [**전체 데모 영상 (3명이 동시에 쓰는 3분할 시연)**](https://drive.google.com/file/d/1oMfWccdxC8tbMpsUjlNUYq0q5nqT8Yb4/view)
+
+[30초 요약](#30초-요약) · [화면](#-화면) · [빠른 시작](#-빠른-시작) · [성능 실측](#-성능-실측) · [문서](#-문서)
 
 </div>
 
@@ -27,6 +31,17 @@ LLM 키와 비용은 각자 부담(BYOK)이라, 서버는 키를 보지도 저�
 | **원가** | 멀티유저 AI는 사용량이 곧 적자 | key-blind BYOK — 추론 비용이 사용자에게 귀속 |
 | **맥락** | 긴 다자 대화는 컨텍스트 한도에서 끊김 | 128K 임계 지연 요약 + 세그먼트 경계 단일 출처 |
 | **가치 보존** | 좋은 논의가 채팅 로그로 흘러 사라짐 | `[ 문서로 정리 ]` — 논의를 문서로 응결(FR-13) |
+
+---
+
+## 🖼 화면
+
+| 공유 스레드 | 응결된 문서 | 커뮤니티 문서 탭 |
+|---|---|---|
+| <img src="./docs/assets/thread.png" alt="여러 사람의 댓글과 그 누적 위에서 답하는 AI 버블" width="260"> | <img src="./docs/assets/document.png" alt="논의가 정리된 마크다운 문서와 출처 표기" width="260"> | <img src="./docs/assets/community.png" alt="커뮤니티의 게시글 문서 탭" width="260"> |
+| 사람들의 댓글이 **하나의 컨텍스트**를 이루고, `@AI`가 그 누적 위에서 답합니다. AI 버블은 커뮤니티 페르소나 이름으로 표시됩니다. | 논의가 제목·섹션·표·**미해결 질문**까지 갖춘 문서로 응결됩니다. 하단에 **출처(세그먼트·턴 수)** 가 남습니다. | 응결된 문서가 커뮤니티에 누적됩니다 — 대화가 흘러가도 결론은 자산으로 남습니다. |
+
+> 위 이미지는 `npm run media`(프론트엔드)로 **재현 가능하게 생성**됩니다. REST·LLM을 스텁하고 실제 UI를 촬영하므로 실제 키·백엔드 없이 매번 동일한 결과가 나오고, UI가 바뀌면 이미지 diff로 드러납니다.
 
 ---
 
@@ -240,6 +255,7 @@ cd frontend && npm run typecheck && npm test && npm run build
 | `backend/` | `npm run db:pg:ddl` · `db:pg:push` · `db:pg:check` | Postgres DDL 생성 · 적용 · 스키마 드리프트 검사 |
 | `frontend/` | `npm run dev` / `build` | Vite 개발 서버(5173) / 타입체크 + 프로덕션 빌드 |
 | `frontend/` | `npm run typecheck` · `npm test` · `npm run e2e` | `tsc --noEmit` · vitest · Playwright |
+| `frontend/` | `npm run media` · `npm run media:gif` | README 스크린샷 재생성 · 프레임 → GIF(ffmpeg 필요) |
 
 ## License
 
