@@ -13,6 +13,7 @@ import { home } from './dicts/home';
 import { thread } from './dicts/thread';
 import { post } from './dicts/post';
 import { community } from './dicts/community';
+import { document } from './dicts/document';
 import { profile } from './dicts/profile';
 import { states } from './dicts/states';
 import { misc } from './dicts/misc';
@@ -28,6 +29,7 @@ export const DICTS = {
   thread,
   post,
   community,
+  document,
   profile,
   states,
   misc,

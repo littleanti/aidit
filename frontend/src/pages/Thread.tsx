@@ -28,6 +28,7 @@ import { DEFAULT_AI_LENGTH } from '../engine/length';
 import { useThreadStore } from '../stores/threadStore';
 import { useThreadStream } from '../stream/useThreadStream';
 import { runPrimaryReply } from '../engine/contextEngine';
+import { condenseToDocument } from '../engine/documentEngine';
 import { retryAiBubble } from '../engine/retryAiBubble';
 import { urlToInlineData } from '../lib/imageInline';
 import { assetUrl } from '../config/api';
@@ -111,10 +112,13 @@ export default function Thread() {
   // thread-wide re-render on every keystroke; only the boolean is surfaced).
   const [wantsAI, setWantsAI] = useState(false);
 
-  // Author-only owner menu (edit/delete), now in the original-post card meta row
-  // instead of the nav header. Overflow [⋯] trigger opens a popover; delete is a
-  // 2-step confirm INSIDE the menu. Mirrors the Composer AI-menu dismiss pattern.
+  // Overflow [⋯] menu in the nav header. Opens for ANY logged-in user (FR-13.1:
+  // "문서로 정리" is open to every participant); the edit/delete items inside stay
+  // author-only. Delete is a 2-step confirm INSIDE the menu. Mirrors the
+  // Composer AI-menu dismiss pattern.
   const [ownerMenuOpen, setOwnerMenuOpen] = useState(false);
+  // FR-13: condensation in flight (the menu item shows a busy label meanwhile).
+  const [condensing, setCondensing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const ownerMenuRef = useRef<HTMLDivElement>(null);
@@ -150,6 +154,42 @@ export default function Thread() {
 
   // SSE live stream (also drives initial replay via Last-Event-ID / afterSeq).
   const { status } = useThreadStream(postId);
+
+  /**
+   * FR-13.1/13.2 — condense this discussion into a markdown document.
+   *
+   * Runs on the CALLER'S own key (BYOK): the key is read at call time from the
+   * auth store and handed to the engine, never stored in component state or
+   * logged. On success we navigate to the new document; on failure we only toast
+   * — the thread itself is never mutated (FR-13.7).
+   */
+  const condense = useCallback(async () => {
+    if (!post || !postId || condensing) return;
+    const apiKey = useAuthStore.getState().googleApiKey;
+    if (!apiKey) {
+      setOwnerMenuOpen(false);
+      showAiToast(t('thread.condenseNoKey'));
+      return;
+    }
+    setCondensing(true);
+    try {
+      const res = await condenseToDocument({
+        postId,
+        communityPersonaPrompt: community?.personaPrompt ?? '',
+        postTitle: post.title,
+        apiKey,
+      });
+      if (res.ok && res.document) {
+        setOwnerMenuOpen(false);
+        navigate(`/d/${res.document.id}`);
+        return;
+      }
+      setOwnerMenuOpen(false);
+      showAiToast(res.errorMessage ?? t('thread.condenseNoKey'));
+    } finally {
+      setCondensing(false);
+    }
+  }, [post, postId, condensing, community, navigate, t]);
 
   // Browser-level connectivity (WIREFRAME §8). Combined with the SSE status this
   // drives the offline / reconnecting top strip.
@@ -521,10 +561,12 @@ export default function Thread() {
             <path d="M6 3h12v18l-6-4-6 4z" />
           </svg>
         </button>
-        {/* owner-only overflow menu (edit/delete) — back in the top bar to match
-            Aidit-Code (moved here from the original-post card meta row, 2026-06-28).
-            [⋯] trigger opens a popover; delete is a 2-step confirm inside it. */}
-        {myUserId && post.authorId === myUserId && (
+        {/* overflow menu in the top bar (moved here from the original-post card
+            meta row, 2026-06-28). [⋯] opens a popover; delete is a 2-step confirm
+            inside it. 2026-07-27 (FR-13.1): the TRIGGER now shows for any
+            logged-in user because "문서로 정리" is open to every participant —
+            edit/delete remain gated to the author INSIDE the menu. */}
+        {myUserId && (
           <div ref={ownerMenuRef} className="relative">
             <button
               type="button"
@@ -543,7 +585,7 @@ export default function Thread() {
               <div
                 role="menu"
                 aria-label={t('thread.ownerMenuAria')}
-                className="absolute right-0 top-full z-30 mt-1 flex w-28 flex-col rounded-[2px] border border-term-border bg-term-card py-1 shadow-glow-soft"
+                className="absolute right-0 top-full z-30 mt-1 flex w-36 flex-col rounded-[2px] border border-term-border bg-term-card py-1 shadow-glow-soft"
               >
                 {confirmingDelete ? (
                   <>
@@ -582,23 +624,42 @@ export default function Thread() {
                   </>
                 ) : (
                   <>
-                    <Link
-                      to="/create-post"
-                      state={{ editPostId: post.id }}
-                      role="menuitem"
-                      onClick={() => setOwnerMenuOpen(false)}
-                      className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-dim transition hover:bg-term-hover hover:text-term-bright"
-                    >
-                      {t('thread.editLabel')}
-                    </Link>
+                    {/* FR-13.1: open to EVERY logged-in participant. */}
                     <button
                       type="button"
                       role="menuitem"
-                      onClick={() => setConfirmingDelete(true)}
-                      className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-danger transition hover:bg-term-hover"
+                      disabled={condensing}
+                      aria-label={t('thread.condenseAria')}
+                      onClick={() => void condense()}
+                      className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-amber transition hover:bg-term-hover disabled:text-term-faint"
                     >
-                      {t('thread.deleteLabel')}
+                      {condensing
+                        ? t('thread.condenseBusyLabel')
+                        : t('thread.condenseLabel')}
                     </button>
+                    {/* author-only actions below the divider */}
+                    {post.authorId === myUserId && (
+                      <>
+                        <div className="my-1 border-t border-term-border" />
+                        <Link
+                          to="/create-post"
+                          state={{ editPostId: post.id }}
+                          role="menuitem"
+                          onClick={() => setOwnerMenuOpen(false)}
+                          className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-dim transition hover:bg-term-hover hover:text-term-bright"
+                        >
+                          {t('thread.editLabel')}
+                        </Link>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => setConfirmingDelete(true)}
+                          className="flex min-h-[44px] items-center gap-2 px-3 text-xs text-term-danger transition hover:bg-term-hover"
+                        >
+                          {t('thread.deleteLabel')}
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </div>

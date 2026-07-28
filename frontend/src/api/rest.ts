@@ -5,6 +5,8 @@ import type {
   Community,
   ContextResponse,
   CreateCommentRequest,
+  DocumentDetail,
+  DocumentSummary,
   Post,
   PostListItem,
   SessionResponse,
@@ -488,6 +490,61 @@ export async function getComments(
  */
 export function getContext(postId: string): Promise<ContextResponse> {
   return request<ContextResponse>(`/posts/${postId}/context`);
+}
+
+// ---- Documents (FR-13) ----
+
+export interface PostDocumentBody {
+  /** Extracted from the markdown's first '# heading'; server falls back to the post title. */
+  title?: string;
+  /** The markdown produced by the caller's own BYOK call. */
+  body: string;
+  /** provenance: active segment index at condensation time. */
+  segmentIndex: number;
+  /** provenance: last bubble seq included in the condensation. */
+  sourceSeq: number;
+  /** Idempotency key so a retry never duplicates a document. */
+  clientId?: string;
+}
+
+/**
+ * POST /posts/:id/documents — persist a condensed discussion document (FR-13).
+ * L1: the markdown was generated in THIS browser with the user's own key; the
+ * request carries only the finished text and a Bearer JWT — never the key.
+ */
+export function postDocument(
+  postId: string,
+  body: PostDocumentBody,
+  userId?: string,
+): Promise<{ document: DocumentDetail }> {
+  return request<{ document: DocumentDetail }>(`/posts/${postId}/documents`, {
+    method: 'POST',
+    body,
+    userId,
+  });
+}
+
+/** GET /documents/:id — a single document including its markdown body. */
+export function getDocument(id: string): Promise<{ document: DocumentDetail }> {
+  return request<{ document: DocumentDetail }>(`/documents/${id}`);
+}
+
+/** GET /posts/:id/documents — documents condensed from one thread (newest first). */
+export function getPostDocuments(
+  postId: string,
+): Promise<{ items: DocumentSummary[] }> {
+  return request<{ items: DocumentSummary[] }>(`/posts/${postId}/documents`);
+}
+
+/** GET /communities/:slug/documents — community document feed, cursor-paged. */
+export function getCommunityDocuments(
+  slug: string,
+  cursor?: string,
+): Promise<{ items: DocumentSummary[]; nextCursor: string | null }> {
+  return request<{ items: DocumentSummary[]; nextCursor: string | null }>(
+    `/communities/${slug}/documents`,
+    cursor ? { query: { cursor } } : undefined,
+  );
 }
 
 // ---- Metrics (XC-10 / BE-13) ----

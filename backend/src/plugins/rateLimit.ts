@@ -17,11 +17,17 @@ const POST_MAX = 10; // up to 10 posts/min/identity
 const COMMUNITY_COOLDOWN_MS = 180_000; // 1 community / 3 minutes/identity
 const UPLOAD_WINDOW_MS = 60_000; // 1 minute
 const UPLOAD_MAX = 20; // up to 20 uploads/min/identity (only disk-write endpoint)
+// FR-13: document condensation burns a whole context window on the caller's own
+// key and writes up to 200K chars, so it is the heaviest user-triggered action.
+const DOCUMENT_WINDOW_MS = 300_000; // 5 minutes
+const DOCUMENT_MAX = 3; // up to 3 condensations / 5 min / identity
 
 // Sliding-window timestamps for post creation, per identity.
 const postTimestamps = new Map<string, number[]>();
 // Sliding-window timestamps for image uploads, per identity.
 const uploadTimestamps = new Map<string, number[]>();
+// Sliding-window timestamps for document condensation (FR-13), per identity.
+const documentTimestamps = new Map<string, number[]>();
 // Last community-creation instant, per identity.
 const lastCommunityAt = new Map<string, number>();
 
@@ -90,6 +96,29 @@ const rateLimitImpl: FastifyPluginAsync = async (app) => {
       }
       arr.push(now);
       uploadTimestamps.set(id, arr);
+      return;
+    }
+
+    if (routePath === "/posts/:id/documents") {
+      const arr = (documentTimestamps.get(id) ?? []).filter(
+        (t) => now - t < DOCUMENT_WINDOW_MS,
+      );
+      if (arr.length >= DOCUMENT_MAX) {
+        const oldest = arr[0]!;
+        const retryMs = DOCUMENT_WINDOW_MS - (now - oldest);
+        void reply.header("Retry-After", Math.ceil(retryMs / 1000));
+        return reply.code(429).send({
+          error: `Rate limit: at most ${DOCUMENT_MAX} documents per ${Math.round(
+            DOCUMENT_WINDOW_MS / 60_000,
+          )} minutes. Try again shortly.`,
+        });
+      }
+      // Recorded on the gate (onRequest), so a malformed request also consumes a
+      // slot — same tradeoff as the community cooldown below. Acceptable here
+      // because the client only POSTs after its own LLM call already succeeded,
+      // making malformed bodies a non-path in practice.
+      arr.push(now);
+      documentTimestamps.set(id, arr);
       return;
     }
 

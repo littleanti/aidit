@@ -19,6 +19,8 @@ export async function makeApp(): Promise<FastifyInstance> {
 
 // Wipe all rows between tests so suites are independent (order matters for FKs).
 export async function resetDb(): Promise<void> {
+  // FR-13: documents hold RESTRICT FKs to post/community, so they go first.
+  await prisma.document.deleteMany();
   await prisma.vote.deleteMany();
   await prisma.bookmark.deleteMany();
   await prisma.comment.deleteMany();

@@ -132,3 +132,36 @@ export interface ContextResponse {
   tokenSum: number;
   summaryNeeded: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// FR-13 — condensed discussion documents.
+//
+// The markdown is generated in the browser with the caller's own key; the server
+// only stores/serves the finished text (L1 key-blind holds: no apiKey field).
+// ---------------------------------------------------------------------------
+
+/** List-card shape: everything but the (potentially huge) markdown body. */
+export interface DocumentSummary {
+  id: string;
+  communityId: string;
+  communitySlug: string;
+  communityName: string;
+  communityPersonaIcon?: string | null;
+  postId: string;
+  postTitle: string | null;
+  authorId: string | null;
+  authorUsername: string | null;
+  title: string;
+  /** provenance: active segment index when the document was condensed. */
+  segmentIndex: number;
+  /** provenance: last bubble seq included in the condensation. */
+  sourceSeq: number;
+  createdAt: string;
+  /** Plain-text excerpt for list rendering (markdown syntax stripped). */
+  preview?: string;
+}
+
+/** Full document, markdown body included (GET /documents/:id). */
+export interface DocumentDetail extends DocumentSummary {
+  body: string;
+}

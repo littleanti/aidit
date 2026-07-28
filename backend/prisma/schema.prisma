@@ -15,48 +15,51 @@ generator client {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  username     String   @unique // display + self identification. Keys are NEVER stored.
-  passwordHash String?  // bcrypt hash; null for legacy passwordless rows
-  createdAt    DateTime @default(now())
-  communities Community[]   @relation("CreatedCommunities")
-  posts       Post[]
-  comments    Comment[]
-  visitEvents VisitEvent[]
-  bookmarks   Bookmark[]
-  votes       Vote[]
+  id           String       @id @default(cuid())
+  username     String       @unique // display + self identification. Keys are NEVER stored.
+  passwordHash String? // bcrypt hash; null for legacy passwordless rows
+  createdAt    DateTime     @default(now())
+  communities  Community[]  @relation("CreatedCommunities")
+  posts        Post[]
+  comments     Comment[]
+  visitEvents  VisitEvent[]
+  bookmarks    Bookmark[]
+  votes        Vote[]
+  documents    Document[]
 }
 
 model Community {
-  id            String   @id @default(cuid())
-  slug          String   @unique // search / URL
+  id            String     @id @default(cuid())
+  slug          String     @unique // search / URL
   name          String
   description   String?
-  personaPrompt String   // community AI persona (system instruction)
-  personaIcon   String?  // L12: nullable persona icon
+  personaPrompt String // community AI persona (system instruction)
+  personaIcon   String? // L12: nullable persona icon
   creatorId     String
-  creator       User     @relation("CreatedCommunities", fields: [creatorId], references: [id])
-  createdAt     DateTime @default(now())
+  creator       User       @relation("CreatedCommunities", fields: [creatorId], references: [id])
+  createdAt     DateTime   @default(now())
   posts         Post[]
+  documents     Document[]
 }
 
 model Post {
-  id           String   @id @default(cuid())
+  id           String           @id @default(cuid())
   communityId  String
-  community    Community @relation(fields: [communityId], references: [id])
+  community    Community        @relation(fields: [communityId], references: [id])
   authorId     String
-  author       User     @relation(fields: [authorId], references: [id])
+  author       User             @relation(fields: [authorId], references: [id])
   title        String
   body         String
-  imageUrl     String?  // optional uploaded image (filesystem-served URL); null = no image
-  score        Int      @default(0)   // upvotes (popularity sort)
-  commentCount Int      @default(0)
-  hotScore     Float    @default(0)   // denormalized hot score (§9)
-  createdAt    DateTime @default(now())
+  imageUrl     String? // optional uploaded image (filesystem-served URL); null = no image
+  score        Int              @default(0) // upvotes (popularity sort)
+  commentCount Int              @default(0)
+  hotScore     Float            @default(0) // denormalized hot score (§9)
+  createdAt    DateTime         @default(now())
   comments     Comment[]
   segments     ContextSegment[]
   bookmarks    Bookmark[]
   votes        Vote[]
+  documents    Document[]
 }
 
 enum CommentType {
@@ -72,24 +75,24 @@ enum CommentStatus {
 }
 
 model Comment {
-  id         String        @id @default(cuid())
+  id         String         @id @default(cuid())
   postId     String
-  post       Post          @relation(fields: [postId], references: [id])
-  authorId   String?       // null for AI bubbles
-  author     User?         @relation(fields: [authorId], references: [id])
+  post       Post           @relation(fields: [postId], references: [id])
+  authorId   String? // null for AI bubbles
+  author     User?          @relation(fields: [authorId], references: [id])
   type       CommentType
-  status     CommentStatus @default(COMPLETE)
+  status     CommentStatus  @default(COMPLETE)
   body       String
-  imageUrl   String?       // optional uploaded image (filesystem-served URL); null = no image
-  tokenCount Int           @default(0) // estimated, for context summation
-  segmentId  String        // owning context segment (§6)
+  imageUrl   String? // optional uploaded image (filesystem-served URL); null = no image
+  tokenCount Int            @default(0) // estimated, for context summation
+  segmentId  String // owning context segment (§6)
   segment    ContextSegment @relation(fields: [segmentId], references: [id])
-  replyToId  String?       // which human comment an @AI reply responds to
-  replyTo    Comment?      @relation("ReplyChain", fields: [replyToId], references: [id])
-  replies    Comment[]     @relation("ReplyChain")
-  clientId   String?       // L12: client-supplied idempotency key
-  seq        Int           // monotonic per-post order (SoT sort key, L4)
-  createdAt  DateTime      @default(now())
+  replyToId  String? // which human comment an @AI reply responds to
+  replyTo    Comment?       @relation("ReplyChain", fields: [replyToId], references: [id])
+  replies    Comment[]      @relation("ReplyChain")
+  clientId   String? // L12: client-supplied idempotency key
+  seq        Int // monotonic per-post order (SoT sort key, L4)
+  createdAt  DateTime       @default(now())
 
   @@unique([postId, clientId]) // L12: idempotency
   @@index([postId, seq])
@@ -99,14 +102,14 @@ model Comment {
 // seg#0 is auto-created on post creation. When a summary bubble is produced a new
 // segment opens, whose first bubble is the summary (AI_SUMMARY).
 model ContextSegment {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   postId           String
-  post             Post     @relation(fields: [postId], references: [id])
-  index            Int      // 0,1,2... per-post ordinal
-  summaryCommentId String?  // the summary bubble opening this segment (when index>0)
-  tokenSum         Int      @default(0) // cached cumulative tokens (128K threshold basis)
-  isActive         Boolean  @default(true) // exactly ONE active segment per post
-  createdAt        DateTime @default(now())
+  post             Post      @relation(fields: [postId], references: [id])
+  index            Int // 0,1,2... per-post ordinal
+  summaryCommentId String? // the summary bubble opening this segment (when index>0)
+  tokenSum         Int       @default(0) // cached cumulative tokens (128K threshold basis)
+  isActive         Boolean   @default(true) // exactly ONE active segment per post
+  createdAt        DateTime  @default(now())
   comments         Comment[]
 
   @@unique([postId, index])
@@ -144,4 +147,33 @@ model Vote {
 
   @@unique([userId, postId])
   @@index([postId])
+}
+
+// FR-13: a condensed discussion document. The markdown is generated IN THE
+// BROWSER with the caller's own key (BYOK) — the server is KEY-BLIND and only
+// ever stores the finished text. Kept in its own table (NOT a Comment type) so
+// the thread's `seq`/SSE contract (L4) is untouched: documents consume no seq
+// and publish no realtime event.
+//
+// provenance: segmentIndex + sourceSeq record HOW FAR into the thread this
+// document condensed, so a reader can tell whether it is stale and a later
+// caller can condense an updated version (FR-13.4/13.5).
+model Document {
+  id           String    @id @default(cuid())
+  communityId  String // derived server-side from the post (never client-supplied)
+  community    Community @relation(fields: [communityId], references: [id])
+  postId       String
+  post         Post      @relation(fields: [postId], references: [id])
+  authorId     String? // who ran the condensation; nullable for robustness
+  author       User?     @relation(fields: [authorId], references: [id])
+  title        String // first '# heading' of the markdown, else the post title
+  body         String // markdown
+  segmentIndex Int // active segment index at condensation time
+  sourceSeq    Int // last bubble seq included
+  clientId     String? // idempotency key (retry-safe)
+  createdAt    DateTime  @default(now())
+
+  @@unique([postId, clientId])
+  @@index([communityId, createdAt])
+  @@index([postId, createdAt])
 }

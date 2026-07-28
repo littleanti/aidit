@@ -596,6 +596,9 @@ const plugin: FastifyPluginAsync = async (app) => {
     await prisma.$transaction(async (tx) => {
       await tx.vote.deleteMany({ where: { postId: id } });
       await tx.bookmark.deleteMany({ where: { postId: id } });
+      // FR-13: condensed documents are owned by the thread — deleting the post
+      // removes them too (they reference postId with a RESTRICT FK).
+      await tx.document.deleteMany({ where: { postId: id } });
       await tx.comment.updateMany({
         where: { postId: id },
         data: { replyToId: null },

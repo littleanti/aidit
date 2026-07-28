@@ -6,6 +6,7 @@ import Community from './pages/Community';
 import CreateCommunity from './pages/CreateCommunity';
 import CreatePost from './pages/CreatePost';
 import Thread from './pages/Thread';
+import DocumentPage from './pages/Document';
 import Search from './pages/Search';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
@@ -27,6 +28,8 @@ export default function App() {
           <Route path="/create-post" element={<CreatePost />} />
           <Route path="/create-community" element={<CreateCommunity />} />
           <Route path="/p/:postId" element={<Thread />} />
+          {/* FR-13.6: condensed discussion document */}
+          <Route path="/d/:documentId" element={<DocumentPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

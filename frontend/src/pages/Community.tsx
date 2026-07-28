@@ -4,10 +4,15 @@ import {
   ApiError,
   getCommunities,
   getCommunity,
+  getCommunityDocuments,
   getCommunityPosts,
   getPosts,
 } from '../api/rest';
-import type { Community as CommunityDTO, PostListItem } from '../api/types';
+import type {
+  Community as CommunityDTO,
+  DocumentSummary,
+  PostListItem,
+} from '../api/types';
 import { useAuthStore } from '../stores/authStore';
 import Avatar from '../components/Avatar';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
@@ -359,6 +364,18 @@ function CommunityDetail({ slug }: { slug: string }) {
   const userId = useAuthStore((s) => s.userId);
   const [activeSort] = useState<'new' | 'top'>('new');
 
+  // FR-13.6: body tab — posts (default) | condensed documents. Same segmented
+  // tablist idiom as the search screen (title bar = page identity, body tab =
+  // content switch).
+  const [tab, setTab] = useState<'posts' | 'documents'>('posts');
+  const [documents, setDocuments] = useState<DocumentSummary[]>([]);
+  const [docCursor, setDocCursor] = useState<string | null>(null);
+  const [docLoading, setDocLoading] = useState(false);
+  const [docMoreLoading, setDocMoreLoading] = useState(false);
+  const [docError, setDocError] = useState<string | null>(null);
+  // null until the first fetch resolves, so the tab label shows no count yet.
+  const [docLoaded, setDocLoaded] = useState(false);
+
   const [community, setCommunity] = useState<CommunityDTO | null>(null);
   const [posts, setPosts] = useState<PostListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -411,6 +428,55 @@ function CommunityDetail({ slug }: { slug: string }) {
     () => !!community && !!userId && community.creatorId === userId,
     [community, userId],
   );
+
+  // FR-13.6: lazily load the document tab the first time it is opened, and again
+  // whenever the slug changes (the loaded flag resets with it).
+  useEffect(() => {
+    setDocuments([]);
+    setDocCursor(null);
+    setDocError(null);
+    setDocLoaded(false);
+  }, [slug]);
+
+  useEffect(() => {
+    if (tab !== 'documents' || docLoaded) return;
+    let cancelled = false;
+    setDocLoading(true);
+    setDocError(null);
+    (async () => {
+      try {
+        const page = await getCommunityDocuments(slug);
+        if (cancelled) return;
+        setDocuments(page.items);
+        setDocCursor(page.nextCursor);
+        setDocLoaded(true);
+      } catch (err) {
+        if (cancelled) return;
+        setDocError(
+          err instanceof ApiError ? err.message : t('document.listError'),
+        );
+      } finally {
+        if (!cancelled) setDocLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, docLoaded, slug, t]);
+
+  async function loadMoreDocuments() {
+    if (!docCursor || docMoreLoading) return;
+    setDocMoreLoading(true);
+    try {
+      const page = await getCommunityDocuments(slug, docCursor);
+      setDocuments((prev) => [...prev, ...page.items]);
+      setDocCursor(page.nextCursor);
+    } catch (err) {
+      setDocError(err instanceof ApiError ? err.message : t('document.listError'));
+    } finally {
+      setDocMoreLoading(false);
+    }
+  }
 
   if (loading) {
     return <LoadingState />;
@@ -500,7 +566,99 @@ function CommunityDetail({ slug }: { slug: string }) {
         </Link>
       </header>
 
+      {/* FR-13.6: body tabs — [게시글 | 문서] */}
+      <div
+        role="tablist"
+        aria-label={t('community.bodyTabsAria')}
+        className="flex rounded-[2px] border border-term-border"
+      >
+        {(['posts', 'documents'] as const).map((key) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={`flex min-h-[44px] flex-1 items-center justify-center text-sm font-semibold transition ${
+              tab === key
+                ? 'border-b-2 border-term-amber bg-[rgba(255,207,74,0.06)] text-term-amber'
+                : 'text-term-dim hover:text-term-bright'
+            }`}
+          >
+            {key === 'posts'
+              ? t('community.tabPosts')
+              : docLoaded
+                ? t('document.tabLabelWithCount', { count: String(documents.length) })
+                : t('document.tabLabel')}
+          </button>
+        ))}
+      </div>
+
+      {/* documents (FR-13.6) */}
+      {tab === 'documents' && (
+        <section className="space-y-2">
+          {docError && <ErrorState variant="banner" message={docError} />}
+          {docLoading ? (
+            <LoadingState variant="skeleton" rows={3} />
+          ) : documents.length === 0 ? (
+            <EmptyState
+              title={t('document.emptyTitle')}
+              hint={t('document.emptyHint')}
+              className="py-10"
+            />
+          ) : (
+            <>
+              <ul className="space-y-2">
+                {documents.map((d) => (
+                  <li key={d.id}>
+                    <Link
+                      to={`/d/${d.id}`}
+                      className="block rounded-[2px] border border-term-border bg-term-card px-4 py-3.5 transition active:bg-term-hover hover:border-term-bright"
+                    >
+                      <p className="truncate text-base font-bold text-term-title glow">
+                        {d.title}
+                      </p>
+                      {d.preview && (
+                        <p className="mt-1.5 line-clamp-2 text-sm text-term-dim">
+                          {d.preview}
+                        </p>
+                      )}
+                      {d.postTitle && (
+                        <p className="mt-1.5 truncate text-xs text-term-faint">
+                          {t('document.fromPost', { title: d.postTitle })}
+                        </p>
+                      )}
+                      <p className="mt-2 flex items-center gap-2 text-xs text-term-faint">
+                        <Avatar
+                          kind="user"
+                          seed={d.authorUsername ?? t('document.anonymous')}
+                          size="sm"
+                        />
+                        <span className="truncate">
+                          u/{d.authorUsername ?? t('document.anonymous')}
+                        </span>
+                      </p>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              {docCursor && (
+                <button
+                  type="button"
+                  onClick={() => void loadMoreDocuments()}
+                  disabled={docMoreLoading}
+                  className="flex min-h-[44px] w-full items-center justify-center rounded-[2px] border border-term-border text-sm text-term-dim transition hover:border-term-bright hover:text-term-bright disabled:opacity-50"
+                >
+                  {t('document.loadMore')}
+                </button>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
       {/* posts */}
+      {tab === 'posts' && (
       <section className="space-y-2">
         <h2 className="text-xs font-semibold tracking-wider text-term-faint">
           {t('community.postsSection')}
@@ -547,6 +705,7 @@ function CommunityDetail({ slug }: { slug: string }) {
           </ul>
         )}
       </section>
+      )}
     </div>
   );
 }

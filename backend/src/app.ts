@@ -14,6 +14,7 @@ import authRoutes from "./routes/auth.js";
 import commentRoutes from "./routes/comments.js";
 import communityRoutes from "./routes/communities.js";
 import contextRoutes from "./routes/context.js";
+import documentRoutes from "./routes/documents.js";
 import metricsRoutes from "./routes/metrics.js";
 import postRoutes from "./routes/posts.js";
 import uploadRoutes from "./routes/uploads.js";
@@ -110,6 +111,7 @@ export async function build(): Promise<FastifyInstance> {
   await app.register(postRoutes, { prefix: config.apiPrefix });
   await app.register(commentRoutes, { prefix: config.apiPrefix });
   await app.register(contextRoutes, { prefix: config.apiPrefix });
+  await app.register(documentRoutes, { prefix: config.apiPrefix });
   await app.register(metricsRoutes, { prefix: config.apiPrefix });
   await app.register(uploadRoutes, { prefix: config.apiPrefix });
   await app.register(streamRoutes, { prefix: config.apiPrefix });

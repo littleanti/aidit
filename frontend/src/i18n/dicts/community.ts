@@ -16,6 +16,7 @@ export const community = {
 
     // Post search tab (FR-1.4)
     searchTabsAria: '검색 대상',
+    bodyTabsAria: '커뮤니티 콘텐츠',
     tabCommunities: '커뮤니티',
     tabPosts: '게시글',
     postSearchPlaceholder: '게시글 제목·본문으로 검색',
@@ -79,6 +80,7 @@ export const community = {
 
     // Post search tab (FR-1.4)
     searchTabsAria: 'Search target',
+    bodyTabsAria: 'Community content',
     tabCommunities: 'Communities',
     tabPosts: 'Posts',
     postSearchPlaceholder: 'Search posts by title or body',
