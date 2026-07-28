@@ -164,6 +164,9 @@ npm run dev
 | E2E | Playwright 5스펙 — J1 1차 답변 · J2 @AI · J3 요약 · J4 문서 응결(백엔드 없이 hermetic, **4 통과 확인**) · 실키 BYOK |
 | 다중 인스턴스 fan-out | 테스트 내 RESP 브로커로 **2 인스턴스 전달 검증** — 실 Redis 서버 검증은 배포 시 |
 | Postgres | 스키마 파생 + **DDL 생성물 커밋**(`backend/prisma/postgres/init.sql`) — 런타임 검증은 배포 시 |
+| CI | **자체 서버 파이프라인에서 구성** — GitHub Actions를 쓰지 않으므로 리포에 워크플로 정의가 없습니다(의도된 선택, [배포 · CI](#-배포--ci) 참조) |
+
+로컬에서 위 검증을 재현하는 명령:
 
 ```bash
 cd backend  && npm run typecheck && npm test
@@ -184,22 +187,30 @@ cd frontend && npm run typecheck && npm test && npm run e2e
 
 ---
 
-## 🌐 배포
+## 🌐 배포 · CI
 
-프론트엔드는 정적 호스팅(GitHub Pages 등), 백엔드는 컨테이너 호스트(Render 등) 분리 구조입니다.
+**운영 방식: 자체 서버(self-hosted).** 프론트엔드 정적 산출물과 백엔드를 직접 운영하는 서버에 올리며, **GitHub Pages·GitHub Actions는 사용하지 않습니다.** 빌드·테스트·배포 파이프라인(CI/CD)은 그 서버에서 구성합니다 — 이 리포에 워크플로 정의를 두지 않는 것은 누락이 아니라 의도된 선택입니다.
 
 ```bash
-# 프론트엔드
-VITE_API_ORIGIN=https://your-api.example.com npm run build
+# 프론트엔드 (정적 산출물 → 서버의 웹 루트로 배포)
+VITE_API_ORIGIN=https://api.example.com npm run build   # dist/
 
 # 백엔드 (Postgres + Redis로 확장)
 DATABASE_URL=postgresql://…  REDIS_URL=redis://…  JWT_SECRET=<random> \
-WEB_ORIGIN=https://username.github.io  HOST=127.0.0.1  npm start
+WEB_ORIGIN=https://app.example.com  HOST=127.0.0.1  npm start
 ```
 
-주요 환경 변수: `DATABASE_URL` · `JWT_SECRET`(필수) · `JWT_EXPIRES` · `REDIS_URL`(다중 인스턴스) · `WEB_ORIGIN`(CORS) · `HOST` · `LLM_MODEL` · `STORAGE_BACKEND`(local|s3).
+주요 환경 변수: `DATABASE_URL` · `JWT_SECRET`(필수) · `JWT_EXPIRES` · `REDIS_URL`(다중 인스턴스) · `WEB_ORIGIN`(CORS 허용 오리진, 콤마 구분) · `HOST` · `LLM_MODEL` · `STORAGE_BACKEND`(local|s3).
 Postgres 전환: `npm run db:pg:push && npm run db:pg:generate` (상세: [TRD §15](./docs/TRD.md)).
-GitHub Pages는 `public/.nojekyll` + `404.html` SPA 트릭으로 딥 링크를 지원합니다.
+
+파이프라인에서 그대로 쓸 수 있는 게이트 명령:
+
+```bash
+cd backend  && npm run typecheck && npm test && npm run db:pg:check
+cd frontend && npm run typecheck && npm test && npm run build
+```
+
+> 프론트엔드에는 정적 호스팅용 잔여 자산이 남아 있습니다(`public/404.html` SPA 딥링크 폴백, `public/.nojekyll`, 백엔드 CORS 기본 허용 오리진 `littleanti.github.io`). 자체 서버 운영에는 필요하지 않으므로 정리 대상입니다.
 
 ---
 
@@ -214,6 +225,8 @@ GitHub Pages는 `public/.nojekyll` + `404.html` SPA 트릭으로 딥 링크를 �
 | [DESIGN-SYSTEM](./docs/DESIGN-SYSTEM.md) | 컬러 · 타이포 · 로고 자산 단일 출처 |
 | [IMPLEMENTATION_NOTES](./docs/IMPLEMENTATION_NOTES.md) | 실제 구현 차이 · 추가 · 버그 수정 변경 이력 |
 | [BUSINESS_VALUE](./docs/BUSINESS_VALUE.md) | 시장 · ICP · 해자 · 유닛 이코노믹스 · GTM · KPI |
+| [PATENT](./docs/PATENT.html) | **선행기술 조사·대비** — 멀티유저 AI 대화의 key-custody 한계, 임계 재귀 요약, 동시 압축 조정에 대한 6개 레인 조사 + 인용 실재성 검증. "멀티유저 × key-blind 사분면이 비어 있다"는 주장의 근거 |
+| [PAPER](./docs/PAPER.html) | 기술 논문 초안 — 공유 컨텍스트 · 지연 요약 · key-blind 구조의 정리 |
 | [DEMO_SCENARIO](./docs/DEMO_SCENARIO.md) | 3분할 창 데모 시나리오 + Playwright 자동 재현 |
 
 ## 스크립트

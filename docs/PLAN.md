@@ -222,7 +222,7 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 
 | id | 제목 | 설명 | deps | files | est |
 |----|------|------|------|-------|-----|
-| XC-1 | Key-blind 리뷰 체크리스트 | 코드화된 체크리스트 + lint 규칙: 서버 바디/헤더/로그에 apiKey 금지; CI grep 게이트. | BE-1 | `docs/checklists/key-blind.md`, CI config | S |
+| XC-1 | Key-blind 리뷰 체크리스트 | 코드화된 체크리스트 + lint 규칙: 서버 바디/헤더/로그에 apiKey 금지; grep 게이트. **게이트는 자체 서버 배포 파이프라인에서 실행한다**(GitHub Actions 미사용, 2026-07-27). | BE-1 | `docs/checklists/key-blind.md`, 배포 파이프라인 설정 | S |
 | XC-2 | 로그 redaction 테스트 | 서버 로그/응답에 키 형태 payload가 절대 없음을 단언. | XC-1, BE-3..BE-13 | `backend/test/security/redaction.test.ts` | S |
 | XC-3 | CSP + sanitize | CSP 헤더(`connect-src` Google만, `script-src 'self'` 등) + 사용자 콘텐츠/마크다운에 DOMPurify. | FE-1, BE-1 | `backend/src/plugins/security.ts`, `frontend/src/lib/sanitize.ts` | M |
 | XC-4 | 프롬프트 인젝션 가드 | AI-4 chokepoint에서: 페르소나는 systemInstruction 유지, 사용자 입력은 데이터 유지; 덮어쓰기 시도 테스트. | AI-4 | `frontend/src/engine/contextEngine.ts` | S |
@@ -494,6 +494,8 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 ---
 
 ## 12. M14 — GitHub Pages 배포 준비(옵션 A) (2026-06-19)
+
+> ⚠️ **2026-07-27 — 이 마일스톤의 배포 방식은 대체됨(SUPERSEDED).** 운영은 **자체 서버(self-hosted)** 로 결정되어 **GitHub Pages·GitHub Actions를 사용하지 않는다.** 아래 기록은 당시 완료된 작업의 이력으로 남기며, 산출물 중 `public/404.html`·`public/.nojekyll`·백엔드 CORS 기본 허용 오리진(`littleanti.github.io`)은 자체 서버 운영에 불필요한 잔여 자산이라 정리 대상이다. `VITE_API_ORIGIN` 주입과 CSP 자동화(DEP-1/DEP-2), `WEB_ORIGIN` CORS allowlist(DEP-5)는 **자체 서버 배포에도 그대로 유효**하다. 현행 배포·CI 방침은 README "배포 · CI" 절을 따른다.
 
 > 프론트엔드 정적 호스팅(GitHub Pages) + 백엔드 외부 호스트(Render 등) 분리 구조.
 > **기능 추가 없음 — 배포 준비만(PREP).** 공개 배포는 `x-user-id` 실인증 교체 후(현재 scope 외).

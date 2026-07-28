@@ -808,7 +808,7 @@ Prisma는 `datasource.provider`에 `env()`를 허용하지 않으므로 **파일
 | `npm run db:pg:ddl` | `prisma migrate diff`로 **Postgres DDL을 서버 없이** 생성 → `prisma/postgres/init.sql`(213줄, enum·TIMESTAMP(3)·FK 포함). 리뷰 가능한 산출물. |
 | `npm run db:pg:push` | 실제 Postgres에 스키마 적용(`prisma db push`). |
 | `npm run db:pg:generate` | Postgres 스키마로 Prisma 클라이언트 생성. |
-| `npm run db:pg:check` | 파생 스키마가 최신인지 검사 — 드리프트면 비영점 종료(CI 게이트용). |
+| `npm run db:pg:check` | 파생 스키마가 최신인지 검사 — 드리프트면 비영점 종료(**자체 서버 배포 파이프라인의 게이트용**; GitHub Actions는 사용하지 않는다). |
 
 > **왜 `migrate deploy`가 아니라 `db push`인가**: `prisma/migrations/`의 마이그레이션 SQL은 SQLite 문법으로 생성돼 있어 Postgres에 그대로 적용할 수 없다. Postgres 초기 구축은 생성된 `init.sql`(리뷰용) 또는 `db push`(실행용)로 하고, 이후 증분 변경은 `migrate diff`로 DDL을 뽑아 적용한다. Postgres 전용 마이그레이션 히스토리를 갖추는 것은 실제 운영 DB가 생기는 시점의 후속 작업이다.
 

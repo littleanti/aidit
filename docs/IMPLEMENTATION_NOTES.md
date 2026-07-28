@@ -10,6 +10,13 @@
 
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
 
+### 2026-07-27 (2)
+- **[docs]** **배포·CI 방침을 자체 서버(self-hosted)로 명시 — GitHub Pages·Actions 미사용**: 운영을 직접 관리하는 서버에서 하기로 결정되어, 문서가 GitHub 호스팅을 전제하던 서술을 정정한다. 동작 변경 없음(문서 전용).
+  - **README**: "GitHub Pages 배포" 절 → **"배포 · CI"** 절로 교체 — 자체 서버 운영 명시, `WEB_ORIGIN` 예시를 `app.example.com`으로, 파이프라인에서 그대로 쓸 게이트 명령(양쪽 typecheck·test·build + `db:pg:check`) 추가. "검증 상태" 표에 **CI 행 신설** — 리포에 워크플로 정의가 없는 것은 누락이 아니라 의도된 선택임을 못박음.
+  - **TRD §15.1**: `db:pg:check`의 "CI 게이트용" → "자체 서버 배포 파이프라인의 게이트용(GitHub Actions 미사용)".
+  - **PLAN**: §12 M14(GitHub Pages 배포 준비)에 **SUPERSEDED 배너** 추가 — 이력은 보존하되 현행 방침은 README를 따르도록 하고, 여전히 유효한 산출물(`VITE_API_ORIGIN`·CSP 주입·`WEB_ORIGIN` allowlist)과 정리 대상 잔여 자산을 구분해 명시. XC-1의 "CI grep 게이트"도 자체 파이프라인 기준으로 정정.
+  - **남은 정리 대상(코드, 미변경)**: `frontend/public/404.html`(SPA 딥링크 폴백), `frontend/public/.nojekyll`, `backend/src/app.ts`의 CORS 기본 허용 오리진 `https://littleanti.github.io`. 자체 서버 운영에는 불필요하나 동작에 해가 없어 이번 문서 작업에서는 손대지 않았고, README·PLAN에 정리 대상으로 기록했다.
+
 ### 2026-07-27
 - **[feat]** **논의 문서 응결 — 스레드 → 마크다운 문서 (FR-13)**: 데모 대본의 프롬프트 한 줄에만 존재했던 "논의를 문서로 정리" 흐름을 정식 기능으로 승격. 스레드 `⋯` 메뉴의 `[ 문서로 정리 ]` → **호출자 본인 키(BYOK)** 로 활성 컨텍스트를 문서화해 저장하고 `/d/:id`로 이동, 커뮤니티 상세의 **[게시글|문서] 탭**에 누적된다.
   - **DB**: 신규 `Document` 모델(`communityId`/`postId`/`authorId?`/`title`/`body`/`segmentIndex`/`sourceSeq`/`clientId?`) + 마이그레이션 `20260727_add_document`. `@@unique([postId, clientId])`로 재시도 멱등, `@@index([communityId, createdAt])`·`@@index([postId, createdAt])`. 버블(`Comment`)과 분리된 테이블이라 `seq`·SSE 계약(L4/§7)을 건드리지 않는다. (`backend/prisma/schema.prisma`)
