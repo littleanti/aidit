@@ -15,24 +15,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Aidit</title>
-    <!-- SPA deep-link restore for GitHub Pages (rafgraph/spa-github-pages).
-         Decodes the /?/... redirect written by 404.html back into the real
-         path via history.replaceState so BrowserRouter resolves the deep link. -->
-    <script>
-      (function(l){
-        if (l.search[1] === '/') {
-          var decoded = l.search.slice(1).split('&').map(function(s) {
-            return s.replace(/~and~/g, '&');
-          });
-          window.history.replaceState(
-            null, null,
-            l.pathname.slice(0, -1) + decoded[0] +
-            (decoded[1] ? '?' + decoded[1] : '') +
-            l.hash
-          );
-        }
-      }(window.location));
-    </script>
+    <!-- NOTE (2026-07-28): the GitHub Pages deep-link trick was removed here —
+         public/404.html wrote a /?/<path> redirect that a script in this head
+         decoded back via history.replaceState. Deployment is self-hosted now, so
+         deep links are handled the normal way: the static server rewrites
+         unmatched paths to this file (nginx `try_files $uri $uri/ /index.html`).
+         Keeping the decoder without its 404.html counterpart would be dead code
+         that silently rewrites any URL whose query happens to start with "/". -->
   </head>
   <body>
     <div id="root"></div>

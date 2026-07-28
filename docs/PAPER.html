@@ -400,7 +400,25 @@
       bypassing the server; the server is <em>key-blind</em>.</figcaption>
     </figure>
 
-    <h2 class="sec">III.&nbsp;&nbsp;System Architecture</h2>
+        <h3 class="sub">E. Discussion&rarr;Document and Document-Grounded Chat</h3>
+    <p class="noindent">Both directions of what we call the <em>knowledge loop</em> are individually
+    known. Persisting a conversation summary as a durable document is shipped practice: Slack's AI
+    summarizes a channel or conversation, and a workflow step can write that summary into a Canvas
+    document for later reference&nbsp;[21]. Grounding answers in user-supplied documents is likewise
+    established, from retrieval-augmented generation&nbsp;[5] to Google NotebookLM, which restricts a
+    notebook's answers to uploaded sources and attaches inline citations&nbsp;[22].</p>
+    <p>What is absent is the <em>closure of the loop under a key-blind, multi-participant contract</em>.
+    In the shipped systems above, both the summarizing and the grounding inference run on the
+    operator's credential, so cost accrues to the operator; the summarized unit is a message history
+    rather than a threshold-delimited <em>active segment</em>; the produced document carries no
+    provenance identifying how far into the shared context it condensed; and the grounding corpus is a
+    single user's notebook rather than a document condensed <em>by a participant, from the very thread
+    it is later re-injected into</em>. Our contribution in Sec.&nbsp;IV/E&ndash;F is therefore not the
+    condensation or the attachment primitive, but performing both on the caller's own credential over a
+    shared segmented context while preserving provenance and the data-role isolation of
+    Sec.&nbsp;V/C.</p>
+
+<h2 class="sec">III.&nbsp;&nbsp;System Architecture</h2>
 
     <h3 class="sub">A. Design Principle: A Key-Blind Server</h3>
     <p class="noindent">Aidit is a Reddit-style mobile-first community. Each post opens a
@@ -676,7 +694,37 @@
       distinguishes Aidit from prior client-side-summarization art.</figcaption>
     </figure>
 
-    <h2 class="sec">V.&nbsp;&nbsp;Security Analysis</h2>
+        <h3 class="sub">E. Condensation to a Durable Community Document</h3>
+    <p class="noindent">The same client-driven mechanism that compresses a thread can also
+    <em>export</em> it. Any authenticated participant&mdash;not only the thread author&mdash;may
+    condense the active segment into a markdown document: the client fetches the assembled context,
+    places the community persona plus an application-controlled documentation directive in
+    <code>systemInstruction</code> while the discussion stays in data-role turns, calls the provider
+    with <em>its own</em> credential, extracts the document title from the first level-1 heading (else
+    the post title), and posts the finished text.</p>
+    <p>Two properties matter. First, <em>provenance</em>: the record stores the segment index and the
+    turn depth reflected, so a reader can judge whether the document trails the live discussion, and a
+    later participant can accumulate a revision rather than silently replace one. Second,
+    <em>non-interference</em>: the document consumes no <code>seq</code> and emits no SSE event, so the
+    ordering and replay contract of Sec.&nbsp;III/D is untouched; a failed condensation writes nothing
+    and cannot damage the discussion. An empty context is refused before the call, so a user's quota is
+    never spent producing an empty artifact.</p>
+
+    <h3 class="sub">F. Re-Injection as Reference Context</h3>
+    <p class="noindent">The return leg attaches up to a fixed number of the community's condensed
+    documents (three in the implementation) to a single subsequent <code>@AI</code> turn. Each document
+    becomes one data-role turn placed <em>before</em> the active-segment turns, prefixed with an
+    application-controlled label marking it as reference material rather than live conversation. The
+    document body is user-generated content and therefore never enters
+    <code>systemInstruction</code>&mdash;the chokepoint argument of Sec.&nbsp;V/C applies unchanged,
+    which is what makes re-injection safe rather than a new injection surface.</p>
+    <p>The attachment is deliberately <em>per-utterance and client-side</em>: it is a decision about
+    this question, not stored thread state, so it does not enter the server's <code>tokenSum</code> and
+    cannot pull the 128K summarization threshold forward for other participants. A document that fails
+    to load is skipped and the answer proceeds, since blocking a reply on a stale reference would trade
+    the user's actual goal for bookkeeping.</p>
+
+<h2 class="sec">V.&nbsp;&nbsp;Security Analysis</h2>
 
     <h3 class="sub">A. Threat Model and CSP as a Scripted-Connection Control</h3>
     <p class="noindent"><em>Attacker model.</em> We assume an XSS-capable in-page script (able to read
@@ -806,9 +854,12 @@
     derivable from the design.</p>
 
     <h3 class="sub">D. Threats to Validity and Reproducibility</h3>
-    <p class="noindent">The cost result is analytical, not measured (Sec.&nbsp;VI/A), and its
-    falsification conditions are stated there; we have not characterized the constant factors of the
-    CRUD/SSE-relay infrastructure under load. The security claims are scoped to the stated attacker
+    <p class="noindent">The cost model is analytical (Sec.&nbsp;VI/A) and its falsification
+    conditions are stated there; it is now accompanied by a measured single-session run
+    (Sec.&nbsp;VI/E), which is a <em>scripted</em> three-participant session rather than organic usage,
+    so it establishes per-call magnitudes and the attribution property but not a usage distribution. We
+    have not characterized the constant factors of the CRUD/SSE-relay infrastructure under sustained
+    load beyond a local fan-out simulation. The security claims are scoped to the stated attacker
     model (Sec.&nbsp;V/A): <code>connect-src</code> blocks only the scripted-connection channels, and
     residual channels remain (Sec.&nbsp;VII). The novelty claim is exposed to prior art&mdash;the
     individual ingredients are known (Sec.&nbsp;II)&mdash;so the contribution rests on the
@@ -818,7 +869,39 @@
     SQLite&rarr;PostgreSQL on the server; no measurement artifacts are reported, and any quantitative
     figures are illustrative or expected unless explicitly derived.</p>
 
-    <h2 class="sec">VII.&nbsp;&nbsp;Limitations and Future Work</h2>
+        <h3 class="sub">E. Measured Evaluation (Three Real Credentials)</h3>
+    <p class="noindent">The cost model above is analytical; we also instrumented one end-to-end run
+    with <em>three real provider credentials</em>. Three guest participants drove the deployed UI
+    through community creation, a post with its primary reply, a nine-turn discussion (four turns of
+    which invoked <code>@AI</code>), one condensation (Sec.&nbsp;IV/E), and then the same question asked
+    twice&mdash;once without and once with an attached document (Sec.&nbsp;IV/F)&mdash;while the harness
+    recorded the provider's own <code>usageMetadata</code> per call. Model:
+    <code>gemini-3.1-flash-lite</code>; published paid-tier rates of USD&nbsp;0.25&nbsp;/&nbsp;1.50 per
+    1M input&nbsp;/&nbsp;output tokens&nbsp;[23].</p>
+    <table>
+      <thead><tr><th>Call kind</th><th>n</th><th>Mean prompt</th><th>Mean total</th><th>Cost (USD)</th></tr></thead>
+      <tbody>
+        <tr><td>Primary reply</td><td>1</td><td>118</td><td>292</td><td>0.000291</td></tr>
+        <tr><td><code>@AI</code> reply</td><td>4</td><td>766</td><td>952</td><td>0.001880</td></tr>
+        <tr><td>Condensation</td><td>1</td><td>1,493</td><td>2,211</td><td>0.001450</td></tr>
+        <tr><td>With attached document</td><td>1</td><td>923</td><td>1,099</td><td>0.000495</td></tr>
+        <tr><td>Control (no attachment)</td><td>1</td><td>129</td><td>305</td><td>0.000296</td></tr>
+      </tbody>
+    </table>
+    <p>Three observations. (i) <em>Attribution works as designed.</em> The eight calls totalled 7,713
+    tokens and USD&nbsp;0.004412, split across the three participants' own accounts
+    (0.00219&nbsp;/&nbsp;0.00175&nbsp;/&nbsp;0.00048); the provider-side bill attributable to the
+    operator was zero, because no server code path calls a provider. (ii) <em>The shared-context cost
+    curve is visible.</em> Prompt tokens for successive <code>@AI</code> calls in one thread grew
+    399&nbsp;&rarr;&nbsp;650&nbsp;&rarr;&nbsp;898&nbsp;&rarr;&nbsp;1,116&mdash;precisely the growth that
+    the threshold summarization of Sec.&nbsp;IV bounds, and that bounding call is itself paid by
+    whoever triggers it. (iii) <em>Re-injection is cheap.</em> Attaching one condensed document to the
+    same question moved the prompt from 129 to 923 tokens (+794, +USD&nbsp;0.0002).</p>
+    <p>The run also served as a live audit of the key-blind claim of Sec.&nbsp;III/A: across 327
+    observed requests to the application server, none contained any of the three credentials in the
+    body, the query string, or the headers.</p>
+
+<h2 class="sec">VII.&nbsp;&nbsp;Limitations and Future Work</h2>
     <ul class="tight">
       <li><b>Cost-transfer fairness (UX).</b> Externalizing shared-context cost to whichever client
       happens to trigger an <code>@AI</code> event&mdash;especially the unlucky client that crosses
@@ -911,6 +994,15 @@
       <li>"PFID: privacy-first inference delegation for LLMs," <em>arXiv preprint</em> arXiv:2406.12238, 2024.</li>
       <li>"Federated Attention: a distributed paradigm for collaborative LLM inference over edge networks," <em>arXiv preprint</em> arXiv:2511.02647, 2025.</li>
       <li>"Providing an electronic summary of source content," U.S. Patent US9569428B2, granted (client-device summarization of a multi-user shared online meeting; server stores summaries).</li>
+      <li>Slack, "Guide to AI features in Slack" (channel/conversation summarization; the
+      <em>Summarize public channel</em> workflow step writing its output into a Canvas document),
+      product documentation, 2024&ndash;2026. [Online].</li>
+      <li>Google, "NotebookLM" (document-grounded answering over user-uploaded sources with inline
+      citations, built on retrieval-augmented generation&nbsp;[5]), product documentation and
+      overviews, 2024&ndash;2026. [Online].</li>
+      <li>Google, "Gemini API pricing" (paid-tier rates for <code>gemini-3.1-flash-lite</code>:
+      USD&nbsp;0.25 per 1M input tokens and USD&nbsp;1.50 per 1M output tokens; a free tier also
+      exists), developer documentation, retrieved 2026-07-28. [Online].</li>
     </ol>
 
   </div><!-- /twocol -->

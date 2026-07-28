@@ -5,7 +5,7 @@
 **여러 사람이 하나의 AI 대화를 함께 쌓아 올리는 커뮤니티.**
 LLM 키와 비용은 각자 부담(BYOK)이라, 서버는 키를 보지도 저장하지도 않습니다.
 
-`React 18` · `TypeScript` · `Fastify` · `Prisma` · `SSE` · `PWA` · **테스트 204개 통과** · `MIT`
+`React 18` · `TypeScript` · `Fastify` · `Prisma` · `SSE` · `PWA` · **테스트 211개 통과** · `MIT`
 
 <img src="./docs/assets/condense.gif" alt="여러 사람의 논의를 한 번에 마크다운 문서로 응결하는 흐름" width="380">
 
@@ -209,7 +209,7 @@ npm run dev
 
 | 항목 | 상태 |
 |---|---|
-| 백엔드 테스트 | **125 통과** (계약 · SSE · 문서 응결 · pub/sub fan-out · 레이트리밋 저장소 · hotScore · 프로필 페이지네이션) |
+| 백엔드 테스트 | **132 통과** (계약 · SSE · 문서 응결 · pub/sub fan-out · 레이트리밋 저장소 · **CORS 정책** · hotScore · 프로필 페이지네이션) |
 | 프론트엔드 테스트 | **79 통과** (컨텍스트 엔진 · 문서 엔진 · 문서 컨텍스트 스토어 · sanitize · LLM 클라이언트) |
 | 타입체크 | 양쪽 `tsc --noEmit` 클린 |
 | E2E | Playwright **5스펙 10케이스** — J4 문서 응결 4 + J5 문서 재투입 2는 **백엔드 없이 hermetic**이라 이 환경에서 **6건 통과 확인**. J1~J3·실키 BYOK는 라이브 스택(+실키)이 필요해 미실행 |
@@ -268,7 +268,16 @@ Postgres 전환: `npm run db:pg:push && npm run db:pg:generate` (상세: [TRD §
 
 게이트가 하나라도 실패하면 어느 게이트가 실패했는지 요약하고 **`exit 1`** 로 배포를 막습니다.
 
-> 프론트엔드에는 정적 호스팅용 잔여 자산이 남아 있습니다(`public/404.html` SPA 딥링크 폴백, `public/.nojekyll`, 백엔드 CORS 기본 허용 오리진 `littleanti.github.io`). 자체 서버 운영에는 필요하지 않으므로 정리 대상입니다.
+> **딥링크(SPA fallback)는 서버 설정으로 처리합니다.** GitHub Pages 전용 트릭(`public/404.html` + `index.html`의 복원 스니펫)과 `public/.nojekyll`, 백엔드 CORS 기본 허용 오리진 `littleanti.github.io`는 **모두 제거했습니다**(2026-07-28). 대신 정적 파일을 서빙하는 쪽에서 **미매칭 경로를 `index.html`로 넘겨주도록** 설정해야 `/p/:id`·`/d/:id` 직접 접속이 동작합니다.
+>
+> ```nginx
+> # nginx 예시
+> location / {
+>   try_files $uri $uri/ /index.html;
+> }
+> ```
+>
+> 허용할 프론트엔드 오리진은 이제 **`WEB_ORIGIN`에 명시**해야 합니다(기본 허용은 localhost와 사설 LAN IP뿐).
 
 ---
 
@@ -283,8 +292,8 @@ Postgres 전환: `npm run db:pg:push && npm run db:pg:generate` (상세: [TRD §
 | [DESIGN-SYSTEM](./docs/DESIGN-SYSTEM.md) | 컬러 · 타이포 · 로고 자산 단일 출처 |
 | [IMPLEMENTATION_NOTES](./docs/IMPLEMENTATION_NOTES.md) | 실제 구현 차이 · 추가 · 버그 수정 변경 이력 |
 | [BUSINESS_VALUE](./docs/BUSINESS_VALUE.md) | 시장 · ICP · 해자 · 유닛 이코노믹스 · GTM · KPI |
-| [PATENT](./docs/PATENT.html) | **선행기술 조사·대비** — 멀티유저 AI 대화의 key-custody 한계, 임계 재귀 요약, 동시 압축 조정에 대한 6개 레인 조사 + 인용 실재성 검증. "멀티유저 × key-blind 사분면이 비어 있다"는 주장의 근거. ⚠️ **FR-13/FR-14(문서 응결·재투입)는 아직 미반영** |
-| [PAPER](./docs/PAPER.html) | 기술 논문 초안 — 공유 컨텍스트 · 지연 요약 · key-blind 구조의 정리. ⚠️ **FR-13/FR-14는 아직 미반영** |
+| [PATENT](./docs/PATENT.html) | **선행기술 조사·대비** — key-custody 한계, 임계 재귀 요약, 동시 압축 조정, **응결·재투입(Slack AI Canvas·NotebookLM 대비)** 조사 + 인용 실재성 검증. 청구항 22개 |
+| [PAPER](./docs/PAPER.html) | 기술 논문 초안 — 공유 컨텍스트 · 지연 요약 · key-blind · **지식 루프(IV.E/F)** · **실키 실측 평가(VI.E)** |
 | [DEMO_SCENARIO](./docs/DEMO_SCENARIO.md) | 3분할 창 데모 시나리오 + Playwright 자동 재현 |
 
 ## 스크립트

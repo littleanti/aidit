@@ -5,7 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 // L2 Content-Security-Policy. This is the primary key-exfiltration mitigation:
 // connect-src is locked to 'self' (REST /api + SSE) plus the Google Generative
 // Language endpoint that the BYOK client calls directly, plus the backend origin
-// when VITE_API_ORIGIN is set (production/Pages build).
+// when VITE_API_ORIGIN is set (production build).
 //
 // We inject this ONLY into the production-built index.html. In dev, Vite needs
 // inline scripts, eval, and a websocket connection for HMR, which a strict CSP
@@ -69,8 +69,8 @@ export default defineConfig(({ mode }) => {
       : `${backendApiPrefix}/uploads`;
 
   return {
-    // USER page is served at root "/". Set VITE_BASE to a subpath for PROJECT
-    // pages (e.g. VITE_BASE=/repo-name/). Default "/" is correct for USER pages.
+    // Served at root "/" by default. Set VITE_BASE when the app is mounted on a
+    // subpath (e.g. VITE_BASE=/aidit/ behind a reverse proxy).
     base: process.env.VITE_BASE ?? '/',
     plugins: [
       react(),

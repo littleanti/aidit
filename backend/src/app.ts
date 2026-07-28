@@ -28,15 +28,16 @@ export async function build(): Promise<FastifyInstance> {
     logger: true,
   });
 
-  // CORS — allow local dev origins (Vite, etc.) plus the GitHub Pages frontend
-  // and any extra origins declared in WEB_ORIGIN. The server is key-blind:
-  // no apiKey headers are ever read, stored, or relayed.
+  // CORS — allow local dev origins (Vite, etc.) plus any origin declared in
+  // WEB_ORIGIN. The server is key-blind: no apiKey headers are ever read,
+  // stored, or relayed.
   //
   // Origin resolution order:
   //   1. localhost / 127.0.0.1 (any port) — always allowed for local dev.
-  //   2. https://littleanti.github.io — always allowed for the Pages frontend.
-  //   3. WEB_ORIGIN — optional comma-separated list of extra allowed origins
-  //      (e.g. WEB_ORIGIN=https://staging.example.com,https://preview.example.com).
+  //   2. WEB_ORIGIN — comma-separated list of allowed origins. This is how the
+  //      PRODUCTION frontend origin is allowed; there is no hardcoded production
+  //      origin (a `littleanti.github.io` default was removed on 2026-07-28 with
+  //      the rest of the GitHub Pages plan — deployment is self-hosted now).
   const DEFAULT_ALLOWED_ORIGINS: Array<string | RegExp> = [
     /^http:\/\/localhost(:\d+)?$/,
     /^http:\/\/127\.0\.0\.1(:\d+)?$/,
@@ -45,7 +46,6 @@ export async function build(): Promise<FastifyInstance> {
     // forwards Origin: http://192.168.x.x:5173). http-only + private ranges, so
     // production https origins never match. (RFC1918: 10/8, 172.16-31/12, 192.168/16)
     /^http:\/\/(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})(:\d+)?$/,
-    "https://littleanti.github.io",
   ];
 
   const extraOrigins: string[] = (process.env.WEB_ORIGIN ?? "")
