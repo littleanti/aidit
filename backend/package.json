@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/app.ts",
+    "dev:once": "tsx src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
     "prisma:generate": "prisma generate",

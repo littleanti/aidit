@@ -1,4 +1,29 @@
 import { defineConfig, devices } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+// The backend's port is an operator setting (backend/.env → PORT), so it cannot be
+// hardcoded here: a machine running the API on 3002 made `npm run e2e` die with
+// "Timed out waiting 60000ms from config.webServer" while both servers were
+// perfectly healthy — the health probe was simply pointed at the wrong port.
+function backendPort(): number {
+  if (process.env.AIDIT_E2E_API_PORT) return Number(process.env.AIDIT_E2E_API_PORT);
+  // Candidates relative to CWD rather than __dirname: Playwright's config loader
+  // does not reliably provide __dirname, and a silent resolve() failure here shows
+  // up as an unexplained 60s webServer timeout instead of an error.
+  for (const rel of ['../backend/.env', '../../backend/.env', 'backend/.env']) {
+    try {
+      const env = readFileSync(resolve(process.cwd(), rel), 'utf8');
+      const m = env.match(/^\s*PORT\s*=\s*"?(\d+)"?/m);
+      if (m) return Number(m[1]);
+    } catch {
+      // Try the next candidate; a fresh clone has no .env at all.
+    }
+  }
+  return 3001;
+}
+
+const API_PORT = backendPort();
 
 // ============================================================================
 // WP XC-T (E2E scaffold) — Playwright config for the three core journeys
@@ -43,11 +68,22 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.AIDIT_PIPELINE,
             timeout: 60_000,
+            // Keep Vite's /api proxy pointed at the port the API actually uses; its
+            // own default is 3001 and would 502 every request on a 3002 setup.
+            env: { VITE_DEV_PROXY_TARGET: `http://127.0.0.1:${API_PORT}` },
           },
           {
-            command: 'npm run dev',
+            // dev:once, NOT dev: `tsx watch` launched through Playwright's webServer
+            // printed its npm banner and then never bound the port (the run sat in
+            // the 60s wait while a directly-spawned instance came up in ~3s). A test
+            // harness has no use for a file watcher either — it runs one build.
+            command: 'npm run dev:once',
             cwd: '../../backend',
-            url: 'http://localhost:3001/health',
+            // 127.0.0.1, NOT localhost: the backend honours HOST (default
+            // 127.0.0.1 in backend/.env) and binds IPv4 only, while `localhost`
+            // resolves to ::1 first — the probe then gets ECONNREFUSED ::1 for the
+            // full 60s even though the server is up and answering on IPv4.
+            url: `http://127.0.0.1:${API_PORT}/health`,
             reuseExistingServer: !process.env.AIDIT_PIPELINE,
             timeout: 60_000,
           },

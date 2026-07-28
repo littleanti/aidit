@@ -15,6 +15,9 @@ npm run measure:keys # real-key token/cost measurement (needs 3 real keys)
 
 ## Specs
 
+All five specs pass from a cold `npm run e2e` (the real-key one skips unless
+`LLM_TEST_KEY` is set); verified 2026-07-28 including the real-key run.
+
 | Spec | Journey | Needs a live stack? |
 |------|---------|---------------------|
 | `j1-primary-reply.spec.ts` | Post → primary AI reply (FR-4.3 / AI-5) | **Yes** — real backend + DB |
@@ -29,9 +32,26 @@ used to verify the document features in a constrained environment.
 
 ## Server startup is automatic
 
-`playwright.config.ts` declares a `webServer` pair (Vite on 5173, backend on 3001
-via `/health`), so `npm run e2e` is one command instead of "start two servers
-first" (which silently made the suite depend on whatever a developer had running).
+`playwright.config.ts` declares a `webServer` pair (Vite on 5173, backend on
+`/health`), so `npm run e2e` is one command instead of "start two servers first"
+(which silently made the suite depend on whatever a developer had running).
+
+Three things the config has to get right, each of which broke the self-boot path
+once (all three surfaced as the same useless message — `Timed out waiting 60000ms
+from config.webServer` — while both servers were healthy):
+
+- **The backend port is derived from `backend/.env` (`PORT`)**, not hardcoded. A
+  machine running the API on 3002 got a health probe aimed at 3001 forever.
+  Override with `AIDIT_E2E_API_PORT`. Vite's `/api` proxy target is injected from
+  the same value.
+- **`127.0.0.1`, never `localhost`.** The backend honours `HOST` (default
+  `127.0.0.1`) and binds IPv4 only, while `localhost` resolves to `::1` first — the
+  probe collects `ECONNREFUSED ::1` for the full timeout. `curl` hides this by
+  falling back to IPv4.
+- **`npm run dev:once`, not `npm run dev`.** `tsx watch` launched through
+  `webServer` printed its npm banner and never bound the port; a directly spawned
+  instance was up in ~3s. A harness has no use for a file watcher.
+
 Two escape hatches:
 
 - `AIDIT_E2E_BASE_URL=http://localhost:5190` — run against an already-running app
@@ -39,6 +59,20 @@ Two escape hatches:
 - `AIDIT_PIPELINE=1` — refuse to reuse a server that is already listening: a
   pipeline must exercise *this commit's* build. `deploy/pipeline.sh --with-e2e`
   sets it.
+
+## Two things every spec must handle
+
+- **Auth mode.** The login form differs by operator setting: guest (default) renders
+  `#nickname` with no password, signup mode renders `#username` + `#password`.
+  `helpers.ts → login()` detects and handles both — an earlier version filled
+  `#username` unconditionally, so J1–J3 could only pass in signup mode.
+- **UI language.** `langStore` derives its first-visit default from
+  `navigator.language`, and Playwright's locale is en-US, so Korean selectors miss
+  ('게스트' renders as 'Guest'). `login()` and `j4-document.spec.ts` both pin
+  `localStorage('aidit-lang')` to `ko` before the first navigation.
+
+Direct API seeding (e.g. `seedOverThreshold`) must send
+`Authorization: Bearer <token>` from the auth store — `x-user-id` alone returns 401.
 
 ## The LLM mock (key-blind, no real key)
 

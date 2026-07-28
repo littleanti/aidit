@@ -66,18 +66,59 @@ export async function mockLlm(page: Page, opts: LlmMockOptions = {}): Promise<vo
 }
 
 /**
- * Log in through the UI. The Login form posts the username to the Aidit server
- * (real local backend) and stores the DUMMY key locally (L1 — never sent to the
- * server). The key only needs to be non-empty: all LLM calls are mocked.
+ * Log in through the UI. The Login form posts the nickname/username to the Aidit
+ * server (real local backend) and stores the DUMMY key locally (L1 — never sent to
+ * the server). The key only needs to be non-empty: all LLM calls are mocked.
+ *
+ * BOTH auth modes are handled, because the form differs by mode and the mode is an
+ * operator setting (AUTH_SIGNUP_REQUIRED / VITE_AUTH_SIGNUP_REQUIRED):
+ *   - guest (default)  → [게스트] tab, `#nickname`, no password
+ *   - signup required  → [로그인] tab, `#username` + `#password`
+ * An earlier version filled `#username` unconditionally, so J1–J3 could only pass
+ * in signup mode and failed with a 30s "waiting for locator('#username')" timeout
+ * on a default stack — a harness bug that read like a product failure.
  */
 export async function login(
   page: Page,
   username: string,
   apiKey = 'AIza-DUMMY-E2E-KEY',
+  password = 'e2e-pw-12345',
 ): Promise<void> {
+  // Pin the UI language BEFORE the first navigation. langStore derives its
+  // first-visit default from navigator.language, and Playwright's browser locale is
+  // en-US, so every Korean selector below would miss ('게스트' renders as 'Guest').
+  // j4-document.spec.ts pins the same key for the same reason.
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      'aidit-lang',
+      JSON.stringify({ state: { lang: 'ko' }, version: 0 }),
+    );
+  });
+
   await page.goto('/login');
-  await page.locator('#username').fill(username);
-  await page.locator('#apiKey').fill(apiKey);
+
+  // The [게스트] tab is present in both modes; guest is preselected when signup is
+  // not required. Decide by which field the form actually renders.
+  const guestTab = page.getByRole('tab', { name: '게스트' });
+  await guestTab.waitFor({ state: 'visible', timeout: 20000 });
+  await guestTab.click();
+
+  const nickname = page.locator('#nickname');
+  const isGuestMode = await nickname
+    .waitFor({ state: 'visible', timeout: 3000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (isGuestMode) {
+    await nickname.fill(username);
+    await page.locator('#apiKey').fill(apiKey);
+  } else {
+    await page.getByRole('tab', { name: '로그인' }).click();
+    await page.locator('#username').fill(username);
+    await page.locator('#password').fill(password);
+    await page.locator('#apiKey').fill(apiKey);
+  }
+
   await page.getByRole('button', { name: '시작하기' }).click();
   // Login navigates to '/' on success.
   await page.waitForURL('**/');
@@ -93,6 +134,18 @@ export async function getUserId(page: Page): Promise<string> {
   return page.evaluate(() => {
     const raw = localStorage.getItem('aidit-auth');
     return raw ? (JSON.parse(raw).state?.userId ?? '') : '';
+  });
+}
+
+/**
+ * The persisted JWT from the auth store. Direct API seeding must carry it: write
+ * routes authenticate with `Authorization: Bearer <token>` and answer 401 without
+ * it. `x-user-id` alone used to be enough and no longer is.
+ */
+export async function getAuthToken(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const raw = localStorage.getItem('aidit-auth');
+    return raw ? (JSON.parse(raw).state?.token ?? '') : '';
   });
 }
 
@@ -139,8 +192,13 @@ export async function createCommunityAndPost(
  */
 export async function seedOverThreshold(page: Page, postId: string): Promise<void> {
   const userId = await getUserId(page);
+  const token = await getAuthToken(page);
   const res = await page.request.post(`/api/posts/${postId}/comments`, {
-    headers: { 'x-user-id': userId, 'Content-Type': 'application/json' },
+    headers: {
+      'x-user-id': userId,
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
     data: {
       type: 'HUMAN',
       body: '(긴 토론이 쌓였습니다)',

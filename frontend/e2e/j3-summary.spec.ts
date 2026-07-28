@@ -48,12 +48,16 @@ test('J3: crossing 128K renders a distinct summary band then a summary-based ans
   await composer.fill(HUMAN_TEXT);
   await page.getByRole('button', { name: '전송' }).click();
 
-  // 1) The summary band appears and is COLOR-DISTINCT (SummaryBubble:
-  //    role="separator", aria-label "대화 요약 경계", gradient utility class).
+  // 1) The summary band appears, carries the summary text, and marks the segment
+  //    boundary (SummaryBubble: role="separator", aria-label "대화 요약 경계").
   const summaryBand = page.getByRole('separator', { name: '대화 요약 경계' });
   await expect(summaryBand).toBeVisible({ timeout: 15_000 });
   await expect(summaryBand.getByText(SUMMARY_TEXT, { exact: false })).toBeVisible();
-  await expect(summaryBand.locator('.bg-gradient-to-r').first()).toBeVisible();
+  // The boundary is asserted through the FR-7.4 microcopy ("이후 대화는 위 요약 기준"),
+  // not a Tailwind class. An earlier version asserted `.bg-gradient-to-r`, which the
+  // terminal restyle replaced with an amber tint — the band was fine, the test was
+  // pinned to a style detail.
+  await expect(summaryBand.getByText('이후 대화는 위 요약 기준')).toBeVisible();
 
   // 2) The summary-based ANSWER appears (built from summary + after, AI-9) and
   //    is positioned BELOW the summary boundary.

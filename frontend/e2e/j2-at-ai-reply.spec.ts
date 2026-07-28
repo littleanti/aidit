@@ -29,8 +29,13 @@ test('J2: @AI comment shows the human bubble first, then the AI reply', async ({
   await page.getByRole('button', { name: '전송' }).click();
 
   // 1) Human bubble appears (committed first, FR-6.2).
-  const humanBubble = page.getByText(HUMAN_TEXT, { exact: false });
-  await expect(humanBubble).toBeVisible();
+  //
+  // Scoped to the bubble's <p>, NOT getByText over the page: the Composer clears
+  // its textarea only after the POST resolves (Composer 6.1.6), while the
+  // optimistic bubble renders immediately — so for a moment the same text lives in
+  // BOTH the bubble and the textarea, and an unscoped getByText fails strict mode.
+  const humanBubble = page.getByRole('paragraph').filter({ hasText: HUMAN_TEXT });
+  await expect(humanBubble.first()).toBeVisible();
 
   // 2) AI reply bubble appears AFTER (AI-7 order: human -> PENDING -> reply).
   const aiBubble = page.getByText(AI_REPLY, { exact: false });
