@@ -182,14 +182,17 @@ npm run dev
 | E2E | Playwright 5스펙 — J1 1차 답변 · J2 @AI · J3 요약 · **J4 문서 응결 + J5 문서 재투입**(백엔드 없이 hermetic, **6 통과 확인**) · 실키 BYOK |
 | 다중 인스턴스 | 테스트 내 RESP 브로커로 **2 인스턴스 SSE 전달 + 레이트리밋 예산 공유** 검증 — 실 Redis 서버 검증은 배포 시 |
 | Postgres | 스키마 파생 + **DDL 생성물 커밋**(`backend/prisma/postgres/init.sql`) — 런타임 검증은 배포 시 |
-| CI | **자체 서버 파이프라인에서 구성** — GitHub Actions를 쓰지 않으므로 리포에 워크플로 정의가 없습니다(의도된 선택, [배포 · CI](#-배포--ci) 참조) |
+| CI | **`deploy/pipeline.sh`로 리포에 코드화** — 5개 게이트(양쪽 typecheck·test + Postgres 스키마 드리프트) 통과, 게이트 실패 시 `exit 1`까지 실측 확인. GitHub Actions는 쓰지 않습니다(의도된 선택, [배포 · CI](#-배포--ci)) |
+| 커버리지 | 전체 **20.4%**, **엔진 76.4%** (`npm run test:cov`) — 로직은 유닛, 화면은 E2E로 덮는 전략(아래) |
 
-로컬에서 위 검증을 재현하는 명령:
+전체 게이트를 한 번에 재현:
 
 ```bash
-cd backend  && npm run typecheck && npm test
-cd frontend && npm run typecheck && npm test && npm run e2e
+./deploy/pipeline.sh              # 검증만 (5게이트)
+./deploy/pipeline.sh --all        # + E2E(서버 자체 기동) + 프로덕션 빌드
 ```
+
+> **커버리지 해석**: 전체 20.4%는 낮아 보이지만 분포가 의도적입니다 — 판단 로직이 모여 있는 `src/engine`이 **76.4%**, 화면(`src/pages`)은 유닛 테스트 대신 **Playwright E2E**로 덮습니다. 렌더링을 jsdom으로 흉내내는 대신 실제 브라우저에서 확인하는 쪽이 이 제품(실시간·BYOK·마크다운)에서 더 정직한 신호라고 판단했습니다.
 
 ---
 
@@ -221,12 +224,15 @@ WEB_ORIGIN=https://app.example.com  HOST=127.0.0.1  npm start
 주요 환경 변수: `DATABASE_URL` · `JWT_SECRET`(필수) · `JWT_EXPIRES` · `REDIS_URL`(다중 인스턴스) · `WEB_ORIGIN`(CORS 허용 오리진, 콤마 구분) · `HOST` · `LLM_MODEL` · `STORAGE_BACKEND`(local|s3).
 Postgres 전환: `npm run db:pg:push && npm run db:pg:generate` (상세: [TRD §15](./docs/TRD.md)).
 
-파이프라인에서 그대로 쓸 수 있는 게이트 명령:
+파이프라인은 **리포 안에 코드로** 있습니다 — `deploy/pipeline.sh`. 서버가 이 스크립트를 호출하면 되고, 개발자도 배포 전에 같은 게이트를 그대로 돌릴 수 있습니다.
 
 ```bash
-cd backend  && npm run typecheck && npm test && npm run db:pg:check
-cd frontend && npm run typecheck && npm test && npm run build
+./deploy/pipeline.sh              # 검증만: 양쪽 typecheck·test + Postgres 스키마 드리프트
+./deploy/pipeline.sh --with-e2e   # + Playwright(백엔드·Vite를 스스로 기동)
+./deploy/pipeline.sh --all        # + 프로덕션 빌드
 ```
+
+게이트가 하나라도 실패하면 어느 게이트가 실패했는지 요약하고 **`exit 1`** 로 배포를 막습니다.
 
 > 프론트엔드에는 정적 호스팅용 잔여 자산이 남아 있습니다(`public/404.html` SPA 딥링크 폴백, `public/.nojekyll`, 백엔드 CORS 기본 허용 오리진 `littleanti.github.io`). 자체 서버 운영에는 필요하지 않으므로 정리 대상입니다.
 
@@ -256,8 +262,9 @@ cd frontend && npm run typecheck && npm test && npm run build
 | `backend/` | `npm run load:sim` | 부하 시뮬레이션(SSE fan-out + 요약 경쟁) |
 | `backend/` | `npm run prisma:migrate` | 마이그레이션 적용 + 클라이언트 생성 |
 | `backend/` | `npm run db:pg:ddl` · `db:pg:push` · `db:pg:check` | Postgres DDL 생성 · 적용 · 스키마 드리프트 검사 |
+| 루트 | `./deploy/pipeline.sh [--with-e2e\|--with-build\|--all]` | 자체 서버 CI/CD 게이트 |
 | `frontend/` | `npm run dev` / `build` | Vite 개발 서버(5173) / 타입체크 + 프로덕션 빌드 |
-| `frontend/` | `npm run typecheck` · `npm test` · `npm run e2e` | `tsc --noEmit` · vitest · Playwright |
+| `frontend/` | `npm run typecheck` · `npm test` · `npm run test:cov` · `npm run e2e` | `tsc --noEmit` · vitest · 커버리지 · Playwright(서버 자체 기동) |
 | `frontend/` | `npm run media` · `npm run media:gif` | README 스크린샷 재생성 · 프레임 → GIF(ffmpeg 필요) |
 
 ## License

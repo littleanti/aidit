@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:cov": "vitest run --coverage",
     "test:watch": "vitest",
     "e2e": "playwright test --config e2e/playwright.config.ts",
     "media": "playwright test --config e2e/playwright.media.config.ts",

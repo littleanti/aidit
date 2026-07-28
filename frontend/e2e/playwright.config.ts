@@ -25,6 +25,34 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
+  // Boot the servers the journeys need, so `npm run e2e` is ONE command instead
+  // of "start the backend, start Vite, then run the tests" (which meant the suite
+  // silently depended on whatever the developer had running — including stale
+  // code). Skipped when AIDIT_E2E_BASE_URL points at an already-running app.
+  //
+  // reuseExistingServer keeps a LOCAL loop fast, but a pipeline run (AIDIT_PIPELINE=1)
+  // refuses to reuse: it must exercise this commit's build, not whatever a
+  // developer left running on the port.
+  ...(process.env.AIDIT_E2E_BASE_URL
+    ? {}
+    : {
+        webServer: [
+          {
+            command: 'npm run dev',
+            cwd: '..',
+            url: 'http://localhost:5173',
+            reuseExistingServer: !process.env.AIDIT_PIPELINE,
+            timeout: 60_000,
+          },
+          {
+            command: 'npm run dev',
+            cwd: '../../backend',
+            url: 'http://localhost:3001/health',
+            reuseExistingServer: !process.env.AIDIT_PIPELINE,
+            timeout: 60_000,
+          },
+        ],
+      }),
   // Single worker keeps the shared backend state deterministic across journeys.
   workers: 1,
   fullyParallel: false,
