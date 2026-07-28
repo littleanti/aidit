@@ -1,96 +1,104 @@
-# Aidit E2E (Playwright) — J1 / J2 / J3
+# Aidit E2E & measurement (Playwright)
 
-End-to-end **scaffold** for the three core product journeys. These specs drive a
-**locally running** Aidit backend + frontend in a real (mobile-viewport)
-browser, and **mock the LLM provider endpoint** so no real Google API key is needed
-and no real LLM call is ever made.
+Five journey specs plus three non-test tools (media capture, real-key measurement,
+recorded demo). Everything drives a real browser at a mobile viewport (Pixel 7).
 
-| Spec | Journey | Asserts |
-|------|---------|---------|
-| `j1-primary-reply.spec.ts` | Post → primary AI reply (FR-4.3 / AI-5) | After creating a post, the primary AI reply bubble (mocked text) appears in the thread. |
-| `j2-at-ai-reply.spec.ts` | `@AI` → human-first then AI bubble (FR-6.2 / AI-7) | The human `@AI` comment is committed **first**, then the AI reply bubble appears **below** it. |
-| `j3-summary.spec.ts` | >128K → color-distinct summary band → summary-based answer (FR-7 / AI-6/8/9) | A `role="separator"` summary band (amber→purple gradient) renders, then a summary-based answer appears below it. |
+```bash
+cd frontend
+npx playwright install chromium   # once
 
-## Why these are a scaffold (not part of the green gate)
+npm run e2e          # journey specs — boots the backend + Vite itself
+npm run media        # regenerate README screenshots + GIF frames
+npm run media:gif    # frames -> docs/assets/condense.gif (needs ffmpeg)
+npm run measure:keys # real-key token/cost measurement (needs 3 real keys)
+```
 
-Running a full browser E2E here is heavy and flaky, so **the milestone's automated
-green gate is the Vitest unit/contract/integration suite** (`npm test` in
-`frontend/`), which already covers the same engine contracts (XC-4, AI-6/7/8/9,
-sanitize, store dedupe) hermetically. These Playwright specs are written,
-type-clean, and documented so they can be run on demand against a live stack.
+## Specs
 
-## How the LLM mock works (key-blind, no real key)
+| Spec | Journey | Needs a live stack? |
+|------|---------|---------------------|
+| `j1-primary-reply.spec.ts` | Post → primary AI reply (FR-4.3 / AI-5) | **Yes** — real backend + DB |
+| `j2-at-ai-reply.spec.ts` | `@AI` → human bubble first, then the AI reply (FR-6.2 / AI-7) | **Yes** |
+| `j3-summary.spec.ts` | >128K → summary band → summary-based answer (FR-7 / AI-6/8/9) | **Yes** |
+| `j4-document.spec.ts` | **FR-13** 문서 응결 (4 cases) + **FR-14** 문서 재투입 (2 cases) | **No — hermetic** |
+| `real-key-byok.spec.ts` | BYOK with a REAL key: key-blind server + direct provider call | **Yes** + a real key |
 
-`helpers.ts → mockLlm(page)` installs `page.route('**generativelanguage.googleapis.com/**')`:
+`j4-document.spec.ts` stubs the Aidit REST API in addition to the LLM host, so it
+needs only the dev server — no backend, no DB, no key. That is why it is the spec
+used to verify the document features in a constrained environment.
+
+## Server startup is automatic
+
+`playwright.config.ts` declares a `webServer` pair (Vite on 5173, backend on 3001
+via `/health`), so `npm run e2e` is one command instead of "start two servers
+first" (which silently made the suite depend on whatever a developer had running).
+Two escape hatches:
+
+- `AIDIT_E2E_BASE_URL=http://localhost:5190` — run against an already-running app
+  and skip startup entirely (what the hermetic specs use here).
+- `AIDIT_PIPELINE=1` — refuse to reuse a server that is already listening: a
+  pipeline must exercise *this commit's* build. `deploy/pipeline.sh --with-e2e`
+  sets it.
+
+## The LLM mock (key-blind, no real key)
+
+`helpers.ts → mockLlm(page)` routes `**generativelanguage.googleapis.com/**`:
 
 - `:generateContent` → `{ candidates: [{ content: { parts: [{ text }] } }] }`
 - `:countTokens` → `{ totalTokens }`
 
-So the BYOK browser→LLM provider call is intercepted in-page. A **dummy key**
-(`AIza-DUMMY-E2E-KEY`) is entered at login; it is stored locally only (L1) and
-never sent to the Aidit server. J3 uses `replyForCall` to return the **summary**
-on call #0 and the **summary-based answer** on call #1.
+The BYOK browser→provider call is intercepted in-page, so a **dummy key**
+(`AIza-DUMMY-E2E-KEY`) entered at login is enough; it stays local (L1) and never
+reaches the Aidit server. J3 uses `replyForCall` to return the **summary** on call
+#0 and the **summary-based answer** on call #1.
 
-## Prerequisites
+`j4-document.spec.ts` handles the LLM host itself (recording + fulfilling in ONE
+handler) because Playwright runs routes last-registered-first, so a separate
+recorder would be shadowed by `mockLlm`.
 
-```bash
-# from repo root — install Playwright browsers once
-cd frontend
-npx playwright install chromium
-```
+`real-key-byok.spec.ts` is the deliberate exception: a real key, no mock, proving
+the un-mocked path.
 
-## Running
+## Non-test tools
 
-1. **Start the backend** (Fastify, port 3001) from `server/`:
-   ```bash
-   cd server
-   npm run dev            # or: npm run build && npm start
-   ```
-2. **Start the frontend** (Vite dev server, port 5173) from `frontend/`:
-   ```bash
-   cd frontend
-   npm run dev
-   ```
-   The dev server proxies `/api → http://localhost:3001` (strips `^/api`).
-3. **Run the specs** from `frontend/`:
-   ```bash
-   npm run e2e            # = playwright test --config e2e/playwright.config.ts
-   ```
-   Override the target with `AIDIT_E2E_BASE_URL` (e.g. a `vite preview` build).
+### `capture-media.spec.ts` — README images
 
-## Fixture / seed assumptions
+Stubs REST + LLM and photographs the real UI, so the output is identical on every
+run and a UI change surfaces as an image diff. It has its **own config**
+(`playwright.media.config.ts`) and is excluded from the main config via
+`testIgnore` — regenerating media must never gate the test suite.
 
-These specs use accessible, text-based locators with fallbacks, but they assume
-some seeded state. Adjust the navigation/selectors to your local seed:
+Two things it fakes carefully, both learned the hard way:
 
-- **J1** navigates to `/create-post`. If post creation is gated behind selecting
-  a community in your build, create/select a community first.
-- **J2** opens the most-recent post via the first `a[href*="/post/"]` link on
-  Home. Seed at least one post (any community) before running.
-- **J3** needs a thread whose **active segment is already over the 128K
-  threshold** so the server's `GET /posts/:id/context` returns
-  `summaryNeeded: true`. Seed a post whose active `ContextSegment.tokenSum >
-  128_000` (e.g. via a seed script that inserts comments with large
-  `tokenCount`s, or by lowering the threshold in a test build). Without this
-  fixture J3 will not trigger the lazy-summary branch.
+- **EventSource is stubbed open.** A `page.route`-fulfilled SSE response is a
+  *complete* body, so the real EventSource opens then immediately hits EOF — and
+  the "연결이 끊겼습니다" banner ends up in every screenshot of a working app.
+- **An AI bubble is `authorId === null`.** A stub helper written as
+  `authorId: null ?? 'user-x'` swallowed the null and rendered the AI answer as a
+  human message.
 
-## Selector contract (documented assumptions)
+### `measure-real-keys.mjs` — token/cost measurement
 
-- Login: `#username`, `#apiKey`, button `시작하기`.
-- Composer: textarea `aria-label="댓글 입력"`, send button `aria-label="전송"`.
-- Summary band: `role="separator"`, `aria-label="대화 요약 경계"`, gradient class
-  `.bg-gradient-to-r` (color-distinctness).
-- Create-post form: title field labelled `제목/title`, body labelled
-  `내용/본문/body`, submit button matching `작성|등록|게시|create|post`. If your
-  form uses different labels, update `j1-primary-reply.spec.ts`.
+Drives three browser contexts with three **real** keys through the whole loop
+(community → post + primary reply → 9-turn discussion → condense → the same
+question with and without an attached document) and records the provider's own
+`usageMetadata` per call, grouped by call kind.
 
-## Type-checking the specs
+- **Observation only** (`page.on('request'|'response')`), never interception:
+  proxying the per-post SSE stream would buffer an infinite response and hang the
+  thread view.
+- Waits on **observed LLM completions**, not DOM text. Counting `[AI]` in the DOM
+  is wrong — the Composer's active AI chip renders the same token, so the wait
+  returns before the call finishes and the next `reload` aborts it (that bug lost
+  two calls in an early run).
+- Also asserts the security claim on live traffic: no request to the Aidit server
+  may contain a key, in body, query, or headers.
+- Keys come from `DEMO_KEY_A/B/C` and are **never** written to the output JSON or
+  the logs; totals are keyed by nickname.
 
-The specs are excluded from the app build (`frontend/tsconfig.json` includes only
-`src`) and from Vitest collection (`vitest.config.ts` excludes `e2e/**`). To
-type-check them in isolation:
+Measured results are published in the root README ("성능 실측 C").
 
-```bash
-cd frontend
-npx tsc --noEmit --project e2e/tsconfig.json
-```
+### `demo-scenario.mjs` — recorded demo
+
+Three tiled windows + ffmpeg screen capture, per `docs/DEMO_SCENARIO.md`. Not a
+test; it exists to produce the demo video.

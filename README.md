@@ -212,7 +212,7 @@ npm run dev
 | 백엔드 테스트 | **125 통과** (계약 · SSE · 문서 응결 · pub/sub fan-out · 레이트리밋 저장소 · hotScore · 프로필 페이지네이션) |
 | 프론트엔드 테스트 | **79 통과** (컨텍스트 엔진 · 문서 엔진 · 문서 컨텍스트 스토어 · sanitize · LLM 클라이언트) |
 | 타입체크 | 양쪽 `tsc --noEmit` 클린 |
-| E2E | Playwright 5스펙 — J1 1차 답변 · J2 @AI · J3 요약 · **J4 문서 응결 + J5 문서 재투입**(백엔드 없이 hermetic, **6 통과 확인**) · 실키 BYOK |
+| E2E | Playwright **5스펙 10케이스** — J4 문서 응결 4 + J5 문서 재투입 2는 **백엔드 없이 hermetic**이라 이 환경에서 **6건 통과 확인**. J1~J3·실키 BYOK는 라이브 스택(+실키)이 필요해 미실행 |
 | 다중 인스턴스 | 테스트 내 RESP 브로커로 **2 인스턴스 SSE 전달 + 레이트리밋 예산 공유** 검증 — 실 Redis 서버 검증은 배포 시 |
 | Postgres | 스키마 파생 + **DDL 생성물 커밋**(`backend/prisma/postgres/init.sql`) — 런타임 검증은 배포 시 |
 | 실키 실측 | **실제 키 3개로 전 구간 8회 호출 성공** — 사용자 합계 $0.004412 / 서버 $0 / 키 유출 0(327건 검사). 위 [성능 실측 C](#c-실사용-실측--실제-키-3개로-전-구간-2026-07-28) |
@@ -283,8 +283,8 @@ Postgres 전환: `npm run db:pg:push && npm run db:pg:generate` (상세: [TRD §
 | [DESIGN-SYSTEM](./docs/DESIGN-SYSTEM.md) | 컬러 · 타이포 · 로고 자산 단일 출처 |
 | [IMPLEMENTATION_NOTES](./docs/IMPLEMENTATION_NOTES.md) | 실제 구현 차이 · 추가 · 버그 수정 변경 이력 |
 | [BUSINESS_VALUE](./docs/BUSINESS_VALUE.md) | 시장 · ICP · 해자 · 유닛 이코노믹스 · GTM · KPI |
-| [PATENT](./docs/PATENT.html) | **선행기술 조사·대비** — 멀티유저 AI 대화의 key-custody 한계, 임계 재귀 요약, 동시 압축 조정에 대한 6개 레인 조사 + 인용 실재성 검증. "멀티유저 × key-blind 사분면이 비어 있다"는 주장의 근거 |
-| [PAPER](./docs/PAPER.html) | 기술 논문 초안 — 공유 컨텍스트 · 지연 요약 · key-blind 구조의 정리 |
+| [PATENT](./docs/PATENT.html) | **선행기술 조사·대비** — 멀티유저 AI 대화의 key-custody 한계, 임계 재귀 요약, 동시 압축 조정에 대한 6개 레인 조사 + 인용 실재성 검증. "멀티유저 × key-blind 사분면이 비어 있다"는 주장의 근거. ⚠️ **FR-13/FR-14(문서 응결·재투입)는 아직 미반영** |
+| [PAPER](./docs/PAPER.html) | 기술 논문 초안 — 공유 컨텍스트 · 지연 요약 · key-blind 구조의 정리. ⚠️ **FR-13/FR-14는 아직 미반영** |
 | [DEMO_SCENARIO](./docs/DEMO_SCENARIO.md) | 3분할 창 데모 시나리오 + Playwright 자동 재현 |
 
 ## 스크립트

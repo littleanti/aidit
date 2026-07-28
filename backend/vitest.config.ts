@@ -7,6 +7,12 @@ import { defineConfig } from "vitest/config";
 // through Fastify's `app.inject` (and the SSE transport is driven via a fake
 // socket). Single-fork / no concurrency so the in-memory rate-limit + pubsub
 // singletons and the shared DB file behave deterministically.
+//
+// FOOTGUN (observed 2026-07-28): the test DB path is FIXED (prisma/test.db), so
+// two SIMULTANEOUS `npm test` invocations in this package stomp on each other's
+// database and produce spurious failures (15 phantom failures in one such run).
+// Run the suite serially — deploy/pipeline.sh does exactly that; don't launch a
+// second run alongside it.
 export default defineConfig({
   test: {
     globals: false,

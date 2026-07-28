@@ -638,6 +638,8 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 
 ## 18. (보류/예정) M16 — Fly.io 배포 + Postgres 전환 (deferred, 2026-06-20)
 
+> **2026-07-28 갱신**: 이 마일스톤의 **Postgres 전환 부분은 준비 완료**다 — 파생 스키마(`prisma/schema.postgres.prisma`)·DDL 산출물(`prisma/postgres/init.sql`)·드리프트 게이트(`db:pg:check`)가 있고, 함께 필요한 pub/sub·레이트리밋 공유도 어댑터로 구현됐다(TRD §15). **남은 것은 실제 인스턴스에 대한 런타임 검증**이며, 호스팅은 Fly.io가 아니라 **자체 서버**로 방향이 바뀌었다(README "배포 · CI"). 아래 원 기록은 당시 계획으로 보존한다.
+
 > **현재 결정**: **로컬 PC에서 SQLite로 데모 유지**(필요 시 `vite --host`로 LAN 공유). 아래 배포 작업은 **나중에** 진행하기 위한 보류 기록이다. 실인증(JWT, M15)은 이미 완료되어 로컬/공개 모두 적용됨 — 로컬은 `JWT_SECRET` 미설정 시 dev 폴백+경고로 동작(추가 설정 불필요), **공개 배포 시에만 실 `JWT_SECRET` 필수**.
 
 **확정 설계 결정 (재논의 불필요)**
@@ -732,3 +734,28 @@ PRD §12.5 · 수용기준 보완 + NFR + 지표 + 라이선스 매핑.
 - [ ] **PR-FE-8 · 검증**: `typecheck` + `test` + `build` green. 브라우저 — 탭 전환 · 무한스크롤 · `/me/settings` 이동·back · KO/EN 전환 · 비로그인 EmptyState 유지 · API Key 마스킹 동작·Logout 동작 확인.
 
 **M18 종료 기준**: 3개 프로필 엔드포인트가 keyset `{ items, nextCursor }` envelope 반환(잘못된 커서 400, EOF `null`); bookmarks 커서가 post.createdAt 아닌 bookmark 행 기준임; `getUserPosts`/`getUserBookmarks`/`getUserCommunities`가 paged shape 반환; Profile(`/me`)이 탭 3개(communities/posts/bookmarks) + 활성 탭 무한스크롤; 설정(API Key·Language·Logout)이 `/me/settings`로 이동됨; AppLayout 그룹에 `/me/settings` 라우트 등록; i18n 키 추가; BYOK 키 마스킹·로컬 전용 동작 불변; 비로그인 EmptyState 유지; 모바일 우선·터치 ≥44px·가로 스크롤 없음; `typecheck`·`test`·`build` green.
+
+---
+
+## 21. M19 — 지식 루프 + 수평 확장 + 검증 게이트 (v1.3, 2026-07-27~28)
+
+> 심사 기준(기술성/창의성/완성도/비즈니스/전달력) 관점의 약점을 좁히는 묶음. 전부 구현·검증·커밋 완료.
+
+| WP | 내용 | 산출물 | 검증 |
+|----|------|--------|------|
+| **KL-1** | **논의 문서 응결(FR-13)** — 스레드 `⋯` → `[ 문서로 정리 ]` → 본인 키로 마크다운 응결 → `/d/:id`, 커뮤니티 [게시글\|문서] 탭 | `Document` 모델·마이그레이션, `routes/documents.ts`, `engine/documentEngine.ts`, `pages/Document.tsx` | 백엔드 계약 18건, 엔진 21건, e2e J4 4건 |
+| **KL-2** | **문서 재투입(FR-14)** — Composer AI 메뉴에서 문서 최대 3개 첨부, 활성 컨텍스트 **앞**에 참고 턴으로 삽입(XC-4 유지) | `stores/docContextStore.ts`, `buildLlmRequest.attachedDocuments` | 엔진 7건, 스토어 8건, e2e J5 2건 |
+| **SC-1** | **Postgres 전환 경로** — 단일 SoT 스키마에서 파생 + DDL 생성 + 드리프트 게이트 | `scripts/sync-postgres-schema.mjs`, `prisma/postgres/init.sql` | `db:pg:check`(파이프라인 게이트) |
+| **SC-2** | **pub/sub 어댑터** — `InMemory`/`Redis`(`REDIS_URL`), 의존성 추가 없이 RESP 자체 구현 | `redis/resp.ts`, `realtime/pubsub.ts` | fan-out 14건(2 인스턴스 전달 + 인메모리 비전달 대비) |
+| **SC-3** | **레이트리밋 공유** — 정책/저장소 분리, 원자적 고정 윈도우(`INCR`) | `store/rateLimitStore.ts`, `redis/client.ts` | 16건(2 인스턴스 예산 공유 + 동시 초과 허용 없음) |
+| **VF-1** | **부하 시뮬레이션** — SSE fan-out 지연 + 요약 경쟁 수렴 | `test/load/simulate.mjs` | 실측(README 성능 실측 A·B) |
+| **VF-2** | **실키 실측** — 실제 키 3명으로 전 구간, 토큰·비용·키 유출 계측 | `e2e/measure-real-keys.mjs` | 실측(README 성능 실측 C) |
+| **VF-3** | **검증 게이트 코드화** — 5게이트 + 실패 시 `exit 1`, e2e 서버 자체 기동, 커버리지 | `deploy/pipeline.sh` | 드리프트 주입으로 실패 경로까지 실측 |
+| **DL-1** | **전달력** — 응결 흐름 GIF + 화면 3장(재현 생성), README 재구성, 배포·CI 방침 명시 | `e2e/capture-media.spec.ts`, `docs/assets/*` | `npm run media` 재현 |
+
+**완료 게이트**: 백엔드 125 / 프론트 79 유닛 통과, 양쪽 typecheck 클린, e2e J4·J5 6건 통과, `./deploy/pipeline.sh --with-build` 전 게이트 PASS.
+
+**남은 것**(의도적 미완):
+- 실 Redis 서버 / 실 Postgres 인스턴스 **런타임** 검증 — 배포 시 1회.
+- e2e 서버 **자체 기동 경로**의 실행 검증 — 개발 포트 점유 때문에 설정 로드까지만.
+- **유기적 사용 데이터**(파일럿) — 현재 실측은 각본화된 1회 세션.
