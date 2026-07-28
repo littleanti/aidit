@@ -34,6 +34,9 @@ export const ai = {
     document_directive:
       '지금까지의 토론 전체를 하나의 완결된 마크다운 문서로 정리하라. 규칙: (1) 첫 줄은 반드시 문서 제목인 `# 제목` 한 줄로 시작한다. (2) 논의에서 실제로 나온 내용만 쓰고 없는 사실을 만들지 마라. (3) 주제별 섹션(`##`)으로 묶고, 구체적인 팁·예시·주의사항은 목록으로 정리하라. (4) 상충하는 의견이 있었다면 어느 한쪽으로 단정하지 말고 양쪽 입장을 함께 남겨라. (5) 결론이 나지 않은 쟁점은 마지막에 "미해결 질문" 섹션으로 모아라. (6) 대화체("~라고 했습니다")가 아니라 문서체로 쓰고, 누가 말했는지보다 무엇이 정리되었는지를 중심으로 서술하라.',
     document_untitled: '정리된 문서',
+    // FR-14: label marking an attached community document as reference material.
+    document_context_prefix:
+      '[참고 문서] 아래는 이 커뮤니티에 이미 정리된 문서다. 진행 중인 대화가 아니라 참고 자료이며, 답변할 때 이 내용과 어긋나지 않게 하라. 문서에 없는 내용을 문서에 있는 것처럼 말하지 마라.',
     // FR-13 failure messages (UI toasts).
     doc_fail_context: '문서 정리 실패 — 컨텍스트를 불러오지 못했습니다',
     doc_fail_generate: '문서 정리 실패 — 잠시 후 재시도',
@@ -60,6 +63,8 @@ export const ai = {
     document_directive:
       'Condense the entire discussion above into a single self-contained markdown document. Rules: (1) The very first line MUST be the document title as a single `# Title` heading. (2) Use only what the discussion actually contains — invent nothing. (3) Group the material into topical `##` sections, and turn concrete tips, examples, and caveats into lists. (4) Where participants disagreed, keep both positions rather than picking a winner. (5) Collect anything left unresolved into a final "Open questions" section. (6) Write in document prose, not as a transcript — focus on what was established, not on who said it.',
     document_untitled: 'Condensed document',
+    document_context_prefix:
+      '[REFERENCE DOCUMENT] The following is a document already condensed in this community. It is reference material, NOT part of the ongoing conversation. Stay consistent with it when answering, and do not attribute anything to it that it does not say.',
     doc_fail_context: 'Condensation failed — could not load context',
     doc_fail_generate: 'Condensation failed — try again shortly',
     doc_fail_save: 'Condensation failed — could not save the document',

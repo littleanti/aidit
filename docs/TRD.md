@@ -354,6 +354,7 @@ export interface CommunitiesPage { items: Community[]; nextCursor: string | null
 - 글 원본/타인 댓글/AI 버블 → 역할 매핑: 사람 발화는 `role:"user"`, AI 버블은 `role:"model"`.
 - 다자 대화이므로 각 user turn 앞에 `「{username}」: ` 접두로 화자 구분(LLM API는 멀티 user 화자 개념이 약해 텍스트로 표기).
 - 요약 버블은 새 세그먼트의 첫 `user` turn으로 "지금까지 요약: ..." 형태 주입(§6.3).
+- **첨부 문서(FR-14)**: 선택된 커뮤니티 문서는 **활성 컨텍스트 턴들보다 앞에** `role:'user'` 턴으로 놓인다. 각 턴은 앱이 통제하는 라벨(`ai.document_context_prefix`, ko/en)로 시작해 "이건 참고 문서, 아래가 진행 중인 대화"를 구분한다. **문서 본문은 UGC이므로 systemInstruction에 절대 넣지 않는다**(XC-4). 본문은 발화 시점에 `GET /documents/:id`로 가져오며(목록 응답에는 본문이 없다), 일부 조회가 실패하면 그 문서만 빼고 답변을 계속한다(FR-14.7). 상한 3개(FR-14.3), `@AI` 경로 전용(FR-14.8).
 - **멀티모달 이미지**: 컨텍스트 턴은 텍스트(`parts:[{text}]`)로만 매핑한다. 이미지는 **"그 호출에서 신규로 실리는" 한 장**만 user turn에 `inlineData`(base64) 파트로 덧붙는다 — ① `@AI` 댓글에 방금 업로드한 이미지(Composer), ② **글 작성 시 첨부한 이미지의 1차 AI 답변**(`runPrimaryReply`: 글 본문 텍스트 턴 뒤에 작성자 user turn으로 `Post.imageUrl`을 `inlineData`로 첨부). 과거 글/댓글의 이미지는 후속 호출에서 재전송하지 않는다(컨텍스트는 텍스트). 인코딩 실패 시 텍스트 only로 진행(답변을 막지 않음).
 
 ---

@@ -37,7 +37,13 @@ import {
 // generateContent is the status-tracked wrapper (records connectivity for the
 // header badge); the underlying browser->LLM call is unchanged.
 import { generateContent } from './llmStatus';
-import { getContext, postComment, patchComment, ApiError } from '../api/rest';
+import {
+  getContext,
+  getDocument,
+  postComment,
+  patchComment,
+  ApiError,
+} from '../api/rest';
 import { useAuthStore } from '../stores/authStore';
 import { useLangStore } from '../stores/langStore';
 import { track } from '../lib/metrics';
@@ -76,6 +82,13 @@ export interface AppendedTurn {
   image?: { mimeType: string; data: string };
 }
 
+/** FR-14: a community document attached as reference context for this call. */
+export interface AttachedDocument {
+  title: string;
+  /** markdown body — UGC, so it may ONLY ever become a role:'user' data turn. */
+  body: string;
+}
+
 export interface BuildLlmRequestArgs {
   /** Community persona prompt. L6/XC-4: goes ONLY into systemInstruction. */
   personaPrompt: string;
@@ -92,6 +105,10 @@ export interface BuildLlmRequestArgs {
   /** Optional AI-response-length level. Omitted => DEFAULT_AI_LENGTH ('normal',
    *  a bounded one-or-two-paragraph answer). */
   length?: AiLength;
+  /** FR-14: community documents to prepend as reference-material user turns,
+   *  BEFORE the live conversation. XC-4: document bodies are UGC and therefore
+   *  never touch systemInstruction. */
+  attachedDocuments?: AttachedDocument[];
 }
 
 export interface LlmRequest {
@@ -99,6 +116,16 @@ export interface LlmRequest {
   systemInstruction?: string;
   contents: LlmContent[];
   generationConfig?: GenerationConfig;
+}
+
+/** FR-14: app-controlled label that marks an attached document as REFERENCE
+ *  material rather than part of the live conversation. App-controlled text, but
+ *  it rides in a user data turn together with the (UGC) document body — which is
+ *  exactly why the body can never be promoted to systemInstruction. */
+function documentContextPrefix(): string {
+  return useLangStore.getState().lang === 'en'
+    ? aiDict.en.document_context_prefix
+    : aiDict.ko.document_context_prefix;
 }
 
 /** Speaker prefix applied to HUMAN user turns (CONTEXT MAPPING). */
@@ -141,13 +168,31 @@ export function buildLlmRequest(
   const { personaPrompt, context, appended, generationConfig } = args;
   const len = args.length ?? DEFAULT_AI_LENGTH;
 
+  // FR-14: attached community documents come FIRST, as reference material, so
+  // the live conversation stays last and closest to the question being answered.
+  // XC-4: each document is a role:'user' DATA turn — a document body is UGC and
+  // must never reach systemInstruction, exactly like a comment.
+  const documentTurns: LlmContent[] = (args.attachedDocuments ?? []).map(
+    (doc) => ({
+      role: 'user' as const,
+      parts: [
+        {
+          text: `${documentContextPrefix()}\n# ${doc.title}\n\n${doc.body}`,
+        },
+      ],
+    }),
+  );
+
   // Copy context turns verbatim into wire shape. The server-side assembler is
   // the source of truth for role mapping; we do NOT re-derive roles here, only
   // wrap text into { parts: [{ text }] }. This keeps roles immutable.
-  const contents: LlmContent[] = context.contents.map((turn) => ({
-    role: turn.role,
-    parts: [{ text: turn.text }],
-  }));
+  const contents: LlmContent[] = [
+    ...documentTurns,
+    ...context.contents.map((turn) => ({
+      role: turn.role,
+      parts: [{ text: turn.text }],
+    })),
+  ];
 
   // XC-4: an appended turn is ALWAYS a user data turn with the speaker prefix.
   // On a fresh-upload turn it additionally carries the local image bytes as a
@@ -422,6 +467,38 @@ export interface RunAtAiReplyArgs {
   image?: { mimeType: string; data: string };
   /** Optional AI-response-length for the @AI reply. Omitted => 'normal'. */
   length?: AiLength;
+  /** FR-14: community document ids the caller attached as reference context for
+   *  THIS turn. Bodies are fetched here (the list endpoint omits them); an id
+   *  that fails to load is skipped so a stale attachment can't block the answer. */
+  attachedDocumentIds?: string[];
+}
+
+/**
+ * FR-14: resolve attached document ids into { title, body } for the request.
+ *
+ * Fetched in parallel and INDIVIDUALLY tolerant: a document that was deleted (or
+ * whose fetch fails) drops out and the answer proceeds with the rest. Blocking an
+ * @AI reply because one reference went missing would trade the user's actual goal
+ * for a stale attachment (same reasoning as the graceful summary fallback).
+ */
+async function resolveAttachedDocuments(
+  ids: string[] | undefined,
+): Promise<AttachedDocument[]> {
+  if (!ids || ids.length === 0) return [];
+
+  const settled = await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const res = await getDocument(id);
+        return { title: res.document.title, body: res.document.body };
+      } catch {
+        track('document_context_missing');
+        return null;
+      }
+    }),
+  );
+
+  return settled.filter((d): d is AttachedDocument => d !== null);
 }
 
 // ---------------------------------------------------------------------------
@@ -627,12 +704,19 @@ export async function runAtAiReply(
       ? { username: callerUsername, body: humanCommentBody }
       : undefined;
 
+  // FR-14: reference documents are resolved AFTER the (possible) summarization
+  // above, so a fresh summary and the attachments land in the same request.
+  const attachedDocuments = await resolveAttachedDocuments(
+    args.attachedDocumentIds,
+  );
+
   const request = buildLlmRequest({
     personaPrompt: communityPersonaPrompt,
     userPersonaPrompt: args.userPersonaPrompt,
     context,
     appended,
     length,
+    attachedDocuments,
   });
 
   const clientId = makeClientId();

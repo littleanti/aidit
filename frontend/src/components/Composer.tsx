@@ -32,8 +32,17 @@ import {
   isFilledSlot,
   type UserPersonaSlot,
 } from '../stores/userPersonaStore';
-import { postComment, uploadImage } from '../api/rest';
-import type { Comment } from '../api/types';
+import {
+  getCommunityDocuments,
+  postComment,
+  uploadImage,
+  ApiError,
+} from '../api/rest';
+import type { Comment, DocumentSummary } from '../api/types';
+import {
+  useDocContextStore,
+  MAX_ATTACHED_DOCS,
+} from '../stores/docContextStore';
 import { runAtAiReply } from '../engine/contextEngine';
 import { type AiLength, DEFAULT_AI_LENGTH } from '../engine/length';
 import { useT } from '../i18n/useT';
@@ -75,6 +84,9 @@ interface ComposerProps {
   postId: string;
   /** community persona prompt — passed to the engine for @AI replies. */
   communityPersonaPrompt?: string;
+  /** FR-14: slug of the post's community — used to list its condensed documents
+   *  so they can be attached as reference context. Absent => the row is empty. */
+  communitySlug?: string;
   /** Surface ONLY the wantsAI boolean up to Thread (for the shell-prompt swap).
    *  The live comment TEXT is intentionally NOT surfaced — mirroring it would
    *  force a thread-wide re-render on every keystroke; only the boolean is. */
@@ -90,6 +102,10 @@ function tempSeq(): number {
 
 // The 3 AI-response-length levels, in display order.
 const LENGTH_ORDER: AiLength[] = ['short', 'normal', 'long'];
+
+// Stable empty array for the FR-14 selector: returning a fresh [] from a zustand
+// selector on every render would change identity each time and re-render forever.
+const EMPTY_IDS: string[] = [];
 
 /** Robot "AI" glyph shared by the trailing chip + the popover toggle. */
 function RobotIcon({ size = 14 }: { size?: number }) {
@@ -122,9 +138,14 @@ function AiModeMenu({
   showGuard,
   personas,
   personaSel,
+  docs,
+  docsLoading,
+  docsError,
+  selectedDocIds,
   onToggle,
   onPickLength,
   onPickPersona,
+  onToggleDoc,
   onAddKey,
   onOpenSettings,
   t,
@@ -137,12 +158,19 @@ function AiModeMenu({
   personas: UserPersonaSlot[];
   /** selected slot index for THIS thread, or null for "none" (default). */
   personaSel: number | null;
+  /** FR-14: the community's condensed documents (lazy-loaded when opened). */
+  docs: DocumentSummary[];
+  docsLoading: boolean;
+  docsError: string | null;
+  /** FR-14: document ids attached to THIS utterance. */
+  selectedDocIds: string[];
   onToggle: () => void;
   onPickLength: (len: AiLength) => void;
   onPickPersona: (index: number | null) => void;
+  onToggleDoc: (documentId: string) => void;
   onAddKey: () => void;
   onOpenSettings: () => void;
-  t: (key: string) => string;
+  t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
   const labels: Record<AiLength, string> = {
     short: t('thread.lengthShort'),
@@ -275,6 +303,65 @@ function AiModeMenu({
           </>
         )}
       </div>
+      {/* FR-14: reference-document row — attach the community's condensed
+          documents to THIS @AI turn, closing the knowledge loop (FR-13 exports,
+          FR-14 re-imports). Selection is session-only, per post, capped at 3. */}
+      <div
+        role="group"
+        aria-label={t('thread.docContextRow')}
+        className={`flex flex-col gap-1.5 border-t border-term-border pt-2 ${
+          aiMode ? '' : 'opacity-40'
+        }`}
+      >
+        <span className="text-[11px] font-bold text-term-faint">
+          {t('thread.docContextCount', {
+            selected: String(selectedDocIds.length),
+            max: String(MAX_ATTACHED_DOCS),
+          })}
+        </span>
+        {docsLoading ? (
+          <span className="text-[11px] text-term-dim">
+            {t('thread.docContextLoading')}
+          </span>
+        ) : docsError ? (
+          <span className="text-[11px] text-term-danger">{docsError}</span>
+        ) : docs.length === 0 ? (
+          <span className="text-[11px] leading-snug text-term-dim">
+            {t('thread.docContextEmpty')} — {t('thread.docContextEmptyHint')}
+          </span>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {docs.map((doc) => {
+              const checked = selectedDocIds.includes(doc.id);
+              // At the cap, unchecked rows are disabled: refusing is clearer than
+              // silently evicting a document the user deliberately picked.
+              const atCap =
+                !checked && selectedDocIds.length >= MAX_ATTACHED_DOCS;
+              const disabled = !aiMode || atCap;
+              return (
+                <button
+                  key={doc.id}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={checked}
+                  disabled={disabled}
+                  onClick={() => onToggleDoc(doc.id)}
+                  className={`flex min-h-[36px] w-full items-center gap-1.5 rounded-[2px] border px-2 text-left text-xs transition ${
+                    checked
+                      ? 'border-term-amber text-term-amber'
+                      : 'border-term-border text-term-dim'
+                  } ${disabled ? 'cursor-not-allowed opacity-50' : 'hover:text-term-bright'}`}
+                >
+                  <span aria-hidden className="shrink-0 font-bold">
+                    {checked ? '[✓]' : '[ ]'}
+                  </span>
+                  <span className="truncate">{doc.title}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
       {/* key-absent guard — shown when the user taps the toggle without a key
           (AI stays OFF; the guard explains why + links to key registration). */}
       {showGuard && (
@@ -309,7 +396,12 @@ function AiModeMenu({
   );
 }
 
-export default function Composer({ postId, communityPersonaPrompt, onWantsAIChange }: ComposerProps) {
+export default function Composer({
+  postId,
+  communityPersonaPrompt,
+  communitySlug,
+  onWantsAIChange,
+}: ComposerProps) {
   const navigate = useNavigate();
   const { t } = useT();
   const userId = useAuthStore((s) => s.userId);
@@ -354,6 +446,19 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   // Trailing AI-menu popover open/close.
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // FR-14: reference documents for this community, lazily loaded the first time
+  // the AI menu is opened (a thread where nobody attaches anything never pays
+  // for the request).
+  const [docs, setDocs] = useState<DocumentSummary[]>([]);
+  const [docsLoaded, setDocsLoaded] = useState(false);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [docsError, setDocsError] = useState<string | null>(null);
+  const selectedDocIds = useDocContextStore(
+    (st) => st.selectedByPost[postId] ?? EMPTY_IDS,
+  );
+  const toggleDoc = useDocContextStore((st) => st.toggle);
+  const clearDocs = useDocContextStore((st) => st.clear);
   // "tried to enable AI without a key" — surfaces the guard; AI stays OFF.
   const [noKeyWarn, setNoKeyWarn] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -394,6 +499,40 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
   useEffect(() => {
     if (!menuOpen) setNoKeyWarn(false);
   }, [menuOpen]);
+
+  // FR-14: fetch the community's documents on first menu open.
+  useEffect(() => {
+    if (!menuOpen || docsLoaded || !communitySlug) return;
+    let cancelled = false;
+    setDocsLoading(true);
+    setDocsError(null);
+    (async () => {
+      try {
+        const page = await getCommunityDocuments(communitySlug);
+        if (cancelled) return;
+        setDocs(page.items);
+        setDocsLoaded(true);
+      } catch (err) {
+        if (cancelled) return;
+        setDocsError(
+          err instanceof ApiError ? err.message : tn('thread.docContextError'),
+        );
+      } finally {
+        if (!cancelled) setDocsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [menuOpen, docsLoaded, communitySlug]);
+
+  // Switching threads drops this thread's document list cache (the selection
+  // itself is per-post in the store, so it does not need clearing here).
+  useEffect(() => {
+    setDocs([]);
+    setDocsLoaded(false);
+    setDocsError(null);
+  }, [communitySlug]);
 
   // Toggle AI mode. With no BYOK key, AI CANNOT be enabled — surface the guard
   // instead of flipping it on. With a key, flip the explicit override.
@@ -562,6 +701,11 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
       const selSlot = selIdx !== null ? personaState.personas[selIdx] : undefined;
       const userPersonaPrompt =
         selSlot && isFilledSlot(selSlot) ? selSlot.prompt : undefined;
+      // FR-14: snapshot the attachment for THIS utterance, then clear it — an
+      // attachment is a per-turn decision, so the next message starts clean.
+      const attachedIds = useDocContextStore.getState().selected(postId);
+      if (attachedIds.length > 0) clearDocs(postId);
+
       void runAtAiReply({
         postId,
         humanCommentId,
@@ -572,6 +716,7 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
         humanCommentBody: body,
         image: imagePart,
         length: aiLength,
+        attachedDocumentIds: attachedIds,
       }).then((res) => {
         if (!res.ok && res.errorMessage) showToast(res.errorMessage);
       });
@@ -599,6 +744,24 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
           className="mx-3 mb-1 mt-2 rounded-[2px] border border-term-danger bg-term-bg px-3 py-2 text-sm text-term-danger"
         >
           {toast}
+        </div>
+      )}
+
+      {/* FR-14: attachment chip — after the popover closes, this is the only
+          reminder that documents ride along with the next @AI turn. */}
+      {selectedDocIds.length > 0 && (
+        <div className="flex items-center gap-2 px-3 pt-2">
+          <span className="flex min-h-[28px] items-center gap-1.5 rounded-[2px] border border-term-amber px-2 text-[11px] font-bold text-term-amber">
+            {t('thread.docContextChip', { count: String(selectedDocIds.length) })}
+            <button
+              type="button"
+              onClick={() => clearDocs(postId)}
+              aria-label={t('thread.docContextClearAria')}
+              className="text-term-dim transition hover:text-term-bright"
+            >
+              ×
+            </button>
+          </span>
         </div>
       )}
 
@@ -715,12 +878,17 @@ export default function Composer({ postId, communityPersonaPrompt, onWantsAIChan
                 showGuard={!hasApiKey && noKeyWarn}
                 personas={userPersonas}
                 personaSel={personaSel}
+                docs={docs}
+                docsLoading={docsLoading}
+                docsError={docsError}
+                selectedDocIds={selectedDocIds}
                 onToggle={handleToggleAi}
                 onPickLength={(len) => {
                   setAiLength(postId, len);
                   setMenuOpen(false);
                 }}
                 onPickPersona={(idx) => selectPersona(postId, idx)}
+                onToggleDoc={(documentId) => toggleDoc(postId, documentId)}
                 onAddKey={() => {
                   setMenuOpen(false);
                   navigate('/me/settings');

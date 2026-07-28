@@ -169,6 +169,8 @@ async function seedSession(page: Page, opts: { key?: string | null } = {}) {
 interface ApiStubs {
   /** Bodies of every POST /posts/:id/documents the page issued. */
   documentPosts: Array<Record<string, unknown>>;
+  /** Bodies of every POST /posts/:id/comments the page issued. */
+  postedComments: Array<Record<string, unknown>>;
   /** Raw request bodies sent to the LLM host. */
   llmRequests: Array<Record<string, unknown>>;
 }
@@ -188,7 +190,7 @@ async function stubApi(
     llmReply?: string;
   } = {},
 ): Promise<ApiStubs> {
-  const stubs: ApiStubs = { documentPosts: [], llmRequests: [] };
+  const stubs: ApiStubs = { documentPosts: [], postedComments: [], llmRequests: [] };
   const documents = opts.documents ?? [];
   const llmReply = opts.llmReply ?? DOC_MARKDOWN;
 
@@ -229,6 +231,33 @@ async function stubApi(
     if (method === 'GET' && path === `/posts/${POST_ID}/context`) return json(context);
     if (method === 'GET' && path === `/posts/${POST_ID}/comments`) {
       return json({ items: comments });
+    }
+    // Posting a comment must return a real Comment DTO: the @AI flow needs the
+    // committed comment's id to attach the reply to (a bare {} silently stops
+    // the flow before any LLM call).
+    if (method === 'POST' && path === `/posts/${POST_ID}/comments`) {
+      const sent = req.postDataJSON() as { body?: string; clientId?: string };
+      return json(
+        {
+          id: `posted-${stubs.postedComments.length + 1}`,
+          postId: POST_ID,
+          authorId: 'me-user',
+          authorUsername: '아라',
+          type: 'HUMAN',
+          status: 'COMPLETE',
+          body: sent.body ?? '',
+          tokenCount: 10,
+          segmentId: 'seg-0',
+          replyToId: null,
+          clientId: sent.clientId ?? null,
+          seq: comments.length + stubs.postedComments.push(sent),
+          createdAt: new Date('2026-07-27T01:00:00Z').toISOString(),
+        },
+        201,
+      );
+    }
+    if (method === 'PATCH' && path.startsWith('/comments/')) {
+      return json({ id: path.split('/').pop(), status: 'COMPLETE' });
     }
     if (path === `/posts/${POST_ID}/stream`) {
       // Keep the SSE connection open but silent: the snapshot already came from
@@ -400,5 +429,64 @@ test.describe('J4 — 논의 문서 응결 (FR-13)', () => {
     expect(stubs.documentPosts).toHaveLength(0);
     expect(stubs.llmRequests).toHaveLength(0);
     await expect(page).toHaveURL(new RegExp(`/p/${POST_ID}$`));
+  });
+});
+
+test.describe('J5 — 문서를 컨텍스트로 재투입 (FR-14)', () => {
+  test('attaching a document sends it as a leading reference turn', async ({
+    page,
+  }) => {
+    await seedSession(page);
+    const stubs = await stubApi(page, { documents: [documentPayload()] });
+
+    await page.goto(`/p/${POST_ID}`);
+    await expect(page.getByText('컨텍스트를 먼저 주는 게 중요합니다.')).toBeVisible();
+
+    // Open the Composer AI popover and attach the community document.
+    await page.getByRole('button', { name: 'AI 모드 설정' }).click();
+    const menu = page.getByRole('dialog', { name: 'AI 모드 설정' });
+    await expect(menu.getByText(/참고 문서 0\/3/)).toBeVisible();
+    await menu.getByRole('checkbox', { name: /Code Agent 사용 가이드/ }).click();
+    await expect(menu.getByText(/참고 문서 1\/3/)).toBeVisible();
+
+    // Close the popover — the chip is the reminder that a doc rides along.
+    await page.keyboard.press('Escape');
+    await expect(page.getByText(/문서 1개 참고/)).toBeVisible();
+
+    // Send an @AI message.
+    await page.getByRole('textbox', { name: '댓글 입력' }).fill('정리된 내용 기준으로 알려줘');
+    await page.getByRole('button', { name: '전송' }).click();
+
+    // The LLM request must carry the document FIRST, as a user turn, and the
+    // document body must NOT be in systemInstruction (XC-4 / FR-14.5).
+    await expect
+      .poll(() => stubs.llmRequests.length, { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    const req = stubs.llmRequests[0] as {
+      systemInstruction?: unknown;
+      contents: Array<{ role: string; parts: Array<{ text?: string }> }>;
+    };
+    const firstTurn = req.contents[0]!;
+    expect(firstTurn.role).toBe('user');
+    expect(firstTurn.parts[0]!.text).toContain('참고 문서');
+    expect(firstTurn.parts[0]!.text).toContain('# Code Agent 사용 가이드');
+    expect(firstTurn.parts[0]!.text).toContain('컨텍스트를 **먼저** 준다');
+    expect(JSON.stringify(req.systemInstruction ?? '')).not.toContain(
+      '프롬프트 작성',
+    );
+
+    // The attachment is per-utterance: the chip is gone after sending.
+    await expect(page.getByText(/문서 1개 참고/)).toHaveCount(0);
+  });
+
+  test('with no documents the row explains how to create one', async ({ page }) => {
+    await seedSession(page);
+    await stubApi(page, { documents: [] });
+
+    await page.goto(`/p/${POST_ID}`);
+    await page.getByRole('button', { name: 'AI 모드 설정' }).click();
+    const menu = page.getByRole('dialog', { name: 'AI 모드 설정' });
+    await expect(menu.getByText(/응결된 문서가 없어요/)).toBeVisible();
+    await expect(menu.getByText(/문서로 정리/)).toBeVisible();
   });
 });

@@ -854,6 +854,7 @@ export default function Thread() {
         <Composer
           postId={postId}
           communityPersonaPrompt={community?.personaPrompt ?? ''}
+          communitySlug={community?.slug}
           onWantsAIChange={setWantsAI}
         />
       </div>
