@@ -19,7 +19,8 @@
     "db:pg:generate": "npm run db:pg:sync && prisma generate --schema prisma/schema.postgres.prisma",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "load:sim": "tsx test/load/simulate.mjs"
+    "load:sim": "tsx test/load/simulate.mjs",
+    "calibrate:tokens": "tsx scripts/calibrate-token-estimate.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",

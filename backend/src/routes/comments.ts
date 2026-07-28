@@ -11,6 +11,7 @@ import {
   type CommentDTO,
 } from "../realtime/events.js";
 import { requireAuth } from "../auth.js";
+import { estimateTokens } from "../domain/tokenEstimate.js";
 import { isAllowedImageUrl } from "../storage/imageUrl.js";
 
 // WP BE-6 + BE-11 — Comments route.
@@ -69,10 +70,9 @@ function toCommentDTO(row: CommentRow): CommentDTO {
   };
 }
 
-// Server-side token estimate when the client does not provide one (~4 chars/token).
-function estimateTokens(body: string): number {
-  return Math.ceil(body.length / 4);
-}
+// Server-side token estimate when the client does not provide one. The formula
+// (script-aware, calibrated against countTokens) lives in domain/tokenEstimate.ts
+// so it is testable and stated once — see TRD §6.4.
 
 const LIST_PAGE_SIZE = 50;
 

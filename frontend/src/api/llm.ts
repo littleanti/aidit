@@ -205,9 +205,48 @@ interface CountTokensResponse {
   totalTokens?: number;
 }
 
-/** Local heuristic fallback: ~4 chars per token. */
+// Token estimation for the 128K segment budget. TRD §6.4 is the SoT for these
+// constants; they were calibrated OFFLINE against the provider's (free)
+// countTokens over this repo's own corpus on 2026-07-28.
+//
+// Runtime deliberately does NOT call countTokens: it is exact but costs a network
+// round trip per message. So the local estimate has to be good enough — and the
+// previous `chars/4` was not. chars/4 is a Latin rule of thumb; measured against
+// gemini-3.1-flash-lite, Korean runs ~1.7-1.9 chars/token while English runs
+// ~4.5-5.2. It under-counted app content by 39.4% in aggregate (worst single
+// sample -58%), pushing the 128K trigger far past the policy point and effectively
+// disabling FR-7 on Korean threads.
+//
+// The constants are fitted on APP-SHAPED samples (comments, AI replies, condensed
+// documents) — NOT on this repo's documentation, which tokenizes ~1.5x denser and
+// produced a coefficient that over-counted real content by ~34% in a first pass.
+//
+// KEEP IN SYNC with backend/src/domain/tokenEstimate.ts — the server sums its own
+// estimate into ContextSegment.tokenSum, which is what GET /context compares
+// against the threshold. Divergence makes the two disagree about when to summarize.
+
+/** Chars per token for dense scripts (Hangul, CJK ideographs, kana). */
+const DENSE_CHARS_PER_TOKEN = 1.3;
+/** Chars per token for everything else (Latin, digits, punctuation, markdown). */
+const REST_CHARS_PER_TOKEN = 4.5;
+
+/** Hangul syllables + jamo, CJK ideographs, kana. The coefficient was calibrated
+ *  on Hangul (the app ships ko/en); CJK/kana are grouped with it as a similar-
+ *  density approximation rather than a measured result. */
+const DENSE_SCRIPT = /[가-힣ᄀ-ᇿ㄰-㆏぀-ヿ一-鿿]/g;
+
+/**
+ * Estimate the token count of `text` (TRD §6.4).
+ *
+ * Measured accuracy over 10 app-shaped samples: +7.9% in aggregate (deliberately
+ * conservative), -3%..+22% per message, mean absolute error 9%. Under-counting is
+ * the unsafe direction, so the residual bias is kept positive.
+ */
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
+  if (text.length === 0) return 0;
+  const dense = (text.match(DENSE_SCRIPT) ?? []).length;
+  const rest = text.length - dense;
+  return Math.ceil(dense / DENSE_CHARS_PER_TOKEN + rest / REST_CHARS_PER_TOKEN);
 }
 
 /** Sum the estimated tokens across all content parts. */
