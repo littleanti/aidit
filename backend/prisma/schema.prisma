@@ -116,6 +116,19 @@ model ContextSegment {
 }
 
 // L12: per-user daily visit tracking (one row per user per date).
+// Daily counters for browser-only events (TRD §16). Aggregate, not a log: the
+// sink never stores event props, so there is nothing per-row to keep. The
+// (name, date) uniqueness + atomic increment makes the DB the single source of
+// truth even with several app instances.
+model EventCounter {
+  id    String @id @default(cuid())
+  name  String // allow-listed event name, e.g. "llm_success"
+  date  String // "YYYY-MM-DD" (UTC)
+  count Int    @default(0)
+
+  @@unique([name, date])
+}
+
 model VisitEvent {
   id     String @id @default(cuid())
   userId String

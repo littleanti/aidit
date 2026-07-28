@@ -80,6 +80,16 @@ CREATE TABLE "ContextSegment" (
 );
 
 -- CreateTable
+CREATE TABLE "EventCounter" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "date" TEXT NOT NULL,
+    "count" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "EventCounter_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "VisitEvent" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -138,6 +148,9 @@ CREATE UNIQUE INDEX "Comment_postId_clientId_key" ON "Comment"("postId", "client
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ContextSegment_postId_index_key" ON "ContextSegment"("postId", "index");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EventCounter_name_date_key" ON "EventCounter"("name", "date");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "VisitEvent_userId_date_key" ON "VisitEvent"("userId", "date");

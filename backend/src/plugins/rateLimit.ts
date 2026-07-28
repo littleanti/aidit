@@ -40,6 +40,15 @@ const POLICIES: Record<string, Policy> = {
     max: 3,
     message: "Rate limit: at most 3 documents per 5 minutes. Try again shortly.",
   },
+  // TRD §16: the event sink is unauthenticated, so it needs a bound. The limit is
+  // generous because a single user action can emit several events (e.g. @AI ->
+  // ai_reply_invoked + llm_success), and losing counts to a 429 would quietly bias
+  // the very rates we compute from them.
+  "/metrics/events": {
+    windowMs: 60_000,
+    max: 120,
+    message: "Rate limit: too many metrics events. Try again shortly.",
+  },
   // Community creation is a cooldown, i.e. a window of one.
   "/communities": {
     windowMs: 180_000,

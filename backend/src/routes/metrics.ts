@@ -3,16 +3,36 @@ import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../db.js";
 import { requireAuth } from "../auth.js";
 
-// WP BE-13 — Metrics + VisitEvent.
+// WP BE-13 — Metrics + VisitEvent. Event sink per TRD §16.
 //
 // Server stays KEY-BLIND (PLAN L1): no apiKey is ever read, stored, or relayed.
-// Two endpoints:
-//   POST /metrics/visit — idempotent daily visit record (author D1-retention basis).
-//   GET  /metrics       — §8 KPIs derivable from the DB.
+// Three endpoints:
+//   POST /metrics/visit  — idempotent daily visit record (author D1-retention basis).
+//   POST /metrics/events — browser-only event sink (allow-listed names -> counters).
+//   GET  /metrics        — §8 KPIs derivable from the DB.
 //
-// KPIs that require client-only events (e.g. LLM API success rate, P95 SSE
-// propagation latency) are NOT observable server-side in a key-blind PoC, so we
-// return them as `null` with a note in `unavailable`.
+// P95 SSE propagation latency still needs an end-to-end client measurement that a
+// counter cannot express, so it stays `null` with a note in `unavailable`.
+// llmSuccessRate used to be there too; the sink below closes it.
+
+/**
+ * Events this server counts. Mirrors the track() call sites in
+ * frontend/src/lib/metrics.ts consumers — adding an event means editing BOTH
+ * sides on purpose: what we count is a contract, not a side effect.
+ */
+const ALLOWED_EVENTS = new Set([
+  "login",
+  "register",
+  "ai_reply_invoked",
+  "llm_success",
+  "llm_failure",
+  "summary_success",
+  "summary_failure",
+  "document_invoked",
+  "document_success",
+  "document_failure",
+  "document_context_missing",
+]);
 
 // "YYYY-MM-DD" for the given instant in UTC (stable, server-tz independent).
 function isoDate(d: Date): string {
@@ -41,6 +61,39 @@ const plugin: FastifyPluginAsync = async (app) => {
     });
 
     return reply.code(200).send({ userId, date });
+  });
+
+  // POST /metrics/events — the browser-only event sink (TRD §16).
+  //
+  // Deliberately UNAUTHENTICATED: instrumentation fires before login too (a failed
+  // 'login' event is exactly the interesting case), and requiring a token would
+  // erase that window. Abuse is bounded by the rate limit policy instead.
+  //
+  // `props` IS NOT READ. Not stored, not logged, not echoed. This endpoint takes
+  // arbitrary JSON from anyone, and anything we logged from it could carry a user's
+  // API key into the server's logs on a single client-side mistake — the one thing
+  // a key-blind server must never allow. So this is a COUNTER, not a log.
+  app.post("/metrics/events", async (req, reply) => {
+    const body = req.body as { event?: unknown } | undefined;
+    const event = typeof body?.event === "string" ? body.event : "";
+
+    // Unknown/malformed -> 202 and say so. A 4xx would turn telemetry into noise in
+    // the client console and would break the moment the frontend adds an event
+    // ahead of a server deploy. Silence would be worse: the caller could not tell
+    // that nothing was counted.
+    if (!ALLOWED_EVENTS.has(event)) {
+      return reply.code(202).send({ counted: false });
+    }
+
+    const date = isoDate(new Date());
+    // Atomic increment on (name, date): several instances share one counter row.
+    await prisma.eventCounter.upsert({
+      where: { name_date: { name: event, date } },
+      update: { count: { increment: 1 } },
+      create: { name: event, date, count: 1 },
+    });
+
+    return reply.code(202).send({ counted: true });
   });
 
   // GET /metrics — compute §8 KPIs from the database.
@@ -107,6 +160,20 @@ const plugin: FastifyPluginAsync = async (app) => {
         ? null
         : retentionNumerator / retentionDenominator;
 
+    // --- Browser-reported counters (TRD §16). All-time totals per event name.
+    const counterRows = await prisma.eventCounter.groupBy({
+      by: ["name"],
+      _sum: { count: true },
+    });
+    const eventCounts: Record<string, number> = {};
+    for (const r of counterRows) eventCounts[r.name] = r._sum.count ?? 0;
+
+    const llmOk = eventCounts.llm_success ?? 0;
+    const llmFail = eventCounts.llm_failure ?? 0;
+    // Null (not 0) until at least one attempt is reported: a rate over zero
+    // attempts is not "0% success", it is "unknown".
+    const llmSuccessRate = llmOk + llmFail === 0 ? null : llmOk / (llmOk + llmFail);
+
     return reply.send({
       postCount,
       // §8 KPI targets are documented in CLAUDE.md; here we expose raw measured values.
@@ -114,14 +181,12 @@ const plugin: FastifyPluginAsync = async (app) => {
       avgUniqueCommentersPerThread, // target >= 3
       summarySuccessRate, // target >= 0.95 (null when no summaries yet)
       authorD1RetentionRate, // target >= 0.25 (null when no authored posts yet)
-      // KPIs that depend on client-only events the key-blind server never sees.
-      llmSuccessRate: null, // target >= 0.97 — measured in the browser (BYOK).
+      llmSuccessRate, // target >= 0.97 — from browser-reported counters (§16)
+      eventCounts, // raw allow-listed counters, for anything derived client-side
       p95PropagationMs: null, // target < 1500 — measured client-side end-to-end.
       unavailable: {
-        llmSuccessRate:
-          "LLM calls happen browser-side (BYOK, key-blind server); success/failure is not observable here.",
         p95PropagationMs:
-          "SSE propagation latency is an end-to-end client measurement; not recorded server-side.",
+          "SSE propagation latency is an end-to-end client measurement; a counter cannot express a distribution (TRD §16.3).",
       },
     });
   });

@@ -34,9 +34,16 @@ export function track(event: string, props?: Record<string, unknown>): void {
     // console can theoretically throw in exotic environments; never propagate.
   }
 
-  // Optional server sink. We POST best-effort and ignore the outcome entirely.
-  // The endpoint is OPTIONAL: if the server has no /metrics/events route the
-  // POST simply 404s and we discard it. This keeps XC-10 additive and decoupled.
+  // Server sink (TRD §16). Best-effort: the outcome is ignored entirely.
+  //
+  // The server counts allow-listed event NAMES only — it does not read `props` at
+  // all, by design, so that no client mistake can put a user's key into server
+  // logs. Props therefore exist for the console.debug line above; treat anything
+  // put in them as local-only.
+  //
+  // Still tolerant of a server without the route (older deploy): a 404 is just
+  // discarded, exactly like a network error. An unknown event name gets a 202
+  // `{counted:false}` — also ignored here, and visible in the response if you look.
   try {
     if (typeof fetch !== 'function') return;
     void fetch('/api/metrics/events', {
