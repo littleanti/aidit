@@ -206,11 +206,15 @@ interface CountTokensResponse {
 }
 
 // Token estimation for the 128K segment budget. TRD §6.4 is the SoT for these
-// constants; they were calibrated OFFLINE against the provider's (free)
-// countTokens over this repo's own corpus on 2026-07-28.
+// constants; they were calibrated OFFLINE against the provider's countTokens on
+// 2026-07-28. On its cost, precisely: Vertex AI / Firebase AI Logic documents "no
+// charge for calling countTokens" (3000 RPM quota), while the Gemini Developer API
+// docs — what this file calls — say nothing about countTokens billing. Free of
+// charge still burns RPM quota shared with generateContent.
 //
-// Runtime deliberately does NOT call countTokens: it is exact but costs a network
-// round trip per message. So the local estimate has to be good enough — and the
+// So we deliberately do NOT call countTokens per message; the only runtime call is
+// pingLlm()'s connectivity probe, once per key (FR-8). That means the local
+// estimate has to be good enough — and the
 // previous `chars/4` was not. chars/4 is a Latin rule of thumb; measured against
 // gemini-3.1-flash-lite, Korean runs ~1.7-1.9 chars/token while English runs
 // ~4.5-5.2. It under-counted app content by 39.4% in aggregate (worst single

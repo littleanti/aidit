@@ -5,9 +5,12 @@
 // constants in src/domain/tokenEstimate.ts (and their twin in
 // frontend/src/api/llm.ts).
 //
-// countTokens is FREE, so calibration costs nothing but a few requests. Runtime
-// still never calls it: the point of this script is to keep a pure-local estimate
-// honest.
+// Cost, scoped precisely (TRD §6.4): Vertex AI / Firebase AI Logic documents
+// "There's no charge for calling countTokens" with a 3000 RPM quota; the Gemini
+// Developer API docs — the endpoint below — say nothing about countTokens billing.
+// So expect no token charge, but note it DOES consume RPM quota. This script makes
+// ~10 calls, well inside that. Runtime never calls countTokens per message: the
+// point of this script is to keep a pure-local estimate honest.
 //
 // Usage:
 //   CAL_KEY=<a provider key> node scripts/calibrate-token-estimate.mjs

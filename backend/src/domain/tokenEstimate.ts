@@ -4,11 +4,19 @@
 // compares that sum against the 128K product threshold. So this function decides
 // WHEN a thread gets summarized.
 //
-// We deliberately do NOT call the provider's countTokens at runtime: it is exact
-// but adds a network round trip per message, needs a credential (the server is
+// We deliberately do NOT call the provider's countTokens PER MESSAGE: it is exact
+// but adds a network round trip per bubble, needs a credential (the server is
 // key-blind), and introduces another failure path. Instead the coefficients below
-// were calibrated OFFLINE against countTokens (which is free) on 2026-07-28.
-// Re-run scripts/calibrate-token-estimate.mjs after any model change.
+// were calibrated OFFLINE against countTokens on 2026-07-28. Re-run
+// scripts/calibrate-token-estimate.mjs after any model change.
+// (The one runtime countTokens call is FR-8's connectivity probe — once per key.)
+//
+// On countTokens cost, precisely: Vertex AI / Firebase AI Logic documents "There's
+// no charge for calling countTokens" with a 3000 RPM quota, but the Gemini
+// Developer API docs — the endpoint this app actually calls — say nothing about
+// countTokens billing. And free of charge still consumes RPM quota, which is a
+// second reason not to call it per message: it would share the user's per-minute
+// budget with generateContent. See TRD §6.4.
 //
 // WHY THE OLD `chars/4` WAS A BUG, NOT JUST IMPRECISION
 // chars/4 is a Latin-text rule of thumb. Measured against gemini-3.1-flash-lite,

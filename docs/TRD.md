@@ -337,7 +337,7 @@ export interface CommunitiesPage { items: Community[]; nextCursor: string | null
 > **모든 호출은 브라우저에서.** 서버·서버 로그를 절대 경유하지 않는다.
 
 - 엔드포인트(REST): `https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={USER_KEY}`
-- 토큰 카운팅: `.../models/{MODEL}:countTokens?key={USER_KEY}` (정확) 또는 로컬 휴리스틱(`chars/4`) 폴백.
+- 토큰 카운팅: **런타임 판정은 로컬 추정식**(§6.4, 실측 보정)만 사용한다. `.../models/{MODEL}:countTokens?key={USER_KEY}`는 **키당 1회 연결 프로브**(FR-8 `pingLlm` — 생성 비용 없이 키·네트워크 도달성 확인)로만 호출하며, 발화별 토큰 산정에는 쓰지 않는다.
 - 모델(A-1): `LLM_MODEL = "gemini-3.1-flash-lite"` (PoC 고정값, 설정 한 곳에서 관리).
 - 요청 형태:
 ```jsonc
@@ -397,7 +397,8 @@ export interface CommunitiesPage { items: Community[]; nextCursor: string | null
 ### 6.4 토큰 카운팅 — **계수의 단일 출처(SoT)**
 
 - 각 버블 게시 시 `tokenCount`를 **로컬 추정**으로 산정한다. 서버는 `segment.tokenSum += tokenCount`, `GET /context`는 그 합을 128K 임계 판정에 그대로 쓴다.
-- **런타임에 `countTokens`를 호출하지 않는다.** 정확하지만 발화마다 API 왕복이 붙고, 키가 있어야 하며(서버는 key-blind), 실패 경로가 늘어난다. 대신 **오프라인에서 `countTokens`(무료)로 계수를 보정**하고 런타임은 순수 로컬 계산만 한다.
+- **발화마다 `countTokens`를 호출하지 않는다.** 정확하지만 버블마다 API 왕복이 붙고, 키가 있어야 하며(서버는 key-blind), 실패 경로가 늘어난다. 대신 **오프라인에서 `countTokens`로 계수를 보정**하고 런타임은 순수 로컬 계산만 한다. (예외는 FR-8 연결 프로브 — **키당 1회**, §5.)
+- **`countTokens` 비용의 정확한 범위**(2026-07-28 문서 확인): "There's no charge for calling `countTokens`", "maximum quota … 3000 RPM" — 단 이 서술의 출처는 **Vertex AI / Firebase AI Logic** 문서([링크](https://firebase.google.com/docs/vertex-ai/count-tokens))이고, 우리가 호출하는 **Gemini Developer API**(`generativelanguage.googleapis.com`) 문서에는 과금 여부 서술이 **없다**. 그리고 과금이 없어도 **RPM 쿼터는 소비**한다 — 발화별 호출을 배제하는 근거가 하나 더 있는 셈이다(사용자 키의 분당 한도를 생성 호출과 나눠 쓰게 된다). 보정 스크립트는 총 10회 남짓만 호출하므로 이 범위 안에서 안전하다.
 
 **보정된 추정식 (2026-07-28 실측)**
 

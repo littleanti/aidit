@@ -1,7 +1,7 @@
 # Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
 
 > 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
-> 상태: M1–M19 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-07-28 (토큰 추정 계수 실측 보정 — 128K 판정 결함 수정)
+> 상태: M1–M19 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-07-28 (`countTokens` "무료" 서술의 근거 범위 정정)
 > 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
 
 ---
@@ -9,6 +9,14 @@
 ## 변경 이력 (Changelog)
 
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
+
+### 2026-07-28 (9)
+- **[docs]** **`countTokens`가 "무료"라는 서술의 근거 범위를 정정 (TRD §5·§6.4)**: 보정 근거를 적으면서 코드 주석·스크립트·문서에 `countTokens is FREE`라고 단정해 뒀는데, 1차 문서를 다시 확인한 결과 **그 범위가 과했다.**
+  - **확인된 것**: "There's no charge for calling `countTokens` (the Count Tokens API)" + "maximum quota … 3000 requests per minute (RPM)" — 출처는 **Vertex AI / Firebase AI Logic** 문서([링크](https://firebase.google.com/docs/vertex-ai/count-tokens)).
+  - **확인되지 않은 것**: 우리가 실제로 호출하는 **Gemini Developer API**(`generativelanguage.googleapis.com`)의 [토큰 문서](https://ai.google.dev/gemini-api/docs/tokens)·[가격 문서](https://ai.google.dev/gemini-api/docs/pricing)에는 `countTokens` 과금 여부 서술이 **없다**. 즉 "토큰 요금이 붙지 않는다"는 근거는 있으나 해당 엔드포인트에 대한 1차 근거는 아니다.
+  - **무료여도 공짜가 아니다**: `countTokens`는 **RPM 쿼터를 소비**한다. 이는 발화마다 호출하지 않기로 한 결정을 오히려 강화한다 — 댓글 한 건마다 부르면 사용자 키의 분당 한도를 생성 호출과 나눠 쓰게 되고, 서버는 key-blind라 대신 부를 수도 없다.
+  - **서술 정정 범위**: `backend/src/domain/tokenEstimate.ts`, `frontend/src/api/llm.ts`, `backend/scripts/calibrate-token-estimate.mjs`, TRD §6.4, README "성능 실측 D" — "무료" → **"과금 없음(Vertex 문서 기준) · RPM 쿼터 소비 · Developer API 문서에는 미명시"** 로 좁히고 출처를 달았다. 동작 변경 없음.
+  - **덧붙여 정정한 과잉 서술 2건**: ① 주석의 "런타임에 `countTokens`를 호출하지 않는다"는 **발화별 호출**에 대한 얘기였는데 전면 부정처럼 읽혔다 — 실제로는 **키당 1회 연결 프로브**(FR-8 `pingLlm`)로 호출한다. "발화마다 호출하지 않는다"로 정정. ② 프론트 `llm.ts` 주석에 1차 오류 시절 문구(`this repo's own corpus`)가 남아 바로 아래 정정 문단과 모순돼 있었다 → 제거. ③ TRD §5의 토큰 카운팅 항목이 여전히 폴백을 `chars/4`로 적고 있었다 → 현행 추정식으로 갱신.
 
 ### 2026-07-28 (8)
 - **[fix]** **토큰 추정 계수 실측 보정 — `chars/4`가 한국어를 −58%까지 과소평가하던 결함 수정 (TRD §6.4)**: 128K 요약 트리거(FR-7)의 판정 기준이 잘못돼 있었다. **런타임 `countTokens` 호출은 채택하지 않고**(발화마다 API 왕복 추가, 서버는 key-blind), **무료인 `countTokens`를 오프라인 보정에만** 사용했다.
