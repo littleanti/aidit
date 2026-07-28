@@ -48,9 +48,9 @@
 | Frontend | **React 18 + TypeScript + Vite**, React Router, Zustand(상태), TailwindCSS | 모바일 우선, PWA(vite-plugin-pwa) |
 | 실시간 | **SSE (EventSource)** | 단방향 서버→클라 충분, WS 대비 단순. 쓰기는 REST |
 | Backend | **Node 20 + Fastify + TypeScript** | 가볍고 SSE 친화적. (대안: NestJS) |
-| ORM/DB | **Prisma + SQLite(PoC) → Postgres(확장)** | 무상태 서버, 단일 SoT |
+| ORM/DB | **Prisma + SQLite(개발·테스트) / Postgres(운영)** | 단일 스키마에서 provider만 전환 — §15.1 |
 | 인증 | **bcrypt(비밀번호) + @fastify/jwt(서명)** | 비밀번호 해시 저장, Bearer JWT 토큰 |
-| Pub/Sub | **인메모리(단일 인스턴스)** → **Redis pub/sub**(다중) | NFR-4 수평확장 |
+| Pub/Sub | **어댑터 인터페이스**: `InMemoryPubSub`(단일) / `RedisPubSub`(다중, `REDIS_URL`) | NFR-4 수평확장 — §15.2 |
 | LLM | **LLM 제공자 BYOK, 클라이언트 직접 호출 (기본: Google Gemini Flash Lite)** | §5 |
 | 배포 | 정적 프론트(CDN) + Node 서버(컨테이너) | |
 
@@ -165,6 +165,29 @@ model Vote {
   @@unique([userId, postId])
   @@index([postId])
 }
+
+// FR-13: 논의 문서 응결. 스레드 논의를 호출자 키(BYOK)로 마크다운 문서로 정리한 결과물.
+// 서버는 key-blind — 완성된 텍스트만 받는다. provenance(segmentIndex/sourceSeq)로
+// "스레드의 어디까지를 응결한 문서인지"가 데이터로 남는다.
+model Document {
+  id           String   @id @default(cuid())
+  communityId  String
+  community    Community @relation(fields: [communityId], references: [id])
+  postId       String
+  post         Post     @relation(fields: [postId], references: [id])
+  authorId     String?  // 응결을 실행한 사용자(삭제 대비 nullable)
+  author       User?    @relation(fields: [authorId], references: [id])
+  title        String   // 생성 마크다운의 첫 '# 제목' 또는 게시글 제목
+  body         String   // 마크다운 본문
+  segmentIndex Int      // 응결 시점의 활성 세그먼트 index (provenance)
+  sourceSeq    Int      // 응결에 포함된 마지막 버블의 seq (provenance)
+  clientId     String?  // 멱등키(재시도 중복 방지)
+  createdAt    DateTime @default(now())
+
+  @@unique([postId, clientId])
+  @@index([communityId, createdAt])
+  @@index([postId, createdAt])
+}
 ```
 
 **설계 포인트**
@@ -172,6 +195,7 @@ model Vote {
 - **세그먼트(`ContextSegment`)** 가 요약 경계의 단일 출처. 활성 세그먼트의 `tokenSum`으로 128K를 판정(요청 #6/#7).
 - **`seq`** 는 post 내 전역 단조 증가 — SSE 재생/정렬/멱등의 기준.
 - **북마크(`Bookmark`)**: 사용자 프라이빗 상태. `GET /posts/:id`는 선택 `x-user-id` 헤더로 요청 사용자의 북마크 여부를 `bookmarked` 불린으로 응답(없으면 false).
+- **문서(`Document`)**: 스레드 논의의 응결물(FR-13). 버블(`Comment`)과 달리 SSE fan-out 대상이 아니고 `seq`를 소비하지 않는다 — 스레드의 실시간 순서 계약(L4)을 건드리지 않기 위해 **별도 테이블**로 둔다. 같은 스레드에서 여러 번 응결하면 새 행이 누적되며(버전 히스토리), `@@unique([postId, clientId])`로 재시도만 멱등화한다.
 - **추천(`Vote`)**: `@@unique([userId, postId])`로 사용자당 글당 1표. **`Post.score`는 더 이상 단순 증가 카운터가 아니라 `Vote` 행 수(count)** 이며 추천 추가/취소마다 재계산된다(기존 "score+1 무중복방지" 폐기). `GET /posts/:id`와 모든 피드 카드는 선택 `x-user-id`로 요청 사용자의 추천 여부를 `voted` 불린으로 응답(북마크와 동일 패턴).
 
 ---
@@ -209,6 +233,10 @@ model Vote {
 | **`GET /users/:id/bookmarks`** | **북마크한 글 목록**(피드 카드, 북마크 최신순) — 커서 페이지네이션 | - | `?cursor=` 수락. `{ items, nextCursor }` 응답. 커서는 **Bookmark 행** 기준(§4.2) |
 | `GET /users/:id/posts` | 사용자가 작성한 글 목록(피드 카드, 최신순) — 커서 페이지네이션 | - | `?cursor=` 수락. `{ items, nextCursor }` 응답. 커서 앵커 = `post.createdAt(ms) + post.id`(§4.2) |
 | `GET /users/:id/communities` | 사용자가 생성한 커뮤니티 목록 — 커서 페이지네이션 | - | `?cursor=` 수락. `{ items, nextCursor }` 응답. 커서 앵커 = `community.createdAt(ms) + community.id`(§4.2) |
+| **`POST /posts/:id/documents`** | **논의 문서 응결 저장**(FR-13) — 클라가 본인 키로 생성한 마크다운을 게시 | **`Authorization: Bearer <jwt>`** | §4.3 · `clientId` 멱등 · 서버는 key-blind(완성 텍스트만 수신) · 201 `{ document }` |
+| **`GET /posts/:id/documents`** | **스레드에 응결된 문서 목록**(최신순) | - | 요약 필드만(본문 미포함) 반환 |
+| **`GET /communities/:slug/documents?cursor=`** | **커뮤니티 문서 목록**(최신순) — 커서 페이지네이션 | - | `{ items, nextCursor }`. 커서 앵커 = `document.createdAt(ms) + document.id`(§4.2) |
+| **`GET /documents/:id`** | **문서 단건 조회**(마크다운 본문 포함) | - | 미존재 404 |
 | `POST /metrics/visit` | 인증 앱 오픈 시 `VisitEvent` 일별 멱등 기록 | **`Authorization: Bearer <jwt>`** | BE-13 · 작성자 D1 · 토큰 검증 |
 | `GET /metrics` | §8 KPI 집계 반환 | - | BE-13 (형상: IMPLEMENTATION_NOTES §2.2) |
 
@@ -279,6 +307,28 @@ export interface CommunitiesPage { items: Community[]; nextCursor: string | null
 **프론트엔드 무한 스크롤**
 
 홈 피드와 동일한 `IntersectionObserver` 센티널 + `usePagedList` 훅 패턴 사용. 프로필 탭 전환 시 해당 탭이 처음 활성화될 때만 첫 페이지를 lazy 로드한다. 탭별 독립 커서 상태 유지.
+
+---
+
+### 4.3 `POST /posts/:id/documents` — 논의 문서 응결 계약 (FR-13)
+
+요청 본문(키 없음 — 서버는 key-blind):
+```jsonc
+{
+  "title": "Code Agent 사용 가이드",  // 선택. 생략/공백이면 서버가 게시글 제목 사용
+  "body": "# Code Agent 사용 가이드\n\n## 1. ...",  // 필수. 마크다운 본문
+  "segmentIndex": 0,                  // 필수. 응결 시점의 활성 세그먼트 index
+  "sourceSeq": 17,                    // 필수. 응결에 포함된 마지막 버블 seq
+  "clientId": "uuid"                  // 선택. 멱등키
+}
+```
+
+- **생성 위치**: 마크다운은 **브라우저**가 호출자 본인 키로 만든다(`frontend/src/engine/documentEngine.ts`). 서버는 완성된 텍스트만 저장하며 어떤 LLM 호출도 하지 않는다(L1 key-blind 불변).
+- **검증**: `body` 비어 있으면 400. `body` 길이 상한 **200,000자**(초과 400). `segmentIndex`/`sourceSeq`는 음이 아닌 정수 필수. 게시글 미존재 404. 미인증 401.
+- **`communityId`** 는 클라가 보내지 않고 **서버가 게시글에서 파생**한다(위조 방지).
+- **멱등**: 동일 `clientId` 재요청은 새 행을 만들지 않고 **기존 문서를 200으로 반환**한다. `clientId`가 없으면 매 호출이 새 버전을 만든다(FR-13.5).
+- **SSE 미발행**: 문서 생성은 스레드 `seq` 계약과 무관하므로 `comment.created` 등 어떤 실시간 이벤트도 발행하지 않는다. 응결을 실행한 클라이언트만 즉시 결과를 받고 이동한다.
+- **레이트리밋(XC-9)**: 문서 응결은 사용자 키로 LLM을 태우는 무거운 동작이므로 **identity당 5분에 3건**으로 제한(초과 429 + `Retry-After`).
 
 ---
 
@@ -362,8 +412,8 @@ export interface CommunitiesPage { items: Community[]; nextCursor: string | null
   - `comment.created` `{ comment }` — 새 버블(사람/AI PENDING/요약).
   - `comment.updated` `{ id, body, status }` — AI 버블 로딩→완료/실패.
   - `segment.opened` `{ segmentIndex, summaryCommentId }` — 요약으로 새 세그먼트 시작.
-- 다중 인스턴스: Redis pub/sub로 post 채널 fan-out, 또는 SSE sticky 라우팅.
 - 재연결: `Last-Event-ID`(=마지막 seq)로 누락분 재생.
+- **다중 인스턴스(구현됨, 2026-07-27)**: pub/sub이 `PubSub` 인터페이스(`subscribe`/`publish`)로 분리되어 두 구현이 존재한다 — `InMemoryPubSub`(기본, 프로세스 로컬)과 `RedisPubSub`(채널 `aidit:post:<postId>`). `REDIS_URL` 환경변수가 있으면 후자가 선택되며 **쓰기 경로(`publish.ts`)와 SSE 엔드포인트(`stream.ts`)는 무변경**이다. 상세는 §15.2.
 
 ---
 
@@ -738,3 +788,47 @@ new Intl.DateTimeFormat(lang === 'ko' ? 'ko-KR' : 'en-US', {
 | 외부 i18n 라이브러리 | **미사용** — `react-i18next`, `lingui` 등 없음. 커스텀 경량 구현(§14.2–14.3). |
 | SSR/SEO | PoC는 CSR 전용 — `<html lang>` 동기화로 최소 접근성만 충족. |
 | XC-4 불변 조건 | `systemInstruction`에 UGC 미포함 원칙 유지. 언어 지시문은 앱 제어 텍스트이므로 허용. |
+
+---
+
+## 15. 수평 확장 (Postgres · Redis pub/sub)
+
+> 목적: "단일 인스턴스 PoC"라는 구조적 한계를 **코드 경로로** 제거한다. 애플리케이션 로직(라우트·SSE 엔드포인트·쓰기 경로)은 한 줄도 분기하지 않고, DB provider와 pub/sub 백엔드만 환경변수로 교체된다.
+
+### 15.1 DB — SQLite(개발/테스트) ↔ Postgres(운영)
+
+Prisma는 `datasource.provider`에 `env()`를 허용하지 않으므로 **파일 2개 + 파생 스크립트** 구조를 쓴다.
+
+| 파일/스크립트 | 역할 |
+|---|---|
+| `backend/prisma/schema.prisma` | **단일 편집 지점(SoT)**. provider = `sqlite`. 개발·테스트가 이걸 쓴다. |
+| `backend/prisma/schema.postgres.prisma` | **파생물(생성됨, 손으로 고치지 않는다)**. datasource 블록만 `postgresql`로 치환된 사본. |
+| `backend/scripts/sync-postgres-schema.mjs` | SoT → 파생 스키마 재생성. 헤더에 "생성됨" 배너를 박아 수동 편집을 막는다. |
+| `npm run db:pg:sync` | 위 스크립트 실행. |
+| `npm run db:pg:ddl` | `prisma migrate diff`로 **Postgres DDL을 서버 없이** 생성 → `prisma/postgres/init.sql`(213줄, enum·TIMESTAMP(3)·FK 포함). 리뷰 가능한 산출물. |
+| `npm run db:pg:push` | 실제 Postgres에 스키마 적용(`prisma db push`). |
+| `npm run db:pg:generate` | Postgres 스키마로 Prisma 클라이언트 생성. |
+| `npm run db:pg:check` | 파생 스키마가 최신인지 검사 — 드리프트면 비영점 종료(CI 게이트용). |
+
+> **왜 `migrate deploy`가 아니라 `db push`인가**: `prisma/migrations/`의 마이그레이션 SQL은 SQLite 문법으로 생성돼 있어 Postgres에 그대로 적용할 수 없다. Postgres 초기 구축은 생성된 `init.sql`(리뷰용) 또는 `db push`(실행용)로 하고, 이후 증분 변경은 `migrate diff`로 DDL을 뽑아 적용한다. Postgres 전용 마이그레이션 히스토리를 갖추는 것은 실제 운영 DB가 생기는 시점의 후속 작업이다.
+
+- **드리프트 방지**: 모델을 SoT에만 추가하고 `db:pg:check`가 파생 스키마의 최신성을 강제한다. 두 파일의 모델 정의가 갈라지는 사고가 구조적으로 불가능하다.
+- **운영 전환 절차**: `DATABASE_URL=postgresql://…` 설정 → `npm run db:pg:push` (스키마 적용) → `npm run db:pg:generate` (Postgres용 클라이언트 생성) → 앱 기동.
+- **검증 상태(정직하게)**: DDL 생성(`init.sql`)은 실제로 수행·커밋되어 Postgres 문법 산출물이 존재한다. **살아있는 Postgres 인스턴스에 대한 런타임 검증은 아직 없다** — 배포 시 `db:pg:deploy` + 계약 테스트를 Postgres URL로 1회 실행하는 것이 남은 숙제다.
+
+### 15.2 Pub/Sub — 인메모리 ↔ Redis
+
+```
+publish.ts (쓰기 경로)          stream.ts (SSE 엔드포인트)
+        │                                │
+        └────────► PubSub 인터페이스 ◄────┘
+                    │            │
+        InMemoryPubSub        RedisPubSub  (채널 aidit:post:<postId>)
+        (기본)                (REDIS_URL 설정 시)
+```
+
+- **인터페이스**: `subscribe(postId, handler) => unsubscribe`, `publish(postId, event)`. **동기 시그니처를 유지**해 기존 호출자(2곳)를 수정하지 않는다.
+- **`RedisPubSub`**: 의존성 추가 없이 `node:net` 위에 최소 RESP 인코더/디코더를 구현했다(구독용·발행용 소켓 2개 분리 — 구독 모드 소켓에서는 PUBLISH가 불가하므로). 지수 백오프 재연결, 재연결 시 활성 채널 **자동 재구독**을 포함한다.
+- **직렬화**: `ThreadEvent`를 JSON으로 실어 보내고 수신 측에서 파싱해 로컬 핸들러에 디스패치한다. 즉 **SSE 프레임 직렬화(`serializeEvent`)는 각 인스턴스에서 수행**되며 와이어 계약(§7)은 불변이다.
+- **장애 모드**: Redis 연결이 끊긴 동안의 이벤트는 **유실된다**(pub/sub은 큐가 아니다). 이는 설계상 허용 — 클라이언트가 `Last-Event-ID`로 재연결하면 DB 스냅샷 재생이 누락분을 복구한다(§7). 즉 **DB가 SoT, pub/sub은 가속기**다.
+- **검증 상태**: `backend/test/pubsub.fanout.test.ts`가 테스트 프로세스 안에 **최소 RESP 브로커를 띄우고 `RedisPubSub` 인스턴스 2개(= 앱 인스턴스 2개)를 붙여**, A에서 publish한 이벤트를 B의 구독자가 수신하는 것을 검증한다. 같은 파일에서 `InMemoryPubSub`은 인스턴스 간 전달이 **안 되는 것**도 함께 검증해(어댑터가 왜 필요한지의 회귀 방어) 대비를 못박는다. 실제 Redis 서버 대상 검증은 배포 환경에서 1회 수행이 남아 있다.

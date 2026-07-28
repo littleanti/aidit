@@ -1,7 +1,7 @@
 # Aidit — 구현 노트 (IMPLEMENTATION_NOTES.md)
 
 > 관련 문서: [PRD.md](./PRD.md), [TRD.md](./TRD.md), [PLAN.md](./PLAN.md), [WIREFRAME.md](./WIREFRAME.md)
-> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-07-17 (내 AI 페르소나 3슬롯 — 로컬 저장 + Composer 발화별 선택)
+> 상태: M1–M5 구현 완료 · 최초 작성 2026-06-17 · 최종 수정 2026-07-27 (논의 문서 응결 FR-13 · Postgres/Redis 수평 확장 경로 · 부하 실측 · README 재구성)
 > 이 문서는 **실제 구현 결과**가 스펙(PRD/TRD/PLAN) 대비 어떻게 확정·추가·변경되었는지, 그리고 개발 중 발견·수정한 버그를 기록한다. 스펙 문서가 "권장/미확정"으로 남긴 항목의 **확정값**과, 통합 과정에서 추가한 소소한 보조 자산을 포함한다.
 
 ---
@@ -9,6 +9,21 @@
 ## 변경 이력 (Changelog)
 
 > 최신 항목이 맨 위. 태그: **[feat]** 기능 추가 · **[fix]** 버그 수정 · **[test]** 테스트 · **[docs]** 문서 · **[chore]** 설정. 각 항목은 상세 절(§)을 가리킨다.
+
+### 2026-07-27
+- **[feat]** **논의 문서 응결 — 스레드 → 마크다운 문서 (FR-13)**: 데모 대본의 프롬프트 한 줄에만 존재했던 "논의를 문서로 정리" 흐름을 정식 기능으로 승격. 스레드 `⋯` 메뉴의 `[ 문서로 정리 ]` → **호출자 본인 키(BYOK)** 로 활성 컨텍스트를 문서화해 저장하고 `/d/:id`로 이동, 커뮤니티 상세의 **[게시글|문서] 탭**에 누적된다.
+  - **DB**: 신규 `Document` 모델(`communityId`/`postId`/`authorId?`/`title`/`body`/`segmentIndex`/`sourceSeq`/`clientId?`) + 마이그레이션 `20260727_add_document`. `@@unique([postId, clientId])`로 재시도 멱등, `@@index([communityId, createdAt])`·`@@index([postId, createdAt])`. 버블(`Comment`)과 분리된 테이블이라 `seq`·SSE 계약(L4/§7)을 건드리지 않는다. (`backend/prisma/schema.prisma`)
+  - **백엔드**: 신규 `POST /posts/:id/documents`(JWT 필수, `body` 필수·200K자 상한, `segmentIndex`/`sourceSeq` 음이 아닌 정수 필수, `communityId`는 **서버가 게시글에서 파생**해 위조 차단, `clientId` 재요청은 기존 문서 200 반환), `GET /posts/:id/documents`, `GET /communities/:slug/documents?cursor=`(커서 페이지네이션, 앵커 `createdAt(ms)+id`), `GET /documents/:id`. 문서 응결은 사용자 키로 LLM을 태우는 무거운 동작이라 **identity당 5분 3건** 레이트리밋 추가. 게시글 삭제 트랜잭션에 문서 삭제를 포함. (`backend/src/routes/documents.ts`, `backend/src/plugins/rateLimit.ts`, `backend/src/routes/posts.ts`, `backend/src/app.ts`)
+  - **프론트 엔진**: 신규 `frontend/src/engine/documentEngine.ts` — `condenseToDocument()`가 `getContext` → 문서화 지시문(`ai.document_directive`, ko/en)으로 `buildLlmRequest` 재사용 → `generateContent`(호출자 키) → 첫 `# 제목` 추출(없으면 게시글 제목) → `postDocument`. **XC-4 격리 유지**: 지시문은 앱 제어 텍스트로 systemInstruction에만, 스레드 내용은 전부 데이터 턴. LLM 실패 시 문서를 만들지 않고 실패를 반환(스레드 무변경, FR-13.7).
+  - **프론트 UI**: 스레드 `⋯` 메뉴를 **작성자 전용 → 로그인 사용자 전원**으로 열고 `[ 문서로 정리 ]`를 최상단에 추가(편집/삭제는 구분선 아래 작성자만, 폭 `w-28`→`w-36`, 실행 중 `[ 정리 중… ]` disabled). 신규 화면 `Document.tsx`(`/d/:documentId`) — `SafeMarkdown` + 기존 `prose-chat` 재사용 + provenance(세그먼트/턴 수) 표기 + 원본 스레드 링크. 저장 마크다운은 첫 줄 `# 제목`을 보존하되 화면에서는 카드 제목과 중복되므로 `stripLeadingTitle()`로 **선행 제목 줄만** 제거해 렌더한다(본문 중간 `#`는 불변). 커뮤니티 상세에 `[게시글|문서]` 세그먼트 탭. (`frontend/src/pages/Thread.tsx`, `frontend/src/pages/Document.tsx`, `frontend/src/pages/Community.tsx`, `frontend/src/App.tsx`, `frontend/src/api/rest.ts`, `frontend/src/api/types.ts`)
+  - **i18n**: 신규 namespace `document`(ko/en) + `ai.document_directive` + `thread.condense*` 키. (`frontend/src/i18n/dicts/document.ts`, `dicts/ai.ts`, `dicts/thread.ts`, `i18n/index.ts`)
+  - **테스트**: 백엔드 계약 테스트(생성·검증 400·401·404·멱등·커뮤니티/스레드 목록·커서·레이트리밋), 프론트 엔진 테스트(제목 추출·게시글 제목 폴백·XC-4 격리·LLM 실패). (PRD FR-13·§5.1·J4·§8 신설, TRD §3·§4·§4.3, WIREFRAME §0·§3·§13)
+- **[feat]** **수평 확장 경로 구현 — Postgres 전환 + pub/sub 어댑터 (NFR-4)**: "단일 인스턴스 PoC"라는 구조적 한계를 코드 경로에서 제거. 애플리케이션 로직은 무분기.
+  - **DB provider 전환**: `prisma/schema.prisma`(SQLite, 단일 편집 지점) → `scripts/sync-postgres-schema.mjs`가 datasource만 치환한 **파생** `prisma/schema.postgres.prisma`를 생성. npm 스크립트 `db:pg:sync`/`db:pg:ddl`(서버 없이 `prisma migrate diff`로 `prisma/postgres/init.sql` 213줄 생성 — enum·`TIMESTAMP(3)`·FK 포함)/`db:pg:push`/`db:pg:generate`/`db:pg:check`(드리프트 검사, CI 게이트용). 두 스키마가 갈라지는 사고가 구조적으로 불가능하다. **한계 명시**: 살아있는 Postgres 런타임 검증은 미수행(배포 시 1회 필요).
+  - **pub/sub 어댑터**: `pubsub.ts`를 `PubSub` 인터페이스 + `InMemoryPubSub`(기본) + `RedisPubSub`(채널 `aidit:post:<postId>`)로 분리하고 `REDIS_URL`로 선택. **의존성 추가 없이** `node:net` 위에 최소 RESP 인코더/디코더 구현(구독용·발행용 소켓 분리, 지수 백오프 재연결 + 활성 채널 자동 재구독). 동기 시그니처를 유지해 호출자(`publish.ts`, `stream.ts`)는 무변경.
+  - **검증**: 신규 `backend/test/pubsub.fanout.test.ts` — 테스트 프로세스 내부에 최소 RESP 브로커를 띄우고 `RedisPubSub` **2개 인스턴스(=앱 2대)** 를 붙여 A→B 이벤트 전달을 확인하고, 같은 파일에서 `InMemoryPubSub`은 인스턴스 간 전달이 **되지 않음**도 검증해 어댑터의 필요성을 회귀로 못박는다. (`backend/src/realtime/pubsub.ts`, `backend/src/config.ts`, TRD §2·§7·§15 신설, PRD NFR-4 갱신)
+- **[test]** **부하 시뮬레이션 하니스 + 실측 기록**: `backend/test/load/simulate.mjs` — 앱을 인프로세스로 띄우고 임시 SQLite에 대해 ① 동시 SSE 구독자 N명에 대한 버블 fan-out 지연(P50/P95/P99), ② 동시 요약 경쟁 K건의 수렴률(정확히 1승·나머지 409·무재시도)을 실측한다. 결과는 실행 환경을 명시해 README "성능 실측"에 기록. 시뮬레이션(로컬 단일 머신·인프로세스)이며 실서비스 부하 테스트가 아님을 명시.
+- **[docs]** **README 전면 재구성**: 텍스트 벽 → 히어로(한 줄 정의 + **데모 영상 링크** + 라이브/문서 배지) → mermaid 시퀀스로 key-blind BYOK 증명 → 차별점 3줄 → 빠른 시작 → 성능 실측 → 상세는 `docs/`로 위임. 아키텍처 ASCII 3줄을 mermaid 다이어그램 2개(시퀀스: 브라우저↔Gemini 직행 / 컴포넌트: 확장 구성)로 대체.
 
 ### 2026-07-25
 - **[docs]** **비즈니스 가치 근거 문서 추가(`docs/BUSINESS_VALUE.md`)**: 심사 기준 "비즈니스 가치"를 서사→근거로 보강. 한 줄 가치제안, 문제·시장, ICP·쐐기 유스케이스, 차별화 해자(key-blind BYOK 비용귀속·멀티유저 공유 컨텍스트·컨텍스트 연속성 엔진), Unit Economics(운영자 LLM 원가≈0), 경쟁 2×2, GTM, KPI, 자매 제품(Aidit-Code)과의 포트폴리오 논리(정반대 원가모델→획득/수익화 사다리), 리스크. (`docs/BUSINESS_VALUE.md`)
