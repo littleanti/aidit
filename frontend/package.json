@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test --config e2e/playwright.config.ts",
     "media": "playwright test --config e2e/playwright.media.config.ts",
-    "media:gif": "node e2e/make-gif.mjs"
+    "media:gif": "node e2e/make-gif.mjs",
+    "measure:keys": "node e2e/measure-real-keys.mjs"
   },
   "dependencies": {
     "dompurify": "^3.4.10",
